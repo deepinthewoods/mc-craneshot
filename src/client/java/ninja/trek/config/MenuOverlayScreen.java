@@ -17,8 +17,8 @@ import java.lang.reflect.Field;
 import java.util.*;
 
 public class MenuOverlayScreen extends Screen {
-    private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>(); // Slot -> Set of expanded movement indices
-    private static final int MARGIN = 20; // Margin from screen edges
+    private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>();
+    private static final int MARGIN = 20;
     private static final int TAB_HEIGHT = 30;
     private static final int CONTENT_START_Y = TAB_HEIGHT - 10;
     private static final double SCROLL_SPEED = 10;
@@ -28,7 +28,6 @@ public class MenuOverlayScreen extends Screen {
     private int scrollOffset = 0;
     private int maxScroll = 0;
 
-    // Dynamic dimensions
     private int guiWidth;
     private int guiHeight;
     private int centerX;
@@ -41,7 +40,6 @@ public class MenuOverlayScreen extends Screen {
 
     @Override
     protected void init() {
-        // Calculate dynamic dimensions
         this.guiWidth = this.width - (MARGIN * 2);
         this.guiHeight = this.height - (MARGIN * 2);
         this.centerX = MARGIN;
@@ -51,7 +49,6 @@ public class MenuOverlayScreen extends Screen {
         int visibleEndY = centerY + guiHeight;
         int height = 0;
 
-        // Calculate tab width based on available space
         int tabCount = CraneshotClient.CAMERA_CONTROLLER.getMovementCount() + 1;
         int tabWidth = Math.min(100, (guiWidth - 20) / tabCount);
 
@@ -71,11 +68,9 @@ public class MenuOverlayScreen extends Screen {
         int MOVEMENT_ROW_HEIGHT = BUTTON_HEIGHT + 5;
         int SETTING_HEIGHT = BUTTON_HEIGHT + 5;
 
-        // Add slot-specific controls if not on general tab
         if (selectedTab > 0) {
             int slotIndex = selectedTab - 1;
 
-            // Always show Add Movement button and Wrap toggle at the top
             if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
                 this.addDrawableChild(ButtonWidget.builder(Text.literal("+"), button -> addMovement(slotIndex))
                         .dimensions(centerX + 10, centerY + CONTENT_START_Y, 20, BUTTON_HEIGHT)
@@ -87,7 +82,6 @@ public class MenuOverlayScreen extends Screen {
                         .build());
             }
 
-            // Movement list with settings
             List<ICameraMovement> movements = CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex);
             int yOffset = CONTENT_START_Y + BUTTON_HEIGHT + 10;
 
@@ -96,9 +90,32 @@ public class MenuOverlayScreen extends Screen {
                 ICameraMovement movement = movements.get(i);
                 int rowY = centerY + yOffset - scrollOffset;
 
-                // Only add visible elements
                 if (rowY >= visibleStartY - BUTTON_HEIGHT && rowY <= visibleEndY) {
-                    // Movement header
+                    // Control buttons now on the left
+                    int controlX = centerX + 10;
+
+                    if (i > 0) {
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↑"), button -> moveMovement(slotIndex, index, index - 1))
+                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                                .build());
+                    }
+                    controlX += 25;
+
+                    if (i < movements.size() - 1) {
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↓"), button -> moveMovement(slotIndex, index, index + 1))
+                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                                .build());
+                    }
+                    controlX += 25;
+
+                    if (movements.size() > 1) {
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> deleteMovement(slotIndex, index))
+                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                                .build());
+                    }
+                    controlX += 25;
+
+                    // Movement name button
                     int movementButtonWidth = Math.min(200, guiWidth / 3);
                     this.addDrawableChild(ButtonWidget.builder(
                                     Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + movement.getName()),
@@ -106,100 +123,89 @@ public class MenuOverlayScreen extends Screen {
                                         toggleMovementExpanded(slotIndex, index);
                                         reinitialize();
                                     })
-                            .dimensions(centerX + 10, rowY, movementButtonWidth, BUTTON_HEIGHT)
+                            .dimensions(controlX, rowY, movementButtonWidth, BUTTON_HEIGHT)
                             .build());
-
-                    // Control buttons positioned relative to GUI width
-                    int controlsStartX = centerX + guiWidth - 75;
-
-                    if (i > 0) {
-                        this.addDrawableChild(ButtonWidget.builder(
-                                        Text.literal("↑"),
-                                        button -> moveMovement(slotIndex, index, index - 1)
-                                )
-                                .dimensions(controlsStartX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-
-                    if (i < movements.size() - 1) {
-                        this.addDrawableChild(ButtonWidget.builder(
-                                        Text.literal("↓"),
-                                        button -> moveMovement(slotIndex, index, index + 1)
-                                )
-                                .dimensions(controlsStartX + 25, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-
-                    if (movements.size() > 1) {
-                        this.addDrawableChild(ButtonWidget.builder(
-                                        Text.literal("×"),
-                                        button -> deleteMovement(slotIndex, index)
-                                )
-                                .dimensions(controlsStartX + 50, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
                 }
 
                 yOffset += MOVEMENT_ROW_HEIGHT;
 
-                // Add settings if movement is expanded
+                // Settings layout in multiple columns
                 if (movement instanceof AbstractMovementSettings settings && isMovementExpanded(slotIndex, index)) {
+                    List<Field> settingFields = new ArrayList<>();
                     for (Field field : settings.getClass().getDeclaredFields()) {
                         if (field.isAnnotationPresent(MovementSetting.class)) {
-                            MovementSetting annotation = field.getAnnotation(MovementSetting.class);
-                            field.setAccessible(true);
-
-                            try {
-                                double value = ((Number) field.get(settings)).doubleValue();
-                                int settingY = centerY + yOffset - scrollOffset;
-
-                                // Only add visible settings
-                                if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
-                                    // Calculate widths based on available space
-                                    int labelWidth = Math.min(150, guiWidth / 4);
-                                    int sliderWidth = Math.min(200, guiWidth / 2);
-
-                                    // Add setting label
-                                    this.addDrawableChild(ButtonWidget.builder(
-                                                    Text.literal(annotation.label()),
-                                                    button -> {}
-                                            )
-                                            .dimensions(centerX + 20, settingY, labelWidth, BUTTON_HEIGHT)
-                                            .build());
-
-                                    // Add setting slider
-                                    SettingSlider slider = new SettingSlider(
-                                            centerX + labelWidth + 30,
-                                            settingY,
-                                            sliderWidth,
-                                            BUTTON_HEIGHT,
-                                            Text.literal(annotation.label()),
-                                            annotation.min(),
-                                            annotation.max(),
-                                            value,
-                                            field.getName(),
-                                            settings
-                                    );
-                                    settingSliders.add(slider);
-                                    this.addDrawableChild(slider);
-                                }
-                                yOffset += SETTING_HEIGHT;
-                            } catch (IllegalAccessException e) {
-                                e.printStackTrace();
-                            }
+                            settingFields.add(field);
                         }
                     }
-                }
 
-                yOffset += MOVEMENT_SPACING;
+                    // Calculate number of columns and widths
+                    int totalWidth = guiWidth - 40;  // Available width minus margins
+                    int labelWidth = Math.min(150, totalWidth / 4);  // Original label width
+                    int sliderWidth = Math.min(200, totalWidth / 2);  // Original slider width
+                    int settingWidth = labelWidth + sliderWidth + 10;  // Total width for one setting
+                    int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+                    int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+                    for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                        Field field = settingFields.get(fieldIndex);
+                        MovementSetting annotation = field.getAnnotation(MovementSetting.class);
+                        field.setAccessible(true);
+
+                        try {
+                            double value = ((Number) field.get(settings)).doubleValue();
+
+                            // Calculate position in grid
+                            int column = fieldIndex / settingsPerColumn;
+                            int row = fieldIndex % settingsPerColumn;
+
+                            int settingX = centerX + 20 + column * (settingWidth + 20);
+                            int settingY = centerY + yOffset + (row * SETTING_HEIGHT) - scrollOffset;
+
+                            if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
+                                // Add setting label with original width
+
+                                
+                                this.addDrawableChild(ButtonWidget.builder(
+                                                Text.literal(annotation.label()),
+                                                button -> {}
+                                        ).dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+                                        .build());
+
+                                // Add slider with original width
+                                SettingSlider slider = new SettingSlider(
+                                        settingX + labelWidth + 10,
+                                        settingY,
+                                        sliderWidth,
+                                        BUTTON_HEIGHT,
+                                        Text.literal(annotation.label()),
+                                        annotation.min(),
+                                        annotation.max(),
+                                        value,
+                                        field.getName(),
+                                        settings
+                                );
+                                settingSliders.add(slider);
+                                this.addDrawableChild(slider);
+                            }
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    // Adjust yOffset based on the height of all settings
+                    yOffset += (settingsPerColumn * SETTING_HEIGHT) + MOVEMENT_SPACING;
+                } else {
+                    yOffset += MOVEMENT_SPACING;
+                }
             }
 
-            // Calculate max scroll based on content height
             int contentHeight = yOffset - (CONTENT_START_Y + BUTTON_HEIGHT + 10);
             int visibleHeight = guiHeight - CONTENT_START_Y - 10;
             maxScroll = Math.max(0, contentHeight - visibleHeight);
         }
     }
+
+
 
     @Override
     public void resize(MinecraftClient client, int width, int height) {
