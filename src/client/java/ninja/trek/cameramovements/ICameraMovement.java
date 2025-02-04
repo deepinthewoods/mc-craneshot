@@ -9,4 +9,7 @@ public interface ICameraMovement {
     void reset(MinecraftClient client, Camera camera);
 
     void adjustDistance(boolean increase);
+
+    String getName();
+
 }

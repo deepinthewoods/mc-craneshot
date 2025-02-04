@@ -10,10 +10,12 @@ public class CraneShotEventHandler {
     private static boolean[] wasPressed = new boolean[3];
     private static double lastScrollTime = 0;
     private static final double SCROLL_COOLDOWN = 0.1;
-    private static final String[] MOVEMENT_NAMES = {"Linear", "Circular", "Bezier"};
+
     private static String currentMessage = "";
     private static long messageTimer = 0;
     private static final long MESSAGE_DURATION = 2000;
+    private static boolean showToast;
+
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             handleScrollInput(client);
@@ -62,7 +64,9 @@ public class CraneShotEventHandler {
         boolean scrollUp = scrollDelta > 0;
         if (CraneshotClient.selectMovementType.isPressed()) {
             CraneshotClient.CAMERA_CONTROLLER.cycleMovementType(scrollUp);
-            showMovementTypeMessage();
+            String movementType = CraneshotClient.CAMERA_CONTROLLER.getCurrentMovement().getName();
+            currentMessage = String.format("Camera %d: %s Movement", CraneshotClient.CAMERA_CONTROLLER.getCurrentMovementIndex() + 1, movementType);
+            showMovementTypeMessage(currentMessage);
             lastScrollTime = currentTime;
             ((MouseAccessor)client.mouse).setEventDeltaVerticalWheel(0);
         } else {
@@ -76,23 +80,16 @@ public class CraneShotEventHandler {
             }
         }
     }
-    private static void showMovementTypeMessage() {
-        int currentHotkey = -1;
-        for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
-            if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
-                currentHotkey = i;
-                break;
-            }
-        }
-        if (currentHotkey != -1) {
-            String movementType = MOVEMENT_NAMES[CraneshotClient.CAMERA_CONTROLLER.getCurrentType(currentHotkey)];
-            currentMessage = String.format("Camera %d: %s Movement", currentHotkey + 1, movementType);
-            messageTimer = System.currentTimeMillis() + MESSAGE_DURATION;
-        }
+    private static void showMovementTypeMessage(String message) {
+
+
+        showToast = true;
+        messageTimer = System.currentTimeMillis() + MESSAGE_DURATION;
+
     }
     private static void updateMessageTimer() {
         if (System.currentTimeMillis() >= messageTimer) {
-            currentMessage = "";
+            showToast = false;
         }
     }
 }

@@ -52,9 +52,19 @@ public class CameraController {
         }
         return 0;
     }
+    public ICameraMovement getCurrentMovement() {
+        if (currentMovement >= 0) {
+            return movements[currentMovement][currentTypes[currentMovement]];
+        }
+        return null;
+    }
     public void adjustDistance(int index, boolean increase) {
         if (index >= 0 && index < movements.length) {
             movements[index][currentTypes[index]].adjustDistance(increase);
         }
+    }
+
+    public int getCurrentMovementIndex() {
+        return currentMovement;
     }
 }

@@ -12,7 +12,7 @@ public class LinearMovement implements ICameraMovement {
     private static final float ROTATION_EASING_FACTOR = 0.1f;
     private static final float DISTANCE_EASING_FACTOR = 0.1f;
     private static final double SCROLL_SENSITIVITY = 0.5;
-    private static final double FIRST_PERSON_DISTANCE_THRESHOLD = 2.5;
+    private static final double FIRST_PERSON_DISTANCE_THRESHOLD = 1.5;
     private static final double MIN_DISTANCE = 2.0;
     private static final double MAX_DISTANCE = 20.0;
 
@@ -20,10 +20,9 @@ public class LinearMovement implements ICameraMovement {
     private double currentDistance = 0;
 
     // Smoothing variables
-    private Vec3d smoothedPlayerPos = new Vec3d(0, 0, 0);
+    private Vec3d smoothedPlayerEyePos = new Vec3d(0, 0, 0);
     private double smoothedYaw = 0;
     private double smoothedPitch = 0;
-
     private boolean resetting = false;
     private boolean wasFirstPerson = true;
 
@@ -33,7 +32,7 @@ public class LinearMovement implements ICameraMovement {
         if (player == null) return;
 
         // Initialize smoothing variables to current player state
-        smoothedPlayerPos = player.getPos();
+        smoothedPlayerEyePos = player.getEyePos();
         smoothedYaw = player.getYaw();
         smoothedPitch = player.getPitch();
         currentDistance = 0;
@@ -46,9 +45,9 @@ public class LinearMovement implements ICameraMovement {
         PlayerEntity player = client.player;
         if (player == null) return true;
 
-        // Smooth position interpolation
+        // Smooth eye position interpolation
         Vec3d playerEyePos = player.getEyePos();
-        smoothedPlayerPos = interpolateVec3d(smoothedPlayerPos, playerEyePos, POSITION_EASING_FACTOR);
+        smoothedPlayerEyePos = interpolateVec3d(smoothedPlayerEyePos, playerEyePos, POSITION_EASING_FACTOR);
 
         // Smooth rotation interpolation
         smoothedYaw = lerpAngle(smoothedYaw, player.getYaw(), ROTATION_EASING_FACTOR);
@@ -76,7 +75,8 @@ public class LinearMovement implements ICameraMovement {
         double yOffset = Math.sin(pitch) * currentDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * currentDistance;
 
-        Vec3d cameraPos = smoothedPlayerPos.add(0, player.getEyeHeight(player.getPose()), 0).add(xOffset, yOffset, zOffset);
+        // Use smoothed eye position directly for camera position calculation
+        Vec3d cameraPos = smoothedPlayerEyePos.add(xOffset, yOffset, zOffset);
 
         // Update camera position and rotation
         ((CameraAccessor)camera).invokesetPos(cameraPos);
@@ -97,6 +97,11 @@ public class LinearMovement implements ICameraMovement {
         targetDistance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, targetDistance * multiplier));
     }
 
+    @Override
+    public String getName() {
+        return "Linear";
+    }
+
     // Helper methods for smooth interpolation
     private Vec3d interpolateVec3d(Vec3d current, Vec3d target, float factor) {
         double x = current.x + (target.x - current.x) * factor;
@@ -110,7 +115,6 @@ public class LinearMovement implements ICameraMovement {
         double diff = target - current;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
-
         return current + diff * factor;
     }
 }
