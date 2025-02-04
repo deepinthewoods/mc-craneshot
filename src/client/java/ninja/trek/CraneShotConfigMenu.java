@@ -17,34 +17,32 @@ public class CraneShotConfigMenu implements ModMenuApi {
         return parent -> {
             ConfigBuilder builder = ConfigBuilder.create()
                     .setParentScreen(parent)
-                    .setTitle(Text.translatable("config.craneshot.title"));
+                    .setTitle(Text.literal("Camera Settings"));
 
             // Add global settings tab
             ConfigCategory globalCategory = builder.getOrCreateCategory(
-                    Text.translatable("config.craneshot.category.global"));
+                    Text.literal("Global Settings"));
             addGlobalSettings(globalCategory, builder.entryBuilder());
 
             // Add tabs for each camera slot
             CameraController controller = CraneshotClient.CAMERA_CONTROLLER;
             for (int i = 0; i < controller.getMovementCount(); i++) {
-                final int slotIndex = i; // Create final variable for lambda capture
+                final int slotIndex = i;
                 ICameraMovement movement = controller.getMovementAt(i);
                 if (movement != null) {
                     ConfigCategory slotCategory = builder.getOrCreateCategory(
-                            Text.translatable("config.craneshot.category.slot", i + 1));
+                            Text.literal("Camera " + (i + 1)));
                     addMovementSettings(slotCategory, builder.entryBuilder(), movement, slotIndex);
                 }
             }
-
             return builder.build();
         };
     }
 
     private void addGlobalSettings(ConfigCategory category, ConfigEntryBuilder entryBuilder) {
-        // Add any global settings from CraneShotConfig
         CraneShotConfig config = CraneShotConfig.get();
         category.addEntry(entryBuilder.startBooleanToggle(
-                        Text.translatable("config.craneshot.option.example_toggle"),
+                        Text.literal("exampleToggle"),
                         config.exampleToggle)
                 .setDefaultValue(true)
                 .setSaveConsumer(newValue -> {
@@ -56,20 +54,18 @@ public class CraneShotConfigMenu implements ModMenuApi {
 
     private void addMovementSettings(ConfigCategory category, ConfigEntryBuilder entryBuilder,
                                      ICameraMovement movement, int slotIndex) {
-        // Use reflection to find all fields with @ConfigField annotation
         for (Field field : movement.getClass().getDeclaredFields()) {
             ConfigField annotation = field.getAnnotation(ConfigField.class);
             if (annotation == null) continue;
             field.setAccessible(true);
-            String translationKey = "config.craneshot.movement." + field.getName().toLowerCase();
 
             try {
                 if (field.getType() == double.class || field.getType() == Double.class) {
-                    addDoubleField(category, entryBuilder, movement, field, annotation, translationKey, slotIndex);
+                    addDoubleField(category, entryBuilder, movement, field, annotation, slotIndex);
                 } else if (field.getType() == float.class || field.getType() == Float.class) {
-                    addFloatField(category, entryBuilder, movement, field, annotation, translationKey, slotIndex);
+                    addFloatField(category, entryBuilder, movement, field, annotation, slotIndex);
                 } else if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-                    addBooleanField(category, entryBuilder, movement, field, annotation, translationKey, slotIndex);
+                    addBooleanField(category, entryBuilder, movement, field, annotation, slotIndex);
                 }
             } catch (Exception e) {
                 Craneshot.LOGGER.error("Failed to add config field: " + field.getName(), e);
@@ -79,14 +75,14 @@ public class CraneShotConfigMenu implements ModMenuApi {
 
     private void addDoubleField(ConfigCategory category, ConfigEntryBuilder entryBuilder,
                                 ICameraMovement movement, Field field, ConfigField annotation,
-                                String translationKey, int slotIndex) throws IllegalAccessException {
+                                int slotIndex) throws IllegalAccessException {
         double currentValue = field.getDouble(movement);
         var entry = entryBuilder.startDoubleField(
-                Text.translatable(translationKey),
+                Text.literal(field.getName()),
                 currentValue);
 
         if (!annotation.description().isEmpty()) {
-            entry.setTooltip(Text.translatable(translationKey + ".tooltip"));
+            entry.setTooltip(Text.literal(annotation.description()));
         }
 
         entry.setDefaultValue(currentValue)
@@ -100,20 +96,19 @@ public class CraneShotConfigMenu implements ModMenuApi {
                         Craneshot.LOGGER.error("Failed to save config value", e);
                     }
                 });
-
         category.addEntry(entry.build());
     }
 
     private void addFloatField(ConfigCategory category, ConfigEntryBuilder entryBuilder,
                                ICameraMovement movement, Field field, ConfigField annotation,
-                               String translationKey, int slotIndex) throws IllegalAccessException {
+                               int slotIndex) throws IllegalAccessException {
         float currentValue = field.getFloat(movement);
         var entry = entryBuilder.startFloatField(
-                Text.translatable(translationKey),
+                Text.literal(field.getName()),
                 currentValue);
 
         if (!annotation.description().isEmpty()) {
-            entry.setTooltip(Text.translatable(translationKey + ".tooltip"));
+            entry.setTooltip(Text.literal(annotation.description()));
         }
 
         entry.setDefaultValue(currentValue)
@@ -127,20 +122,19 @@ public class CraneShotConfigMenu implements ModMenuApi {
                         Craneshot.LOGGER.error("Failed to save config value", e);
                     }
                 });
-
         category.addEntry(entry.build());
     }
 
     private void addBooleanField(ConfigCategory category, ConfigEntryBuilder entryBuilder,
                                  ICameraMovement movement, Field field, ConfigField annotation,
-                                 String translationKey, int slotIndex) throws IllegalAccessException {
+                                 int slotIndex) throws IllegalAccessException {
         boolean currentValue = field.getBoolean(movement);
         var entry = entryBuilder.startBooleanToggle(
-                Text.translatable(translationKey),
+                Text.literal(field.getName()),
                 currentValue);
 
         if (!annotation.description().isEmpty()) {
-            entry.setTooltip(Text.translatable(translationKey + ".tooltip"));
+            entry.setTooltip(Text.literal(annotation.description()));
         }
 
         entry.setDefaultValue(currentValue)
@@ -152,7 +146,6 @@ public class CraneShotConfigMenu implements ModMenuApi {
                         Craneshot.LOGGER.error("Failed to save config value", e);
                     }
                 });
-
         category.addEntry(entry.build());
     }
 }
