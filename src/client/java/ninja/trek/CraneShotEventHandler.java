@@ -20,6 +20,7 @@ public class CraneShotEventHandler {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             handleScrollInput(client);
             updateMessageTimer();
+            CraneshotClient.checkKeybinds();
         });
         HudRenderCallback.EVENT.register((context, tickDelta) -> {
             if (!currentMessage.isEmpty() && System.currentTimeMillis() < messageTimer) {
@@ -92,4 +93,5 @@ public class CraneShotEventHandler {
             showToast = false;
         }
     }
+
 }

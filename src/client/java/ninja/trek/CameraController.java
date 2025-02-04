@@ -3,54 +3,34 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
-import ninja.trek.config.MovementConfigManager;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class CameraController {
     private final List<List<ICameraMovement>> movements;
+    private final ArrayList<Integer> currentTypes;
     private int currentMovement = -1;
-    private final List<Integer> currentTypes;
+
 
     public CameraController() {
         movements = new ArrayList<>();
         currentTypes = new ArrayList<>();
-        MovementConfigManager configManager = MovementConfigManager.getInstance();
 
         // Initialize slots with saved or default configurations
         for (int i = 0; i < 3; i++) {
-            List<ICameraMovement> slotMovements = configManager.loadSlotConfig(i);
-            movements.add(slotMovements);
+            ArrayList arr = new ArrayList<ICameraMovement>();
+            arr.add(new LinearMovement());
+            arr.add(new LinearMovement());
+            movements.add(
+                   arr
+                    );
             currentTypes.add(0);
         }
     }
 
-    // New methods for dynamic movement management
-    public void addMovementToSlot(int slotIndex, ICameraMovement movement) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            movements.get(slotIndex).add(movement);
-            MovementConfigManager configManager = MovementConfigManager.getInstance();
-            configManager.loadMovementConfig(movement, slotIndex);
-            configManager.saveSlotConfig(slotIndex, movements.get(slotIndex));
-        }
-    }
 
-    public void removeMovementFromSlot(int slotIndex, int movementIndex) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            List<ICameraMovement> slotMovements = movements.get(slotIndex);
-            if (movementIndex >= 0 && movementIndex < slotMovements.size()) {
-                if (currentTypes.get(slotIndex) >= movementIndex) {
-                    currentTypes.set(slotIndex, Math.max(0, currentTypes.get(slotIndex) - 1));
-                }
-                slotMovements.remove(movementIndex);
-                if (slotMovements.isEmpty()) {
-                    slotMovements.add(new LinearMovement()); // Always keep at least one movement
-                }
-                MovementConfigManager.getInstance().saveSlotConfig(slotIndex, slotMovements);
-            }
-        }
-    }
+
 
     // Modified existing methods to work with Lists
     public int getMovementCount() {
@@ -143,4 +123,16 @@ public class CameraController {
     public int getCurrentMovementIndex() {
         return currentMovement;
     }
+
+    public void swapMovements(int slotIndex, int index1, int index2) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            List<ICameraMovement> slotMovements = movements.get(slotIndex);
+            if (index1 >= 0 && index1 < slotMovements.size() && index2 >= 0 && index2 < slotMovements.size()) {
+                ICameraMovement temp = slotMovements.get(index1);
+                slotMovements.set(index1, slotMovements.get(index2));
+                slotMovements.set(index2, temp);
+            }
+        }
+    }
+
 }

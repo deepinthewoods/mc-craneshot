@@ -15,7 +15,7 @@
 	"entrypoints": {
 		"main": ["ninja.trek.Craneshot"],
 		"client": ["ninja.trek.CraneshotClient"],
-		"modmenu": ["ninja.trek.CraneShotConfigMenu"],
+		
 		"fabric-datagen": ["ninja.trek.CraneshotDataGenerator"]
 	},
 	"mixins": [

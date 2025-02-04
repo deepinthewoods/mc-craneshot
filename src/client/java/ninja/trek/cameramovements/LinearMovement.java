@@ -5,77 +5,38 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
-import ninja.trek.config.ConfigField;
 import ninja.trek.mixin.client.CameraAccessor;
 
-public class LinearMovement implements ICameraMovement {
-    @ConfigField(
-            name = "Position Easing",
-            description = "How smoothly the camera follows position changes",
-            min = 0.01,
-            max = 1.0,
-            sliderControl = true
-    )
+public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
+
+    @MovementSetting(label = "Position Easing Factor", min = 0.01, max = 1.0)
     private float positionEasingFactor = 0.1f;
 
-    @ConfigField(
-            name = "Rotation Easing",
-            description = "How smoothly the camera follows rotation changes",
-            min = 0.01,
-            max = 1.0,
-            sliderControl = true
-    )
+    @MovementSetting(label = "Rotation Easing Factor", min = 0.01, max = 1.0)
     private float rotationEasingFactor = 0.1f;
 
-    @ConfigField(
-            name = "Distance Easing",
-            description = "How smoothly the camera transitions between distances",
-            min = 0.01,
-            max = 1.0,
-            sliderControl = true
-    )
+    @MovementSetting(label = "Distance Easing Factor", min = 0.01, max = 1.0)
     private float distanceEasingFactor = 0.1f;
 
-    @ConfigField(
-            name = "Scroll Sensitivity",
-            description = "How quickly the distance changes when scrolling",
-            min = 0.1,
-            max = 2.0,
-            sliderControl = true
-    )
+    @MovementSetting(label = "Scroll Sensitivity", min = 0.1, max = 5.0)
     private double scrollSensitivity = 0.5;
 
-    @ConfigField(
-            name = "Minimum Distance",
-            description = "Closest the camera can get to the player",
-            min = 0.5,
-            max = 10.0
-    )
+    @MovementSetting(label = "Min Distance", min = 1.0, max = 10.0)
     private double minDistance = 2.0;
 
-    @ConfigField(
-            name = "Maximum Distance",
-            description = "Furthest the camera can get from the player",
-            min = 5.0,
-            max = 50.0
-    )
+    @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    @ConfigField(
-            name = "First Person Threshold",
-            description = "Distance at which camera switches to first person",
-            min = 0.5,
-            max = 5.0
-    )
-    private double firstPersonDistanceThreshold = 1.5;
-
+    @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10;
+
     private double currentDistance = 0;
     private Vec3d smoothedPlayerEyePos = new Vec3d(0, 0, 0);
     private double smoothedYaw = 0;
     private double smoothedPitch = 0;
     private boolean resetting = false;
     private boolean wasFirstPerson = true;
+    private double firstPersonDistanceThreshold = 2;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
