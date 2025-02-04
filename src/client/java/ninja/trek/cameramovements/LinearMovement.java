@@ -10,22 +10,22 @@ import ninja.trek.mixin.client.CameraAccessor;
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
 
     @MovementSetting(label = "Position Easing Factor", min = 0.01, max = 1.0)
-    private float positionEasingFactor = 0.1f;
+    private double positionEasingFactor = 0.1f;
 
     @MovementSetting(label = "Rotation Easing Factor", min = 0.01, max = 1.0)
-    private float rotationEasingFactor = 0.1f;
+    private double rotationEasingFactor = 0.1f;
 
     @MovementSetting(label = "Distance Easing Factor", min = 0.01, max = 1.0)
-    private float distanceEasingFactor = 0.1f;
+    private double distanceEasingFactor = 0.1f;
 
     @MovementSetting(label = "Scroll Sensitivity", min = 0.1, max = 5.0)
-    private double scrollSensitivity = 0.5;
+    private double scrollSensitivity = 0.5f;
 
     @MovementSetting(label = "Min Distance", min = 1.0, max = 10.0)
-    private double minDistance = 2.0;
+    private double minDistance = 2.0f;
 
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
-    private double maxDistance = 20.0;
+    private double maxDistance = 20.0f;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10;
@@ -86,7 +86,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         Vec3d cameraPos = smoothedPlayerEyePos.add(xOffset, yOffset, zOffset);
         ((CameraAccessor)camera).invokesetPos(cameraPos);
-        ((CameraAccessor)camera).invokeSetRotation((float)smoothedYaw, (float)smoothedPitch);
+        ((CameraAccessor)camera).invokeSetRotation((float) smoothedYaw, (float) smoothedPitch);
 
         return resetting && currentDistance < 0.01;
     }
@@ -107,14 +107,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         return "Linear";
     }
 
-    private Vec3d interpolateVec3d(Vec3d current, Vec3d target, float factor) {
+    private Vec3d interpolateVec3d(Vec3d current, Vec3d target, double factor) {
         double x = current.x + (target.x - current.x) * factor;
         double y = current.y + (target.y - current.y) * factor;
         double z = current.z + (target.z - current.z) * factor;
         return new Vec3d(x, y, z);
     }
 
-    private double lerpAngle(double current, double target, float factor) {
+    private double lerpAngle(double current, double target, double factor) {
         double diff = target - current;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
