@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"package": "ninja.trek.mixin.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"MouseMixin",
+		"CameraAccessor",
+		"MouseAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
