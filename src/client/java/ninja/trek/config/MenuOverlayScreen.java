@@ -18,11 +18,15 @@ import java.util.List;
 public class MenuOverlayScreen extends Screen {
     private static final int GUI_WIDTH = 280;
     private static final int GUI_HEIGHT = 180;
+    private static final int TAB_HEIGHT = 30;
+    private static final int CONTENT_START_Y = TAB_HEIGHT + 10; // Space for tabs + padding
+    private static final int SCROLL_SPEED = 15;
+
     private static boolean isMenuOpen = false;
     private int selectedTab = 0;
     private final List<SettingSlider> settingSliders = new ArrayList<>();
     private int scrollOffset = 0;
-    private static final int SCROLL_AMOUNT = 20;
+    private int maxScroll = 0;
 
     public MenuOverlayScreen() {
         super(Text.literal("CraneShot Settings"));
@@ -34,76 +38,92 @@ public class MenuOverlayScreen extends Screen {
         int centerX = (this.width - GUI_WIDTH) / 2;
         int centerY = (this.height - GUI_HEIGHT) / 2;
 
-        // Tab buttons
+        // Tab buttons at fixed position
         for (int i = 0; i <= CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
             int tabIndex = i;
             String tabName = (i == 0) ? "General" : "Slot " + i;
             this.addDrawableChild(ButtonWidget.builder(Text.literal(tabName), button -> switchTab(tabIndex))
-                    .dimensions(centerX + (i * 70), centerY - 30, 65, 20)
+                    .dimensions(centerX + (i * 70), centerY, 65, 20)
                     .build());
         }
 
         // Create sliders for the current tab's settings
-        updateSliders(centerX, centerY);
+        updateSliders(centerX, centerY + CONTENT_START_Y);
+    }
 
-        // Add scroll buttons if content exceeds view
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("▲"), button -> scroll(-SCROLL_AMOUNT))
-                .dimensions(this.width - 30, centerY, 20, 20)
-                .build());
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("▼"), button -> scroll(SCROLL_AMOUNT))
-                .dimensions(this.width - 30, centerY + GUI_HEIGHT - 40, 20, 20)
-                .build());
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        // Handle mouse wheel scrolling
+        if (verticalAmount != 0) {
+            scroll((int)(-verticalAmount * SCROLL_SPEED));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
 
-//        // Close button
-//        this.addDrawableChild(ButtonWidget.builder(Text.literal("Save & Close"), button -> closeMenu())
-//                .dimensions(centerX + GUI_WIDTH - 100, centerY + GUI_HEIGHT - 30, 90, 20)
-//                .build());
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == CraneshotClient.toggleMenuKey.getDefaultKey().getCode()) toggleMenu();
+        return true;
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Fill with a semi-transparent background without blur
-//        context.fill(0, 0, this.width, this.height, 0xC0000000);
-
         int centerX = (this.width - GUI_WIDTH) / 2;
         int centerY = (this.height - GUI_HEIGHT) / 2;
 
-        // Draw main panel background
-//        context.fill(
-//                centerX,
-//                centerY - 40,
-//                centerX + GUI_WIDTH,
-//                centerY + GUI_HEIGHT,
-//                0xE0000000
-//        );
+        // Draw semi-transparent background
+        context.fill(centerX, centerY, centerX + GUI_WIDTH, centerY + GUI_HEIGHT, 0x80000000);
 
-        // Draw panel border
-//        context.drawBorder(
-//                centerX,
-//                centerY - 40,
-//                GUI_WIDTH,
-//                GUI_HEIGHT + 40,
-//                0xFFFFFFFF
-//        );
+        // Draw content area
+        context.fill(
+                centerX,
+                centerY + CONTENT_START_Y,
+                centerX + GUI_WIDTH,
+                centerY + GUI_HEIGHT,
+                0xC0000000
+        );
 
-
-
+        // Render all widgets
         super.render(context, mouseX, mouseY, delta);
+
         // Draw slider labels
+        int visibleStartY = centerY + CONTENT_START_Y;
+        int visibleEndY = centerY + GUI_HEIGHT;
         for (SettingSlider slider : settingSliders) {
-            String label = slider.getLabel().getString();
-            int textX = centerX + 10;
-            int textY = slider.getY() + 5;
+            int sliderY = slider.getY();
+            if (sliderY + 20 >= visibleStartY && sliderY <= visibleEndY) {
+                String label = slider.getLabel().getString();
+                context.drawTextWithShadow(
+                        this.textRenderer,
+                        label,
+                        centerX + 10,
+                        sliderY + 5,
+                        0xFFFFFF
+                );
+            }
+        }
 
-            // Draw text with shadow for better visibility
-            context.drawTextWithShadow(
-                    this.textRenderer,
-                    label,
-                    textX,
-                    textY,
-                    0xFFFFFF
-            );
-
+        // Draw scroll indicators if needed
+        if (maxScroll > 0) {
+            if (scrollOffset > 0) {
+                context.drawCenteredTextWithShadow(
+                        this.textRenderer,
+                        Text.literal("▲"),
+                        centerX + GUI_WIDTH - 15,
+                        centerY + CONTENT_START_Y,
+                        0xFFFFFF
+                );
+            }
+            if (scrollOffset < maxScroll) {
+                context.drawCenteredTextWithShadow(
+                        this.textRenderer,
+                        Text.literal("▼"),
+                        centerX + GUI_WIDTH - 15,
+                        centerY + GUI_HEIGHT - 15,
+                        0xFFFFFF
+                );
+            }
         }
     }
 
@@ -120,75 +140,50 @@ public class MenuOverlayScreen extends Screen {
                         field.setAccessible(true);
                         try {
                             double value = ((Number) field.get(settings)).doubleValue();
-                            SettingSlider slider = new SettingSlider(
-                                    centerX + 110,
-                                    centerY + 20 + yOffset - scrollOffset,
-                                    150,
-                                    20,
-                                    Text.literal(annotation.label()),
-                                    annotation.min(),
-                                    annotation.max(),
-                                    value,
-                                    field.getName(),
-                                    settings
-                            );
-                            settingSliders.add(slider);
-                            this.addDrawableChild(slider);
+                            int sliderY = centerY + yOffset - scrollOffset;
+                            int visibleStartY = (this.height - GUI_HEIGHT) / 2 + CONTENT_START_Y;
+                            int visibleEndY = (this.height + GUI_HEIGHT) / 2;
+
+                            // Only create and add visible sliders
+                            if (sliderY >= visibleStartY - 20 && sliderY <= visibleEndY) {
+                                SettingSlider slider = new SettingSlider(
+                                        centerX + 110,
+                                        sliderY,
+                                        150,
+                                        20,
+                                        Text.literal(annotation.label()),
+                                        annotation.min(),
+                                        annotation.max(),
+                                        value,
+                                        field.getName(),
+                                        settings
+                                );
+                                settingSliders.add(slider);
+                                this.addDrawableChild(slider);
+                            }
                             yOffset += 30;
                         } catch (IllegalAccessException e) {
                             e.printStackTrace();
                         }
                     }
                 }
+                // Calculate max scroll based on content height
+                int contentHeight = yOffset;
+                int visibleHeight = GUI_HEIGHT - CONTENT_START_Y - 10;
+                maxScroll = Math.max(0, contentHeight - visibleHeight);
             }
         }
     }
 
     private void scroll(int amount) {
-        int maxScroll = Math.max(0, (settingSliders.size() * 30) - GUI_HEIGHT + 60);
-        scrollOffset = Math.max(0, Math.min(scrollOffset + amount, maxScroll));
-        clearChildren();
-        init();
-    }
-
-    private static class SettingSlider extends SliderWidget {
-        private final double min;
-        private final double max;
-        private final String fieldName;
-        private final AbstractMovementSettings settings;
-        private final Text label;
-
-        public SettingSlider(int x, int y, int width, int height, Text label,
-                             double min, double max, double value,
-                             String fieldName, AbstractMovementSettings settings) {
-            super(x, y, width, height, label, (value - min) / (max - min));
-            this.min = min;
-            this.max = max;
-            this.fieldName = fieldName;
-            this.settings = settings;
-            this.label = label;
-            updateMessage();
-        }
-
-        @Override
-        protected void updateMessage() {
-            setMessage(Text.literal(String.format("%.2f", getValue())));
-        }
-
-        @Override
-        protected void applyValue() {
-            double value = min + (max - min) * this.value;
-            settings.updateSetting(fieldName, value);
-        }
-
-        public Text getLabel() {
-            return label;
-        }
-
-        private double getValue() {
-            return min + (max - min) * this.value;
+        if (maxScroll > 0) {
+            scrollOffset = Math.max(0, Math.min(scrollOffset + amount, maxScroll));
+            clearChildren();
+            init();
         }
     }
+
+
 
     private void switchTab(int index) {
         selectedTab = index;
@@ -197,10 +192,7 @@ public class MenuOverlayScreen extends Screen {
         init();
     }
 
-    private void closeMenu() {
-        isMenuOpen = false;
-        MinecraftClient.getInstance().setScreen(null);
-    }
+
 
     public static void toggleMenu() {
         MinecraftClient client = MinecraftClient.getInstance();
