@@ -4,11 +4,14 @@ import com.google.gson.*;
 import net.fabricmc.loader.api.FabricLoader;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.ICameraMovement;
+import ninja.trek.cameramovements.LinearMovement;
 
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class MovementConfigManager {
@@ -16,7 +19,9 @@ public class MovementConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static MovementConfigManager INSTANCE;
 
+    // Store both the movement configs and slot configurations
     private final Map<String, JsonObject> savedConfigs = new HashMap<>();
+    private final Map<Integer, JsonArray> slotConfigs = new HashMap<>();
 
     public static MovementConfigManager getInstance() {
         if (INSTANCE == null) {
@@ -32,6 +37,43 @@ public class MovementConfigManager {
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to create config directory", e);
         }
+    }
+
+    // New method to save slot configuration
+    public void saveSlotConfig(int slot, List<ICameraMovement> movements) {
+        JsonArray slotConfig = new JsonArray();
+        for (ICameraMovement movement : movements) {
+            slotConfig.add(movement.getClass().getName());
+        }
+        slotConfigs.put(slot, slotConfig);
+        save();
+    }
+
+    // New method to load slot configuration
+    public List<ICameraMovement> loadSlotConfig(int slot) {
+        List<ICameraMovement> movements = new ArrayList<>();
+        JsonArray slotConfig = slotConfigs.get(slot);
+
+        if (slotConfig != null) {
+            for (JsonElement element : slotConfig) {
+                try {
+                    String className = element.getAsString();
+                    Class<?> movementClass = Class.forName(className);
+                    ICameraMovement movement = (ICameraMovement) movementClass.getDeclaredConstructor().newInstance();
+                    movements.add(movement);
+                    loadMovementConfig(movement, slot);
+                } catch (Exception e) {
+                    Craneshot.LOGGER.error("Failed to load movement: " + element.getAsString(), e);
+                }
+            }
+        }
+
+        // Ensure at least one movement exists
+        if (movements.isEmpty()) {
+            movements.add(new LinearMovement());
+        }
+
+        return movements;
     }
 
     public void saveMovementConfig(ICameraMovement movement, int slot) {
@@ -88,7 +130,6 @@ public class MovementConfigManager {
                 if (element == null) continue;
 
                 field.setAccessible(true);
-
                 if (field.getType() == double.class || field.getType() == Double.class) {
                     field.setDouble(movement, element.getAsDouble());
                 } else if (field.getType() == float.class || field.getType() == Float.class) {
@@ -108,8 +149,20 @@ public class MovementConfigManager {
 
     private void save() {
         try {
+            JsonObject root = new JsonObject();
+
+            // Save individual movement configs
+            JsonObject configs = new JsonObject();
+            savedConfigs.forEach(configs::add);
+            root.add("movements", configs);
+
+            // Save slot configurations
+            JsonObject slots = new JsonObject();
+            slotConfigs.forEach((slot, movements) -> slots.add(String.valueOf(slot), movements));
+            root.add("slots", slots);
+
             Path configFile = CONFIG_DIR.resolve("movement_configs.json");
-            Files.writeString(configFile, GSON.toJson(savedConfigs));
+            Files.writeString(configFile, GSON.toJson(root));
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to save movement configs", e);
         }
@@ -120,10 +173,22 @@ public class MovementConfigManager {
             Path configFile = CONFIG_DIR.resolve("movement_configs.json");
             if (Files.exists(configFile)) {
                 String json = Files.readString(configFile);
-                JsonObject configs = GSON.fromJson(json, JsonObject.class);
+                JsonObject root = GSON.fromJson(json, JsonObject.class);
 
-                configs.entrySet().forEach(entry ->
-                        savedConfigs.put(entry.getKey(), entry.getValue().getAsJsonObject()));
+                // Load individual movement configs
+                JsonObject configs = root.getAsJsonObject("movements");
+                if (configs != null) {
+                    configs.entrySet().forEach(entry ->
+                            savedConfigs.put(entry.getKey(), entry.getValue().getAsJsonObject()));
+                }
+
+                // Load slot configurations
+                JsonObject slots = root.getAsJsonObject("slots");
+                if (slots != null) {
+                    slots.entrySet().forEach(entry ->
+                            slotConfigs.put(Integer.parseInt(entry.getKey()),
+                                    entry.getValue().getAsJsonArray()));
+                }
             }
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to load movement configs", e);
@@ -132,5 +197,13 @@ public class MovementConfigManager {
 
     private String getConfigKey(ICameraMovement movement, int slot) {
         return movement.getClass().getName() + "#" + slot;
+    }
+
+    // New method to clear all configurations for a slot
+    public void clearSlotConfig(int slot) {
+        slotConfigs.remove(slot);
+        // Remove all movement configs for this slot
+        savedConfigs.entrySet().removeIf(entry -> entry.getKey().endsWith("#" + slot));
+        save();
     }
 }

@@ -5,95 +5,138 @@ import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementConfigManager;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class CameraController {
-    private final ICameraMovement[][] movements;
+    private final List<List<ICameraMovement>> movements;
     private int currentMovement = -1;
-    private final int[] currentTypes;
+    private final List<Integer> currentTypes;
 
     public CameraController() {
-        movements = new ICameraMovement[][] {
-                {new LinearMovement()},
-                {new LinearMovement()},
-                {new LinearMovement()}
-        };
-        currentTypes = new int[] {0, 0, 0};
+        movements = new ArrayList<>();
+        currentTypes = new ArrayList<>();
+        MovementConfigManager configManager = MovementConfigManager.getInstance();
 
-        // Load saved configurations
-        for (int i = 0; i < movements.length; i++) {
-            for (ICameraMovement movement : movements[i]) {
-                MovementConfigManager.getInstance().loadMovementConfig(movement, i);
+        // Initialize slots with saved or default configurations
+        for (int i = 0; i < 3; i++) {
+            List<ICameraMovement> slotMovements = configManager.loadSlotConfig(i);
+            movements.add(slotMovements);
+            currentTypes.add(0);
+        }
+    }
+
+    // New methods for dynamic movement management
+    public void addMovementToSlot(int slotIndex, ICameraMovement movement) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            movements.get(slotIndex).add(movement);
+            MovementConfigManager configManager = MovementConfigManager.getInstance();
+            configManager.loadMovementConfig(movement, slotIndex);
+            configManager.saveSlotConfig(slotIndex, movements.get(slotIndex));
+        }
+    }
+
+    public void removeMovementFromSlot(int slotIndex, int movementIndex) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            List<ICameraMovement> slotMovements = movements.get(slotIndex);
+            if (movementIndex >= 0 && movementIndex < slotMovements.size()) {
+                if (currentTypes.get(slotIndex) >= movementIndex) {
+                    currentTypes.set(slotIndex, Math.max(0, currentTypes.get(slotIndex) - 1));
+                }
+                slotMovements.remove(movementIndex);
+                if (slotMovements.isEmpty()) {
+                    slotMovements.add(new LinearMovement()); // Always keep at least one movement
+                }
+                MovementConfigManager.getInstance().saveSlotConfig(slotIndex, slotMovements);
             }
         }
     }
 
-    // Config access methods
+    // Modified existing methods to work with Lists
     public int getMovementCount() {
-        return movements.length;
+        return movements.size();
     }
 
     public ICameraMovement getMovementAt(int index) {
-        if (index >= 0 && index < movements.length) {
-            return movements[index][currentTypes[index]];
+        if (index >= 0 && index < movements.size()) {
+            List<ICameraMovement> slotMovements = movements.get(index);
+            int currentType = currentTypes.get(index);
+            if (!slotMovements.isEmpty() && currentType < slotMovements.size()) {
+                return slotMovements.get(currentType);
+            }
         }
         return null;
     }
 
     public int getCurrentTypeForSlot(int slotIndex) {
-        if (slotIndex >= 0 && slotIndex < currentTypes.length) {
-            return currentTypes[slotIndex];
+        if (slotIndex >= 0 && slotIndex < currentTypes.size()) {
+            return currentTypes.get(slotIndex);
         }
         return 0;
     }
 
-    public ICameraMovement[] getAvailableMovementsForSlot(int slotIndex) {
-        if (slotIndex >= 0 && slotIndex < movements.length) {
-            return movements[slotIndex];
+    public List<ICameraMovement> getAvailableMovementsForSlot(int slotIndex) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            return new ArrayList<>(movements.get(slotIndex));
         }
-        return new ICameraMovement[0];
+        return new ArrayList<>();
     }
 
-    // Existing methods remain unchanged
     public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
         if (currentMovement != -1) {
-            movements[currentMovement][currentTypes[currentMovement]].reset(client, camera);
+            ICameraMovement current = getMovementAt(currentMovement);
+            if (current != null) {
+                current.reset(client, camera);
+            }
         }
         currentMovement = movementIndex;
-        movements[movementIndex][currentTypes[movementIndex]].start(client, camera);
+        ICameraMovement newMovement = getMovementAt(movementIndex);
+        if (newMovement != null) {
+            newMovement.start(client, camera);
+        }
     }
 
     public void updateTransition(MinecraftClient client, Camera camera) {
         if (currentMovement != -1) {
-            ICameraMovement movement = movements[currentMovement][currentTypes[currentMovement]];
-            if (movement.update(client, camera))
+            ICameraMovement movement = getMovementAt(currentMovement);
+            if (movement != null && movement.update(client, camera)) {
                 currentMovement = -1;
+            }
         }
     }
 
     public void reset(MinecraftClient client, Camera camera) {
         if (currentMovement != -1) {
-            movements[currentMovement][currentTypes[currentMovement]].reset(client, camera);
+            ICameraMovement movement = getMovementAt(currentMovement);
+            if (movement != null) {
+                movement.reset(client, camera);
+            }
+            currentMovement = -1;
         }
     }
 
     public void cycleMovementType(boolean forward) {
         if (currentMovement != -1) {
-            int currentType = currentTypes[currentMovement];
-            currentTypes[currentMovement] = forward ?
-                    (currentType + 1) % movements[currentMovement].length :
-                    (currentType - 1 + movements[currentMovement].length) % movements[currentMovement].length;
+            List<ICameraMovement> slotMovements = movements.get(currentMovement);
+            int currentType = currentTypes.get(currentMovement);
+            int newType = forward ?
+                    (currentType + 1) % slotMovements.size() :
+                    (currentType - 1 + slotMovements.size()) % slotMovements.size();
+            currentTypes.set(currentMovement, newType);
         }
     }
 
     public ICameraMovement getCurrentMovement() {
         if (currentMovement >= 0) {
-            return movements[currentMovement][currentTypes[currentMovement]];
+            return getMovementAt(currentMovement);
         }
         return null;
     }
 
     public void adjustDistance(int index, boolean increase) {
-        if (index >= 0 && index < movements.length) {
-            movements[index][currentTypes[index]].adjustDistance(increase);
+        ICameraMovement movement = getMovementAt(index);
+        if (movement != null) {
+            movement.adjustDistance(increase);
         }
     }
 
