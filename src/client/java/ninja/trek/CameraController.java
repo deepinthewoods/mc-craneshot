@@ -3,6 +3,7 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
+import ninja.trek.config.WrapSettings;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,49 @@ public class CameraController {
     }
 
 
+    public void addMovement(int slotIndex, ICameraMovement movement) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            movements.get(slotIndex).add(movement);
+        }
+    }
 
+    public void removeMovement(int slotIndex, int movementIndex) {
+        if (slotIndex >= 0 && slotIndex < movements.size()) {
+            List<ICameraMovement> slotMovements = movements.get(slotIndex);
+            if (movementIndex >= 0 && movementIndex < slotMovements.size() && slotMovements.size() > 1) {
+                slotMovements.remove(movementIndex);
+                // Update current type if needed
+                if (currentTypes.get(slotIndex) >= slotMovements.size()) {
+                    currentTypes.set(slotIndex, slotMovements.size() - 1);
+                }
+            }
+        }
+    }
+
+
+    public void cycleMovementType(boolean forward) {
+        if (currentMovement != -1) {
+            List<ICameraMovement> slotMovements = movements.get(currentMovement);
+            int currentType = currentTypes.get(currentMovement);
+            boolean wrap = WrapSettings.getWrapState(currentMovement);
+
+            if (forward) {
+                if (currentType < slotMovements.size() - 1 || wrap) {
+                    int newType = wrap ?
+                            (currentType + 1) % slotMovements.size() :
+                            Math.min(currentType + 1, slotMovements.size() - 1);
+                    currentTypes.set(currentMovement, newType);
+                }
+            } else {
+                if (currentType > 0 || wrap) {
+                    int newType = wrap ?
+                            (currentType - 1 + slotMovements.size()) % slotMovements.size() :
+                            Math.max(currentType - 1, 0);
+                    currentTypes.set(currentMovement, newType);
+                }
+            }
+        }
+    }
 
     // Modified existing methods to work with Lists
     public int getMovementCount() {
@@ -95,16 +138,7 @@ public class CameraController {
         }
     }
 
-    public void cycleMovementType(boolean forward) {
-        if (currentMovement != -1) {
-            List<ICameraMovement> slotMovements = movements.get(currentMovement);
-            int currentType = currentTypes.get(currentMovement);
-            int newType = forward ?
-                    (currentType + 1) % slotMovements.size() :
-                    (currentType - 1 + slotMovements.size()) % slotMovements.size();
-            currentTypes.set(currentMovement, newType);
-        }
-    }
+
 
     public ICameraMovement getCurrentMovement() {
         if (currentMovement >= 0) {
