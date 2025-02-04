@@ -5,21 +5,72 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.config.ConfigField;
 import ninja.trek.mixin.client.CameraAccessor;
 
 public class LinearMovement implements ICameraMovement {
-    private static final float POSITION_EASING_FACTOR = 0.1f;
-    private static final float ROTATION_EASING_FACTOR = 0.1f;
-    private static final float DISTANCE_EASING_FACTOR = 0.1f;
-    private static final double SCROLL_SENSITIVITY = 0.5;
-    private static final double FIRST_PERSON_DISTANCE_THRESHOLD = 1.5;
-    private static final double MIN_DISTANCE = 2.0;
-    private static final double MAX_DISTANCE = 20.0;
+    @ConfigField(
+            name = "Position Easing",
+            description = "How smoothly the camera follows position changes",
+            min = 0.01,
+            max = 1.0,
+            sliderControl = true
+    )
+    private float positionEasingFactor = 0.1f;
+
+    @ConfigField(
+            name = "Rotation Easing",
+            description = "How smoothly the camera follows rotation changes",
+            min = 0.01,
+            max = 1.0,
+            sliderControl = true
+    )
+    private float rotationEasingFactor = 0.1f;
+
+    @ConfigField(
+            name = "Distance Easing",
+            description = "How smoothly the camera transitions between distances",
+            min = 0.01,
+            max = 1.0,
+            sliderControl = true
+    )
+    private float distanceEasingFactor = 0.1f;
+
+    @ConfigField(
+            name = "Scroll Sensitivity",
+            description = "How quickly the distance changes when scrolling",
+            min = 0.1,
+            max = 2.0,
+            sliderControl = true
+    )
+    private double scrollSensitivity = 0.5;
+
+    @ConfigField(
+            name = "Minimum Distance",
+            description = "Closest the camera can get to the player",
+            min = 0.5,
+            max = 10.0
+    )
+    private double minDistance = 2.0;
+
+    @ConfigField(
+            name = "Maximum Distance",
+            description = "Furthest the camera can get from the player",
+            min = 5.0,
+            max = 50.0
+    )
+    private double maxDistance = 20.0;
+
+    @ConfigField(
+            name = "First Person Threshold",
+            description = "Distance at which camera switches to first person",
+            min = 0.5,
+            max = 5.0
+    )
+    private double firstPersonDistanceThreshold = 1.5;
 
     private double targetDistance = 10;
     private double currentDistance = 0;
-
-    // Smoothing variables
     private Vec3d smoothedPlayerEyePos = new Vec3d(0, 0, 0);
     private double smoothedYaw = 0;
     private double smoothedPitch = 0;
@@ -27,11 +78,10 @@ public class LinearMovement implements ICameraMovement {
     private boolean wasFirstPerson = true;
 
     @Override
-    public void startTransition(MinecraftClient client, Camera camera) {
+    public void start(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return;
 
-        // Initialize smoothing variables to current player state
         smoothedPlayerEyePos = player.getEyePos();
         smoothedYaw = player.getYaw();
         smoothedPitch = player.getPitch();
@@ -41,48 +91,42 @@ public class LinearMovement implements ICameraMovement {
     }
 
     @Override
-    public boolean updateTransition(MinecraftClient client, Camera camera) {
+    public boolean update(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return true;
 
         // Smooth eye position interpolation
         Vec3d playerEyePos = player.getEyePos();
-        smoothedPlayerEyePos = interpolateVec3d(smoothedPlayerEyePos, playerEyePos, POSITION_EASING_FACTOR);
+        smoothedPlayerEyePos = interpolateVec3d(smoothedPlayerEyePos, playerEyePos, positionEasingFactor);
 
         // Smooth rotation interpolation
-        smoothedYaw = lerpAngle(smoothedYaw, player.getYaw(), ROTATION_EASING_FACTOR);
-        smoothedPitch = lerpAngle(smoothedPitch, player.getPitch(), ROTATION_EASING_FACTOR);
+        smoothedYaw = lerpAngle(smoothedYaw, player.getYaw(), rotationEasingFactor);
+        smoothedPitch = lerpAngle(smoothedPitch, player.getPitch(), rotationEasingFactor);
 
         // Calculate desired distance based on whether we're resetting
         double desiredDistance = resetting ? 0 : targetDistance;
-        currentDistance += (desiredDistance - currentDistance) * DISTANCE_EASING_FACTOR;
+        currentDistance += (desiredDistance - currentDistance) * distanceEasingFactor;
 
         // Handle perspective changes
-        if (currentDistance > FIRST_PERSON_DISTANCE_THRESHOLD &&
+        if (currentDistance > firstPersonDistanceThreshold &&
                 client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-        } else if (currentDistance < FIRST_PERSON_DISTANCE_THRESHOLD &&
+        } else if (currentDistance < firstPersonDistanceThreshold &&
                 client.options.getPerspective() != Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.FIRST_PERSON);
         }
 
-        // Calculate camera position behind player using smoothed values
+        // Calculate camera position
         double yaw = Math.toRadians(smoothedYaw);
         double pitch = Math.toRadians(smoothedPitch);
-
-        // Calculate offset based on smoothed yaw and pitch
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * currentDistance;
         double yOffset = Math.sin(pitch) * currentDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * currentDistance;
 
-        // Use smoothed eye position directly for camera position calculation
         Vec3d cameraPos = smoothedPlayerEyePos.add(xOffset, yOffset, zOffset);
-
-        // Update camera position and rotation
         ((CameraAccessor)camera).invokesetPos(cameraPos);
         ((CameraAccessor)camera).invokeSetRotation((float)smoothedYaw, (float)smoothedPitch);
 
-        // Return true only if we're fully reset
         return resetting && currentDistance < 0.01;
     }
 
@@ -93,8 +137,8 @@ public class LinearMovement implements ICameraMovement {
 
     @Override
     public void adjustDistance(boolean increase) {
-        double multiplier = increase ? (1.0 / (1.0 + SCROLL_SENSITIVITY)) : (1.0 + SCROLL_SENSITIVITY);
-        targetDistance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, targetDistance * multiplier));
+        double multiplier = increase ? (1.0 / (1.0 + scrollSensitivity)) : (1.0 + scrollSensitivity);
+        targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
     }
 
     @Override
@@ -102,7 +146,6 @@ public class LinearMovement implements ICameraMovement {
         return "Linear";
     }
 
-    // Helper methods for smooth interpolation
     private Vec3d interpolateVec3d(Vec3d current, Vec3d target, float factor) {
         double x = current.x + (target.x - current.x) * factor;
         double y = current.y + (target.y - current.y) * factor;
@@ -111,7 +154,6 @@ public class LinearMovement implements ICameraMovement {
     }
 
     private double lerpAngle(double current, double target, float factor) {
-        // Ensure the angle difference is wrapped properly
         double diff = target - current;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
