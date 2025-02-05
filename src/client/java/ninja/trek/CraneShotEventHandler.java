@@ -49,7 +49,7 @@ public class CraneShotEventHandler {
                 }
             }
             if (!anyPressed) {
-                CraneshotClient.CAMERA_CONTROLLER.reset(client, camera);
+                CraneshotClient.CAMERA_CONTROLLER.queueFinish(client, camera);
 
             }
             if (client.player != null) {

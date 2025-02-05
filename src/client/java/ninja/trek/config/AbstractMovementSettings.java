@@ -1,6 +1,4 @@
-package ninja.trek.cameramovements;
-
-import ninja.trek.config.MovementConfigManager;
+package ninja.trek.config;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;

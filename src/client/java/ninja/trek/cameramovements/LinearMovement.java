@@ -5,7 +5,8 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
-import ninja.trek.Craneshot;
+import ninja.trek.config.AbstractMovementSettings;
+import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.CameraAccessor;
 
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {

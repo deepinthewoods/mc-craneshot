@@ -3,16 +3,29 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
+import ninja.trek.config.TransitionMode;
+import ninja.trek.config.TransitionModeManager;
 import ninja.trek.config.WrapSettings;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class CameraController {
     private final List<List<ICameraMovement>> slots;
     private final ArrayList<Integer> currentTypes;
     private int currentMovement = -1;
+    private Queue<MovementRequest> movementQueue = new LinkedList<>();
 
+    private static class MovementRequest {
+        final int movementIndex;
+        final MinecraftClient client;
+        final Camera camera;
+
+        MovementRequest(int movementIndex, MinecraftClient client, Camera camera) {
+            this.movementIndex = movementIndex;
+            this.client = client;
+            this.camera = camera;
+        }
+    }
 
     public CameraController() {
         slots = new ArrayList<>();
@@ -105,41 +118,7 @@ public class CameraController {
         return new ArrayList<>();
     }
 
-    public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
-        if (currentMovement != -1) {
-            ICameraMovement current = getMovementAt(currentMovement);
-            if (current != null) {
-                current.reset(client, camera);
-            }
-        }
-        currentMovement = movementIndex;
-        ICameraMovement newMovement = getMovementAt(movementIndex);
-        if (newMovement != null) {
-            newMovement.start(client, camera);
-        }
-    }
 
-    public void tick(MinecraftClient client, Camera camera) {
-
-        if (currentMovement != -1) {
-            //Craneshot.LOGGER.info("tick");
-            ICameraMovement movement = getMovementAt(currentMovement);
-            if (movement != null && movement.update(client, camera)) {
-//                Craneshot.LOGGER.info("movement complete");
-                currentMovement = -1;
-            }
-        }
-    }
-
-    public void reset(MinecraftClient client, Camera camera) {
-        if (currentMovement != -1) {
-            ICameraMovement movement = getMovementAt(currentMovement);
-            if (movement != null) {
-                movement.reset(client, camera);
-            }
-
-        }
-    }
 
 
 
@@ -168,6 +147,67 @@ public class CameraController {
                 ICameraMovement temp = slotMovements.get(index1);
                 slotMovements.set(index1, slotMovements.get(index2));
                 slotMovements.set(index2, temp);
+            }
+        }
+    }
+
+    public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
+        switch (TransitionModeManager.getCurrentMode()) {
+            case QUEUE:
+                if (currentMovement == -1) {
+                    // If no movement is active, start immediately
+                    startMovementImmediate(client, camera, movementIndex);
+                } else {
+                    // Otherwise, queue the movement
+                    movementQueue.offer(new MovementRequest(movementIndex, client, camera));
+                }
+                break;
+            case INTERPOLATE:
+                // Placeholder for future interpolation implementation
+                startMovementImmediate(client, camera, movementIndex);
+                break;
+            case IMMEDIATE:
+            default:
+                startMovementImmediate(client, camera, movementIndex);
+                break;
+        }
+    }
+
+    private void startMovementImmediate(MinecraftClient client, Camera camera, int movementIndex) {
+        if (currentMovement != -1) {
+            ICameraMovement current = getMovementAt(currentMovement);
+            if (current != null) {
+                current.reset(client, camera);
+            }
+        }
+        currentMovement = movementIndex;
+        ICameraMovement newMovement = getMovementAt(movementIndex);
+        if (newMovement != null) {
+            newMovement.start(client, camera);
+        }
+    }
+
+    public void tick(MinecraftClient client, Camera camera) {
+        if (currentMovement != -1) {
+            ICameraMovement movement = getMovementAt(currentMovement);
+            if (movement != null && movement.update(client, camera)) {
+                // Movement is complete
+                currentMovement = -1;
+
+                // If there are queued movements and we're in queue mode, start the next one
+                if (TransitionModeManager.getCurrentMode() == TransitionMode.QUEUE && !movementQueue.isEmpty()) {
+                    MovementRequest next = movementQueue.poll();
+                    startMovementImmediate(next.client, next.camera, next.movementIndex);
+                }
+            }
+        }
+    }
+
+    public void queueFinish(MinecraftClient client, Camera camera) {
+        if (currentMovement != -1) {
+            ICameraMovement movement = getMovementAt(currentMovement);
+            if (movement != null) {
+                movement.reset(client, camera);
             }
         }
     }

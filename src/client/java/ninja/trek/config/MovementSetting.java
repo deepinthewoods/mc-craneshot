@@ -1,4 +1,4 @@
-package ninja.trek.cameramovements;
+package ninja.trek.config;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

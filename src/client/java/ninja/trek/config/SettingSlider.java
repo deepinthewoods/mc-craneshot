@@ -2,7 +2,6 @@ package ninja.trek.config;
 
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
-import ninja.trek.cameramovements.AbstractMovementSettings;
 
 public class SettingSlider extends SliderWidget {
     private final double min;

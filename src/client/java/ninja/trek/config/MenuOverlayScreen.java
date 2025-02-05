@@ -5,13 +5,10 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CheckboxWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
 import ninja.trek.CraneshotClient;
-import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.LinearMovement;
-import ninja.trek.cameramovements.MovementSetting;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -207,10 +204,10 @@ public class MenuOverlayScreen extends Screen {
             int contentHeight = yOffset - (CONTENT_START_Y + BUTTON_HEIGHT + 10);
             int visibleHeight = guiHeight - CONTENT_START_Y - 10;
             maxScroll = Math.max(0, contentHeight - visibleHeight);
+        } else if (selectedTab == 0) {
+            addGeneralSettings();
         }
     }
-
-    // ... [rest of the methods remain unchanged]
 
 
 
@@ -259,6 +256,26 @@ public class MenuOverlayScreen extends Screen {
                 );
             }
         }
+    }
+
+    private void addGeneralSettings() {
+        int yOffset = CONTENT_START_Y + 20;
+        int buttonWidth = 200;
+        int buttonX = centerX + (guiWidth - buttonWidth) / 2;
+
+        // Add Transition Mode selection
+        this.addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Transition Mode: " + TransitionModeManager.getCurrentMode().getDisplayName()),
+                        button -> {
+                            // Cycle through transition modes
+                            TransitionMode[] modes = TransitionMode.values();
+                            int currentIndex = Arrays.asList(modes).indexOf(TransitionModeManager.getCurrentMode());
+                            int nextIndex = (currentIndex + 1) % modes.length;
+                            TransitionModeManager.setCurrentMode(modes[nextIndex]);
+                            button.setMessage(Text.literal("Transition Mode: " + modes[nextIndex].getDisplayName()));
+                        })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
+                .build());
     }
 
     // Keep existing helper methods
