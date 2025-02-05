@@ -32,7 +32,7 @@ public class MovementConfigManager {
 
     public static void saveSettings() {
         try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-            GSON.toJson(movementSettings, writer);
+            //GSON.toJson(movementSettings, writer);
 //            Craneshot.LOGGER.debug("Saved movement settings: {}", movementSettings);
         } catch (Exception e) {
 //            Craneshot.LOGGER.error("Error saving movement settings", e);

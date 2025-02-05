@@ -6,6 +6,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CheckboxWidget;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -54,7 +55,14 @@ public class MenuOverlayScreen extends Screen {
         for (int i = 0; i <= CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
             int tabIndex = i;
             String tabName = (i == 0) ? "General" : "Slot " + i;
-            ButtonWidget slotBtn = ButtonWidget.builder(Text.literal(tabName), button -> switchTab(tabIndex))
+            Text buttonText = Text.literal(tabName);
+
+            // Apply color formatting based on selection state
+            if (i != selectedTab) {
+                buttonText = buttonText.copy().formatted(Formatting.BLACK);
+            }
+
+            ButtonWidget slotBtn = ButtonWidget.builder(buttonText, button -> switchTab(tabIndex))
                     .dimensions(centerX + (i * (tabWidth + 5)), centerY, tabWidth, 20)
                     .build();
             height = slotBtn.getHeight();
