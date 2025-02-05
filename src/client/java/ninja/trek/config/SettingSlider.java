@@ -1,9 +1,11 @@
 package ninja.trek.config;
 
+import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
+import ninja.trek.cameramovements.RaycastType;
 
-public class SettingSlider extends SliderWidget {
+class SettingSlider extends SliderWidget {
     private final double min;
     private final double max;
     private final String fieldName;
@@ -11,8 +13,7 @@ public class SettingSlider extends SliderWidget {
     private final Text label;
 
     public SettingSlider(int x, int y, int width, int height, Text label,
-                         double min, double max, double value,
-                         String fieldName, AbstractMovementSettings settings) {
+                         double min, double max, double value, String fieldName, AbstractMovementSettings settings) {
         super(x, y, width, height, label, (value - min) / (max - min));
         this.min = min;
         this.max = max;

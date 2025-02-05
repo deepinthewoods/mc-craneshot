@@ -42,13 +42,15 @@ public class MenuOverlayScreen extends Screen {
         this.guiHeight = this.height - (MARGIN * 2);
         this.centerX = MARGIN;
         this.centerY = MARGIN;
+
         int visibleStartY = centerY + CONTENT_START_Y;
         int visibleEndY = centerY + guiHeight;
         int height = 0;
+
+        // Create tab buttons
         int tabCount = CraneshotClient.CAMERA_CONTROLLER.getMovementCount() + 1;
         int tabWidth = Math.min(100, (guiWidth - 20) / tabCount);
 
-        // Tab buttons
         for (int i = 0; i <= CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
             int tabIndex = i;
             String tabName = (i == 0) ? "General" : "Slot " + i;
@@ -66,8 +68,9 @@ public class MenuOverlayScreen extends Screen {
 
         if (selectedTab > 0) {
             int slotIndex = selectedTab - 1;
+
+            // Add controls bar if within visible area
             if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
-                // Add button group
                 int addButtonWidth = 60;
                 int typeButtonWidth = 120;
                 int spacing = 10;
@@ -83,14 +86,13 @@ public class MenuOverlayScreen extends Screen {
                         movements.get(selectedMovementTypeIndex).getName();
 
                 // Movement type selector button
-                this.addDrawableChild(ButtonWidget.builder(
-                                Text.literal("Type: " + currentTypeName),
+                this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
                                 button -> cycleMovementType())
                         .dimensions(centerX + addButtonWidth + spacing + 10, centerY + CONTENT_START_Y,
                                 typeButtonWidth, BUTTON_HEIGHT)
                         .build());
 
-                // Wrap checkbox (moved to the right)
+                // Wrap checkbox
                 this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
                         .pos(centerX + addButtonWidth + typeButtonWidth + spacing + 20, centerY + CONTENT_START_Y)
                         .checked(WrapSettings.getWrapState(slotIndex))
@@ -98,37 +100,47 @@ public class MenuOverlayScreen extends Screen {
                         .build());
             }
 
-            // Rest of the menu implementation...
+            // Render movement list
             List<ICameraMovement> movements = CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex);
             int yOffset = CONTENT_START_Y + BUTTON_HEIGHT + 10;
+
             for (int i = 0; i < movements.size(); i++) {
-                // Existing movement list rendering code...
                 int index = i;
                 ICameraMovement movement = movements.get(i);
                 int rowY = centerY + yOffset - scrollOffset;
+
                 if (rowY >= visibleStartY - BUTTON_HEIGHT && rowY <= visibleEndY) {
-                    // Control buttons now on the left
+                    // Control buttons on the left
                     int controlX = centerX + 10;
+
+                    // Up arrow (if not first)
                     if (i > 0) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↑"), button -> moveMovement(slotIndex, index, index - 1))
-                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-                    controlX += 25;
-                    if (i < movements.size() - 1) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↓"), button -> moveMovement(slotIndex, index, index + 1))
-                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-                    controlX += 25;
-                    if (movements.size() > 1) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> deleteMovement(slotIndex, index))
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
+                                        button -> moveMovement(slotIndex, index, index - 1))
                                 .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
                                 .build());
                     }
                     controlX += 25;
 
-                    // Movement name button
+                    // Down arrow (if not last)
+                    if (i < movements.size() - 1) {
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
+                                        button -> moveMovement(slotIndex, index, index + 1))
+                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                                .build());
+                    }
+                    controlX += 25;
+
+                    // Delete button (if more than one movement)
+                    if (movements.size() > 1) {
+                        this.addDrawableChild(ButtonWidget.builder(Text.literal("×"),
+                                        button -> deleteMovement(slotIndex, index))
+                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                                .build());
+                    }
+                    controlX += 25;
+
+                    // Movement name button with expand/collapse indicator
                     int movementButtonWidth = Math.min(200, guiWidth / 3);
                     this.addDrawableChild(ButtonWidget.builder(
                                     Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + movement.getName()),
@@ -142,20 +154,27 @@ public class MenuOverlayScreen extends Screen {
 
                 yOffset += MOVEMENT_ROW_HEIGHT;
 
-                // Settings layout in multiple columns
+                // Settings section (when expanded)
                 if (movement instanceof AbstractMovementSettings settings && isMovementExpanded(slotIndex, index)) {
-                    // Existing settings rendering code...
                     List<Field> settingFields = new ArrayList<>();
+                    // Get fields from the concrete class
                     for (Field field : settings.getClass().getDeclaredFields()) {
                         if (field.isAnnotationPresent(MovementSetting.class)) {
                             settingFields.add(field);
                         }
                     }
+                    // Get fields from AbstractMovementSettings
+                    for (Field field : AbstractMovementSettings.class.getDeclaredFields()) {
+                        if (field.isAnnotationPresent(MovementSetting.class)) {
+                            settingFields.add(field);
+                        }
+                    }
 
+                    // Calculate layout for settings
                     int totalWidth = guiWidth - 40;
                     int labelWidth = Math.min(150, totalWidth / 4);
-                    int sliderWidth = Math.min(200, totalWidth / 2);
-                    int settingWidth = labelWidth + sliderWidth + 10;
+                    int controlWidth = Math.min(200, totalWidth / 2);
+                    int settingWidth = labelWidth + controlWidth + 10;
                     int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
                     int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
 
@@ -164,13 +183,13 @@ public class MenuOverlayScreen extends Screen {
                         MovementSetting annotation = field.getAnnotation(MovementSetting.class);
                         field.setAccessible(true);
                         try {
-                            double value = ((Number) field.get(settings)).doubleValue();
                             int column = fieldIndex / settingsPerColumn;
                             int row = fieldIndex % settingsPerColumn;
                             int settingX = centerX + 20 + column * (settingWidth + 20);
                             int settingY = centerY + yOffset + (row * SETTING_HEIGHT) - scrollOffset;
 
                             if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
+                                // Label button for all setting types
                                 ButtonWidget labelButton = ButtonWidget.builder(
                                                 Text.literal(annotation.label()),
                                                 button -> {}
@@ -179,20 +198,35 @@ public class MenuOverlayScreen extends Screen {
                                         .build();
                                 this.addDrawableChild(labelButton);
 
-                                SettingSlider slider = new SettingSlider(
-                                        settingX + labelWidth + 10,
-                                        settingY,
-                                        sliderWidth,
-                                        BUTTON_HEIGHT,
-                                        Text.literal(annotation.label()),
-                                        annotation.min(),
-                                        annotation.max(),
-                                        value,
-                                        field.getName(),
-                                        settings
-                                );
-                                settingSliders.add(slider);
-                                this.addDrawableChild(slider);
+                                // Create control based on setting type
+                                if (annotation.type() == MovementSettingType.ENUM) {
+                                    ButtonWidget enumButton = SettingWidget.createEnumButton(
+                                            settingX + labelWidth + 10,
+                                            settingY,
+                                            controlWidth,
+                                            BUTTON_HEIGHT,
+                                            field.getName(),
+                                            settings,
+                                            annotation
+                                    );
+                                    if (enumButton != null) {
+                                        this.addDrawableChild(enumButton);
+                                    }
+                                } else {
+                                    double value = ((Number) field.get(settings)).doubleValue();
+                                    this.addDrawableChild(SettingWidget.createSlider(
+                                            settingX + labelWidth + 10,
+                                            settingY,
+                                            controlWidth,
+                                            BUTTON_HEIGHT,
+                                            Text.literal(annotation.label()),
+                                            annotation.min(),
+                                            annotation.max(),
+                                            value,
+                                            field.getName(),
+                                            settings
+                                    ));
+                                }
                             }
                         } catch (IllegalAccessException e) {
                             e.printStackTrace();
@@ -207,6 +241,7 @@ public class MenuOverlayScreen extends Screen {
             int contentHeight = yOffset - (CONTENT_START_Y + BUTTON_HEIGHT + 10);
             int visibleHeight = guiHeight - CONTENT_START_Y - 10;
             maxScroll = Math.max(0, contentHeight - visibleHeight);
+
         } else if (selectedTab == 0) {
             addGeneralSettings();
         }

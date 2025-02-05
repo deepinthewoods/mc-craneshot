@@ -18,7 +18,7 @@ public class CameraMovementManager {
     }
 
     public void update(MinecraftClient client, Camera camera) {
-        if (activeMovements.isEmpty()) return;
+        if (activeMovements.isEmpty() || client.player == null) return;
 
         // Calculate states and total weight
         float totalWeight = 0;
@@ -33,7 +33,9 @@ public class CameraMovementManager {
                 iterator.remove();
             } else {
                 float weight = movement.getWeight();
-                states.add(new WeightedState(state.getCameraTarget(), weight));
+                // Apply raycast collision check to each movement's target
+                CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player);
+                states.add(new WeightedState(adjustedTarget, weight));
                 totalWeight += weight;
             }
         }
@@ -41,7 +43,9 @@ public class CameraMovementManager {
         // Blend states based on weights
         if (!states.isEmpty()) {
             CameraTarget blendedTarget = blendStates(states, totalWeight);
-            applyCameraTarget(blendedTarget, camera);
+            // Final collision check on blended position
+            CameraTarget finalTarget = blendedTarget.withAdjustedPosition(client.player);
+            applyCameraTarget(finalTarget, camera);
         }
     }
 
@@ -57,7 +61,6 @@ public class CameraMovementManager {
         for (WeightedState weighted : states) {
             float normalizedWeight = weighted.weight / totalWeight;
             CameraTarget target = weighted.target;
-
             blendedPos = blendedPos.add(
                     target.getPosition().multiply(normalizedWeight)
             );
@@ -65,7 +68,13 @@ public class CameraMovementManager {
             blendedPitch += target.getPitch() * normalizedWeight;
         }
 
-        return new CameraTarget(blendedPos, blendedYaw, blendedPitch);
+        // Use the raycast type from the highest weight movement
+        WeightedState highestWeightState = states.stream()
+                .max(Comparator.comparing(ws -> ws.weight))
+                .orElse(states.get(0));
+
+        return new CameraTarget(blendedPos, blendedYaw, blendedPitch,
+                highestWeightState.target.getRaycastType());
     }
 
     private void applyCameraTarget(CameraTarget target, Camera camera) {

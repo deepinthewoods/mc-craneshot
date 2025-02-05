@@ -3,10 +3,7 @@ package ninja.trek.cameramovements.movements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
-import ninja.trek.cameramovements.CameraMovementType;
-import ninja.trek.cameramovements.CameraTarget;
-import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.MovementState;
+import ninja.trek.cameramovements.*;
 import ninja.trek.config.AbstractMovementSettings;
 import ninja.trek.config.MovementSetting;
 
@@ -38,7 +35,7 @@ public class EasingMovement extends AbstractMovementSettings implements ICameraM
         if (player == null) return;
 
         currentTarget = CameraTarget.fromCamera(camera);
-        destinationTarget = CameraTarget.fromDistance(player, targetDistance);
+        destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         resetting = false;
         weight = 1.0f;
     }
@@ -50,7 +47,7 @@ public class EasingMovement extends AbstractMovementSettings implements ICameraM
 
         // Update destination if not resetting
         if (!resetting) {
-            destinationTarget = CameraTarget.fromDistance(player, targetDistance);
+            destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         }
 
         // Calculate new position and rotation with easing

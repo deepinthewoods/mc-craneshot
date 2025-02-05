@@ -9,6 +9,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface MovementSetting {
     String label();
+    String description() default "";
     double min() default 0;
     double max() default 100;
+    MovementSettingType type() default MovementSettingType.SLIDER;
 }

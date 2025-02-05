@@ -37,9 +37,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void start(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return;
-
         currentTarget = CameraTarget.fromCamera(camera);
-        destinationTarget = CameraTarget.fromDistance(player, targetDistance);
+        destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         resetting = false;
         weight = 1.0f;
     }
@@ -51,12 +50,11 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Update destination target if not resetting
         if (!resetting) {
-            destinationTarget = CameraTarget.fromDistance(player, targetDistance);
+            destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         }
 
         // Calculate movement for this frame
         double distanceToMove = movementSpeed * (1.0/20.0); // Convert to blocks per tick
-
         Vec3d currentPos = currentTarget.getPosition();
         Vec3d targetPos = destinationTarget.getPosition();
 
@@ -67,7 +65,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         double totalDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         boolean complete = false;
-
         if (totalDistance < distanceToMove) {
             // If we're close enough, snap to the destination
             currentTarget = destinationTarget;
@@ -84,9 +81,13 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             float newYaw = lerpAngle(currentTarget.getYaw(), destinationTarget.getYaw(), progress);
             float newPitch = lerpAngle(currentTarget.getPitch(), destinationTarget.getPitch(), progress);
 
-            currentTarget = new CameraTarget(new Vec3d(newX, newY, newZ), newYaw, newPitch);
+            currentTarget = new CameraTarget(
+                    new Vec3d(newX, newY, newZ),
+                    newYaw,
+                    newPitch,
+                    getRaycastType()
+            );
         }
-
         return new MovementState(currentTarget, complete);
     }
 
