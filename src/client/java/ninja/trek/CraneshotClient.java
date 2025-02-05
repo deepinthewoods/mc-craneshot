@@ -53,7 +53,7 @@ public class CraneshotClient implements ClientModInitializer {
 						"category.craneshot.camera"
 				))
 		};
-
+		CameraMovementRegistry.initialize();
 		CraneShotEventHandler.register();
 	}
 	public static void checkKeybinds() {

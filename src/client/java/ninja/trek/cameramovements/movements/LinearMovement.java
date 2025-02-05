@@ -3,6 +3,7 @@ package ninja.trek.cameramovements.movements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.Vec3d;
 import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -11,21 +12,21 @@ import ninja.trek.config.AbstractMovementSettings;
 import ninja.trek.config.MovementSetting;
 
 @CameraMovementType(
-        name = "Easing Movement",
-        description = "Moves the camera in a smooth eased motion"
+        name = "Linear Movement",
+        description = "Moves the camera in a straight line at constant speed"
 )
-public class EasingMovement extends AbstractMovementSettings implements ICameraMovement {
-    @MovementSetting(label = "Position Easing Factor", min = 0.01, max = 1.0)
-    private double positionEasingFactor = 0.1f;
+public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
+    @MovementSetting(label = "Movement Speed", min = 0.1, max = 5.0)
+    private double movementSpeed = 1.0;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
-    private double targetDistance = 10;
+    private double targetDistance = 10.0;
 
     @MovementSetting(label = "Min Distance", min = 1.0, max = 10.0)
-    private double minDistance = 2.0f;
+    private double minDistance = 2.0;
 
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
-    private double maxDistance = 20.0f;
+    private double maxDistance = 20.0;
 
     private CameraTarget currentTarget;
     private CameraTarget destinationTarget;
@@ -48,19 +49,52 @@ public class EasingMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(currentTarget, true);
 
-        // Update destination if not resetting
+        // Update destination target if not resetting
         if (!resetting) {
             destinationTarget = CameraTarget.fromDistance(player, targetDistance);
         }
 
-        // Calculate new position and rotation with easing
-        currentTarget = currentTarget.lerp(destinationTarget, positionEasingFactor);
+        // Calculate movement for this frame
+        double distanceToMove = movementSpeed * (1.0/20.0); // Convert to blocks per tick
 
-        // Check if we're close enough to complete
-        boolean complete = resetting &&
-                currentTarget.getPosition().distanceTo(player.getEyePos()) < 0.1;
+        Vec3d currentPos = currentTarget.getPosition();
+        Vec3d targetPos = destinationTarget.getPosition();
+
+        // Calculate direction vector
+        double dx = targetPos.x - currentPos.x;
+        double dy = targetPos.y - currentPos.y;
+        double dz = targetPos.z - currentPos.z;
+        double totalDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        boolean complete = false;
+
+        if (totalDistance < distanceToMove) {
+            // If we're close enough, snap to the destination
+            currentTarget = destinationTarget;
+            complete = resetting && totalDistance < 0.1;
+        } else {
+            // Normalize direction vector and multiply by speed
+            double scale = distanceToMove / totalDistance;
+            double newX = currentPos.x + dx * scale;
+            double newY = currentPos.y + dy * scale;
+            double newZ = currentPos.z + dz * scale;
+
+            // Linear interpolation of rotation
+            float progress = (float)(distanceToMove / totalDistance);
+            float newYaw = lerpAngle(currentTarget.getYaw(), destinationTarget.getYaw(), progress);
+            float newPitch = lerpAngle(currentTarget.getPitch(), destinationTarget.getPitch(), progress);
+
+            currentTarget = new CameraTarget(new Vec3d(newX, newY, newZ), newYaw, newPitch);
+        }
 
         return new MovementState(currentTarget, complete);
+    }
+
+    private float lerpAngle(float start, float end, float t) {
+        float diff = end - start;
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        return start + diff * t;
     }
 
     @Override
@@ -78,7 +112,7 @@ public class EasingMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public String getName() {
-        return "Easing";
+        return "Linear";
     }
 
     @Override

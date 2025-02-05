@@ -8,6 +8,7 @@ import ninja.trek.cameramovements.movements.EasingMovement;
 import ninja.trek.config.TransitionMode;
 import ninja.trek.config.TransitionModeManager;
 import ninja.trek.config.WrapSettings;
+
 import java.util.*;
 
 public class CameraController {
@@ -18,15 +19,12 @@ public class CameraController {
     private static final double FIRST_PERSON_THRESHOLD = 2.0;
     private ICameraMovement queuedMovement;
     private int queuedMovementSlot = -1;
-    private boolean isReturning = false;
-    private EasingMovement returnMovement;
 
     public CameraController() {
         slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
         movementManager = new CameraMovementManager();
         activeMovementSlots = new HashMap<>();
-        returnMovement = new EasingMovement();
 
         // Initialize slots with default configurations
         for (int i = 0; i < 3; i++) {
@@ -38,7 +36,6 @@ public class CameraController {
     }
 
     public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
-        isReturning = false;
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
 
@@ -79,34 +76,25 @@ public class CameraController {
     }
 
     public void tick(MinecraftClient client, Camera camera) {
-        if (isReturning) {
-            movementManager.update(client, camera);
-            updatePerspective(client, camera);
-            if (returnMovement.isComplete()) {
-                isReturning = false;
-                movementManager = new CameraMovementManager();
+        movementManager.update(client, camera);
+        updatePerspective(client, camera);
+
+        if (TransitionModeManager.getCurrentMode() == TransitionMode.QUEUE) {
+            if (queuedMovement != null) {
+                boolean allMovementsComplete = activeMovementSlots.values().stream()
+                        .allMatch(ICameraMovement::isComplete);
+                if (allMovementsComplete) {
+                    clearAllMovements(client, camera);
+                    activeMovementSlots.clear();
+                    activeMovementSlots.put(queuedMovementSlot, queuedMovement);
+                    queuedMovement.start(client, camera);
+                    movementManager.addMovement(queuedMovement, client, camera);
+                    queuedMovement = null;
+                    queuedMovementSlot = -1;
+                }
             }
         } else {
-            movementManager.update(client, camera);
-            updatePerspective(client, camera);
-
-            if (TransitionModeManager.getCurrentMode() == TransitionMode.QUEUE) {
-                if (queuedMovement != null) {
-                    boolean allMovementsComplete = activeMovementSlots.values().stream()
-                            .allMatch(ICameraMovement::isComplete);
-                    if (allMovementsComplete) {
-                        clearAllMovements(client, camera);
-                        activeMovementSlots.clear();
-                        activeMovementSlots.put(queuedMovementSlot, queuedMovement);
-                        queuedMovement.start(client, camera);
-                        movementManager.addMovement(queuedMovement, client, camera);
-                        queuedMovement = null;
-                        queuedMovementSlot = -1;
-                    }
-                }
-            } else {
-                clearCompletedMovements(client, camera);
-            }
+            clearCompletedMovements(client, camera);
         }
     }
 
@@ -119,24 +107,10 @@ public class CameraController {
     }
 
     public void queueFinish(MinecraftClient client, Camera camera) {
-        if (!activeMovementSlots.isEmpty() && !isReturning) {
-            isReturning = true;
-            movementManager = new CameraMovementManager();
-            activeMovementSlots.clear();
-
-            // Configure return movement
-            returnMovement = new EasingMovement();
-            returnMovement.updateSetting("positionEasingFactor", 0.1);
-            returnMovement.updateSetting("rotationEasingFactor", 0.1);
-            returnMovement.updateSetting("targetDistance", 0.0);
-            returnMovement.start(client, camera);
-
-            movementManager.addMovement(returnMovement, client, camera);
+        for (ICameraMovement movement : activeMovementSlots.values()) {
+            movement.queueReset(client, camera);
         }
     }
-
-
-
 
     private void clearCompletedMovements(MinecraftClient client, Camera camera) {
         Iterator<Map.Entry<Integer, ICameraMovement>> iterator = activeMovementSlots.entrySet().iterator();
@@ -152,7 +126,6 @@ public class CameraController {
     private void updatePerspective(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         double distance = camera.getPos().distanceTo(client.player.getEyePos());
-
         if (distance > FIRST_PERSON_THRESHOLD &&
                 client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
@@ -162,8 +135,6 @@ public class CameraController {
         }
     }
 
-
-
     // Movement management methods
     public void cycleMovementType(boolean forward) {
         for (Map.Entry<Integer, ICameraMovement> entry : activeMovementSlots.entrySet()) {
@@ -171,7 +142,6 @@ public class CameraController {
             List<ICameraMovement> slotMovements = slots.get(slotIndex);
             int currentType = currentTypes.get(slotIndex);
             boolean wrap = WrapSettings.getWrapState(slotIndex);
-
             if (forward) {
                 if (currentType < slotMovements.size() - 1 || wrap) {
                     currentTypes.set(slotIndex, wrap ?
