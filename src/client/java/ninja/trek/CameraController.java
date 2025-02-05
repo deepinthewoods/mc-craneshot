@@ -4,77 +4,155 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
+import ninja.trek.cameramovements.movements.EasingMovement;
 import ninja.trek.config.TransitionMode;
 import ninja.trek.config.TransitionModeManager;
 import ninja.trek.config.WrapSettings;
-
 import java.util.*;
 
 public class CameraController {
     private final List<List<ICameraMovement>> slots;
     private final ArrayList<Integer> currentTypes;
-    private final CameraMovementManager movementManager;
+    private CameraMovementManager movementManager;
     private final Map<Integer, ICameraMovement> activeMovementSlots;
     private static final double FIRST_PERSON_THRESHOLD = 2.0;
+    private ICameraMovement queuedMovement;
+    private int queuedMovementSlot = -1;
+    private boolean isReturning = false;
+    private EasingMovement returnMovement;
 
     public CameraController() {
         slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
         movementManager = new CameraMovementManager();
         activeMovementSlots = new HashMap<>();
+        returnMovement = new EasingMovement();
 
         // Initialize slots with default configurations
         for (int i = 0; i < 3; i++) {
             ArrayList<ICameraMovement> arr = new ArrayList<>();
-            arr.add(new LinearMovement());
+            arr.add(new EasingMovement());
             slots.add(arr);
             currentTypes.add(0);
         }
     }
 
     public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
+        isReturning = false;
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
 
         switch (TransitionModeManager.getCurrentMode()) {
             case INTERPOLATE -> {
-                // For interpolation, we maintain the movement in activeMovementSlots
                 ICameraMovement previousMovement = activeMovementSlots.put(movementIndex, movement);
                 if (previousMovement != null) {
-                    previousMovement.reset(client, camera);
+                    previousMovement.queueReset(client, camera);
                 }
+                movement.start(client, camera);
                 movementManager.addMovement(movement, client, camera);
             }
             case QUEUE -> {
-                // For queue mode, we only allow one active movement at a time
-                if (activeMovementSlots.isEmpty()) {
+                boolean canStartNewMovement = activeMovementSlots.isEmpty() ||
+                        (activeMovementSlots.size() == 1 &&
+                                activeMovementSlots.values().iterator().next().isComplete());
+                if (canStartNewMovement) {
+                    clearCompletedMovements(client, camera);
+                    activeMovementSlots.clear();
                     activeMovementSlots.put(movementIndex, movement);
+                    movement.start(client, camera);
                     movementManager.addMovement(movement, client, camera);
+                    queuedMovement = null;
+                    queuedMovementSlot = -1;
+                } else {
+                    queuedMovement = movement;
+                    queuedMovementSlot = movementIndex;
                 }
             }
             case IMMEDIATE -> {
-                // For immediate mode, we clear all movements and start the new one
                 clearAllMovements(client, camera);
+                activeMovementSlots.clear();
                 activeMovementSlots.put(movementIndex, movement);
+                movement.start(client, camera);
                 movementManager.addMovement(movement, client, camera);
+            }
+        }
+    }
+
+    public void tick(MinecraftClient client, Camera camera) {
+        if (isReturning) {
+            movementManager.update(client, camera);
+            updatePerspective(client, camera);
+            if (returnMovement.isComplete()) {
+                isReturning = false;
+                movementManager = new CameraMovementManager();
+            }
+        } else {
+            movementManager.update(client, camera);
+            updatePerspective(client, camera);
+
+            if (TransitionModeManager.getCurrentMode() == TransitionMode.QUEUE) {
+                if (queuedMovement != null) {
+                    boolean allMovementsComplete = activeMovementSlots.values().stream()
+                            .allMatch(ICameraMovement::isComplete);
+                    if (allMovementsComplete) {
+                        clearAllMovements(client, camera);
+                        activeMovementSlots.clear();
+                        activeMovementSlots.put(queuedMovementSlot, queuedMovement);
+                        queuedMovement.start(client, camera);
+                        movementManager.addMovement(queuedMovement, client, camera);
+                        queuedMovement = null;
+                        queuedMovementSlot = -1;
+                    }
+                }
+            } else {
+                clearCompletedMovements(client, camera);
             }
         }
     }
 
     private void clearAllMovements(MinecraftClient client, Camera camera) {
         for (ICameraMovement movement : activeMovementSlots.values()) {
-            movement.reset(client, camera);
+            movement.queueReset(client, camera);
         }
+        movementManager = new CameraMovementManager();
         activeMovementSlots.clear();
     }
 
-    private void updatePerspective(MinecraftClient client, Camera camera) {
-        // Calculate distance from camera to player
-        if (client.player == null) return;
+    public void queueFinish(MinecraftClient client, Camera camera) {
+        if (!activeMovementSlots.isEmpty() && !isReturning) {
+            isReturning = true;
+            movementManager = new CameraMovementManager();
+            activeMovementSlots.clear();
 
+            // Configure return movement
+            returnMovement = new EasingMovement();
+            returnMovement.updateSetting("positionEasingFactor", 0.1);
+            returnMovement.updateSetting("rotationEasingFactor", 0.1);
+            returnMovement.updateSetting("targetDistance", 0.0);
+            returnMovement.start(client, camera);
+
+            movementManager.addMovement(returnMovement, client, camera);
+        }
+    }
+
+
+
+
+    private void clearCompletedMovements(MinecraftClient client, Camera camera) {
+        Iterator<Map.Entry<Integer, ICameraMovement>> iterator = activeMovementSlots.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Integer, ICameraMovement> entry = iterator.next();
+            if (entry.getValue().isComplete()) {
+                entry.getValue().queueReset(client, camera);
+                iterator.remove();
+            }
+        }
+    }
+
+    private void updatePerspective(MinecraftClient client, Camera camera) {
+        if (client.player == null) return;
         double distance = camera.getPos().distanceTo(client.player.getEyePos());
 
-        // Switch perspective based on distance
         if (distance > FIRST_PERSON_THRESHOLD &&
                 client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
@@ -84,19 +162,7 @@ public class CameraController {
         }
     }
 
-    public void tick(MinecraftClient client, Camera camera) {
-        movementManager.update(client, camera);
-        updatePerspective(client, camera);
 
-        // Clean up completed movements
-        activeMovementSlots.entrySet().removeIf(entry -> entry.getValue().isComplete());
-    }
-
-    public void queueFinish(MinecraftClient client, Camera camera) {
-        if (!activeMovementSlots.isEmpty()) {
-            clearAllMovements(client, camera);
-        }
-    }
 
     // Movement management methods
     public void cycleMovementType(boolean forward) {

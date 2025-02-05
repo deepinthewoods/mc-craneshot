@@ -6,7 +6,7 @@ import net.minecraft.client.render.Camera;
 public interface ICameraMovement {
     void start(MinecraftClient client, Camera camera);
     MovementState calculateState(MinecraftClient client, Camera camera);
-    void reset(MinecraftClient client, Camera camera);
+    void queueReset(MinecraftClient client, Camera camera);
     void adjustDistance(boolean increase);
     String getName();
     float getWeight(); // For blending calculations

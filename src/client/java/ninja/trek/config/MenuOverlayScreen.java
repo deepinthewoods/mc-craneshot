@@ -8,7 +8,7 @@ import net.minecraft.client.gui.widget.CheckboxWidget;
 import net.minecraft.text.Text;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.LinearMovement;
+import ninja.trek.cameramovements.movements.EasingMovement;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -291,7 +291,7 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void addMovement(int slotIndex) {
-        CraneshotClient.CAMERA_CONTROLLER.addMovement(slotIndex, new LinearMovement());
+        CraneshotClient.CAMERA_CONTROLLER.addMovement(slotIndex, new EasingMovement());
         reinitialize();
     }
 

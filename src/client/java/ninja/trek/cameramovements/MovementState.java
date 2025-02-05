@@ -1,14 +1,19 @@
 package ninja.trek.cameramovements;
 
 public class MovementState {
-    private final CameraState cameraState;
+    private final CameraTarget target;
     private final boolean isComplete;
 
-    public MovementState(CameraState cameraState, boolean isComplete) {
-        this.cameraState = cameraState;
+    public MovementState(CameraTarget target, boolean isComplete) {
+        this.target = target;
         this.isComplete = isComplete;
     }
 
-    public CameraState getCameraState() { return cameraState; }
-    public boolean isComplete() { return isComplete; }
+    public CameraTarget getCameraTarget() {
+        return target;
+    }
+
+    public boolean isComplete() {
+        return isComplete;
+    }
 }
