@@ -53,7 +53,7 @@ public class CraneShotEventHandler {
 
             }
             if (client.player != null) {
-                CraneshotClient.CAMERA_CONTROLLER.updateTransition(client, camera);
+                CraneshotClient.CAMERA_CONTROLLER.tick(client, camera);
             }
         });
     }

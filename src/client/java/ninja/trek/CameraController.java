@@ -9,13 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CameraController {
-    private final List<List<ICameraMovement>> movements;
+    private final List<List<ICameraMovement>> slots;
     private final ArrayList<Integer> currentTypes;
     private int currentMovement = -1;
 
 
     public CameraController() {
-        movements = new ArrayList<>();
+        slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
 
         // Initialize slots with saved or default configurations
@@ -23,7 +23,7 @@ public class CameraController {
             ArrayList arr = new ArrayList<ICameraMovement>();
             arr.add(new LinearMovement());
             arr.add(new LinearMovement());
-            movements.add(
+            slots.add(
                    arr
                     );
             currentTypes.add(0);
@@ -32,14 +32,14 @@ public class CameraController {
 
 
     public void addMovement(int slotIndex, ICameraMovement movement) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            movements.get(slotIndex).add(movement);
+        if (slotIndex >= 0 && slotIndex < slots.size()) {
+            slots.get(slotIndex).add(movement);
         }
     }
 
     public void removeMovement(int slotIndex, int movementIndex) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            List<ICameraMovement> slotMovements = movements.get(slotIndex);
+        if (slotIndex >= 0 && slotIndex < slots.size()) {
+            List<ICameraMovement> slotMovements = slots.get(slotIndex);
             if (movementIndex >= 0 && movementIndex < slotMovements.size() && slotMovements.size() > 1) {
                 slotMovements.remove(movementIndex);
                 // Update current type if needed
@@ -53,7 +53,7 @@ public class CameraController {
 
     public void cycleMovementType(boolean forward) {
         if (currentMovement != -1) {
-            List<ICameraMovement> slotMovements = movements.get(currentMovement);
+            List<ICameraMovement> slotMovements = slots.get(currentMovement);
             int currentType = currentTypes.get(currentMovement);
             boolean wrap = WrapSettings.getWrapState(currentMovement);
 
@@ -77,12 +77,12 @@ public class CameraController {
 
     // Modified existing methods to work with Lists
     public int getMovementCount() {
-        return movements.size();
+        return slots.size();
     }
 
     public ICameraMovement getMovementAt(int index) {
-        if (index >= 0 && index < movements.size()) {
-            List<ICameraMovement> slotMovements = movements.get(index);
+        if (index >= 0 && index < slots.size()) {
+            List<ICameraMovement> slotMovements = slots.get(index);
             int currentType = currentTypes.get(index);
             if (!slotMovements.isEmpty() && currentType < slotMovements.size()) {
                 return slotMovements.get(currentType);
@@ -99,8 +99,8 @@ public class CameraController {
     }
 
     public List<ICameraMovement> getAvailableMovementsForSlot(int slotIndex) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            return new ArrayList<>(movements.get(slotIndex));
+        if (slotIndex >= 0 && slotIndex < slots.size()) {
+            return new ArrayList<>(slots.get(slotIndex));
         }
         return new ArrayList<>();
     }
@@ -119,10 +119,13 @@ public class CameraController {
         }
     }
 
-    public void updateTransition(MinecraftClient client, Camera camera) {
+    public void tick(MinecraftClient client, Camera camera) {
+
         if (currentMovement != -1) {
+            //Craneshot.LOGGER.info("tick");
             ICameraMovement movement = getMovementAt(currentMovement);
             if (movement != null && movement.update(client, camera)) {
+//                Craneshot.LOGGER.info("movement complete");
                 currentMovement = -1;
             }
         }
@@ -134,7 +137,7 @@ public class CameraController {
             if (movement != null) {
                 movement.reset(client, camera);
             }
-            currentMovement = -1;
+
         }
     }
 
@@ -159,8 +162,8 @@ public class CameraController {
     }
 
     public void swapMovements(int slotIndex, int index1, int index2) {
-        if (slotIndex >= 0 && slotIndex < movements.size()) {
-            List<ICameraMovement> slotMovements = movements.get(slotIndex);
+        if (slotIndex >= 0 && slotIndex < slots.size()) {
+            List<ICameraMovement> slotMovements = slots.get(slotIndex);
             if (index1 >= 0 && index1 < slotMovements.size() && index2 >= 0 && index2 < slotMovements.size()) {
                 ICameraMovement temp = slotMovements.get(index1);
                 slotMovements.set(index1, slotMovements.get(index2));

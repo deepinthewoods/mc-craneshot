@@ -5,6 +5,7 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.Craneshot;
 import ninja.trek.mixin.client.CameraAccessor;
 
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
@@ -87,7 +88,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         Vec3d cameraPos = smoothedPlayerEyePos.add(xOffset, yOffset, zOffset);
         ((CameraAccessor)camera).invokesetPos(cameraPos);
         ((CameraAccessor)camera).invokeSetRotation((float) smoothedYaw, (float) smoothedPitch);
-
+//        Craneshot.LOGGER.info("dist "+currentDistance);
         return resetting && currentDistance < 0.01;
     }
 

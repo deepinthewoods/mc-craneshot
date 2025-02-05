@@ -162,14 +162,19 @@ public class MenuOverlayScreen extends Screen {
                             int settingY = centerY + yOffset + (row * SETTING_HEIGHT) - scrollOffset;
 
                             if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
-                                // Add setting label with original width
-
-                                
-                                this.addDrawableChild(ButtonWidget.builder(
+                                // Add setting label as a text-like button
+                                ButtonWidget labelButton = ButtonWidget.builder(
                                                 Text.literal(annotation.label()),
                                                 button -> {}
-                                        ).dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
-                                        .build());
+                                        )
+                                        .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+
+                                        .build();
+
+                                // Custom renderer for text-like appearance
+
+
+                                this.addDrawableChild(labelButton);
 
                                 // Add slider with original width
                                 SettingSlider slider = new SettingSlider(
@@ -204,6 +209,8 @@ public class MenuOverlayScreen extends Screen {
             maxScroll = Math.max(0, contentHeight - visibleHeight);
         }
     }
+
+    // ... [rest of the methods remain unchanged]
 
 
 
