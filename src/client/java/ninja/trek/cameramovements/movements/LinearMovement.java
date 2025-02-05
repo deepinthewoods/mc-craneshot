@@ -37,7 +37,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void start(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return;
-        currentTarget = CameraTarget.fromCamera(camera);
+        currentTarget = CameraTarget.fromCamera(camera, getRaycastType());
         destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         resetting = false;
         weight = 1.0f;
@@ -102,8 +102,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
-        destinationTarget = CameraTarget.fromPlayer(client.player);
+        // Instead of using fromPlayer which defaults to NONE,
+        // create a new CameraTarget using the current raycast type.
+        destinationTarget = new CameraTarget(
+                client.player.getEyePos(),
+                client.player.getYaw(),
+                client.player.getPitch(),
+                getRaycastType()
+        );
     }
+
 
     @Override
     public void adjustDistance(boolean increase) {

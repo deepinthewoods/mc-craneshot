@@ -3,6 +3,7 @@ package ninja.trek.cameramovements;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.Craneshot;
 
 public class CameraTarget {
     private Vec3d position;
@@ -17,12 +18,12 @@ public class CameraTarget {
         this.raycastType = raycastType;
     }
 
-    public static CameraTarget fromCamera(Camera camera) {
-        return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), RaycastType.NONE);
+    public static CameraTarget fromCamera(Camera camera, RaycastType raycastType) {
+        return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), raycastType);
     }
 
-    public static CameraTarget fromPlayer(PlayerEntity player) {
-        return new CameraTarget(player.getEyePos(), player.getYaw(), player.getPitch(), RaycastType.NONE);
+    public static CameraTarget fromPlayer(PlayerEntity player, RaycastType raycastType) {
+        return new CameraTarget(player.getEyePos(), player.getYaw(), player.getPitch(), raycastType);
     }
 
     public static CameraTarget fromDistance(PlayerEntity player, double distance, RaycastType raycastType) {
@@ -70,6 +71,8 @@ public class CameraTarget {
     }
 
     public CameraTarget withAdjustedPosition(PlayerEntity player) {
+        Craneshot.LOGGER.info("withAdjustedPosition called with raycastType: {}", this.raycastType);
+
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, this.raycastType);
         return new CameraTarget(adjustedPos, this.yaw, this.pitch, this.raycastType);
     }
