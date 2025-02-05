@@ -8,7 +8,7 @@ import java.io.FileWriter;
 
 public enum TransitionMode {
     IMMEDIATE("Immediate Switch"),
-    INTERPOLATE("Interpolate (Coming Soon)"),
+    INTERPOLATE("Interpolate"),
     QUEUE("Queue");
 
     private final String displayName;
