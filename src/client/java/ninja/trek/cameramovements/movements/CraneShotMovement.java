@@ -53,6 +53,7 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
     private float weight = 1.0f;
     private double progress = 0.0;
     private Random random = new Random();
+    private double pathLength;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -87,6 +88,11 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         float midPitch = (start.getPitch() + end.getPitch()) / 2.0f;
         midpoint = new CameraTarget(midPos, midYaw, midPitch);
 
+        // Calculate approximate path length (length of the two segments)
+        double firstSegLength = midPos.subtract(startPos).length();
+        double secondSegLength = endPos.subtract(midPos).length();
+        pathLength = firstSegLength + secondSegLength;
+
         resetting = false;
         weight = 1.0f;
         progress = 0.0;
@@ -97,8 +103,29 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
 
-        // Update progress based on direction (forward or reverse)
-        double progressDelta = (1.0/20.0) * positionSpeedLimit; // Convert to progress per tick
+        // Calculate the current point on the curve
+        Vec3d p0 = start.getPosition();
+        Vec3d p1 = midpoint.getPosition();
+        Vec3d p2 = end.getPosition();
+
+        // Calculate current position on curve
+        double t = progress;
+        double oneMinusT = 1.0 - t;
+        Vec3d currentPos = p0.multiply(oneMinusT * oneMinusT)
+                .add(p1.multiply(2 * oneMinusT * t))
+                .add(p2.multiply(t * t));
+
+        // Calculate tangent vector for speed computation
+        // dB/dt = 2(1-t)(P1-P0) + 2t(P2-P1)
+        Vec3d tangent = p1.subtract(p0).multiply(2 * oneMinusT)
+                .add(p2.subtract(p1).multiply(2 * t));
+
+        // Calculate speed factor based on curve length
+        double currentSpeed = tangent.length();
+        double speedFactor = currentSpeed > 0 ? positionSpeedLimit / (currentSpeed * pathLength) : 0;
+
+        // Update progress based on direction and speed
+        double progressDelta = (1.0/20.0) * speedFactor; // Convert to progress per tick
         if (resetting) {
             progress -= progressDelta;
             if (progress < 0.0) progress = 0.0;
@@ -106,18 +133,6 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
             progress += progressDelta;
             if (progress > 1.0) progress = 1.0;
         }
-
-        // Calculate quadratic bezier curve position
-        Vec3d p0 = start.getPosition();
-        Vec3d p1 = midpoint.getPosition();
-        Vec3d p2 = end.getPosition();
-
-        // Quadratic bezier formula: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
-        double t = progress;
-        double oneMinusT = 1.0 - t;
-        Vec3d position = p0.multiply(oneMinusT * oneMinusT)
-                .add(p1.multiply(2 * oneMinusT * t))
-                .add(p2.multiply(t * t));
 
         // Interpolate rotation
         float yaw = lerpAngle(
@@ -132,7 +147,7 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         );
 
         // Update current position and rotation
-        current = new CameraTarget(position, yaw, pitch);
+        current = new CameraTarget(currentPos, yaw, pitch);
 
         // Return completion state based on direction
         return new MovementState(current, resetting && progress <= 0.0);
