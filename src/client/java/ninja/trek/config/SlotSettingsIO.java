@@ -6,6 +6,9 @@ import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.EasingMovement;
 
+import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -123,6 +126,30 @@ public class SlotSettingsIO {
         }
 
         return slots;
+    }
+
+    public static void copyMovementToClipboard(ICameraMovement movement) {
+        try {
+            JsonObject movementJson = movementToJson(movement);
+            String jsonStr = GSON.toJson(movementJson);
+            StringSelection selection = new StringSelection(jsonStr);
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+            Craneshot.LOGGER.info("Copied movement settings to clipboard");
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Failed to copy movement settings to clipboard", e);
+        }
+    }
+
+    public static ICameraMovement createMovementFromClipboard() {
+        try {
+            String clipboardText = (String) Toolkit.getDefaultToolkit()
+                    .getSystemClipboard().getData(DataFlavor.stringFlavor);
+            JsonObject movementObj = JsonParser.parseString(clipboardText).getAsJsonObject();
+            return jsonToMovement(movementObj);
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Failed to create movement from clipboard", e);
+            return new EasingMovement(); // Return default movement if parsing fails
+        }
     }
 
     private static class CameraMovementSerializer implements JsonSerializer<ICameraMovement> {

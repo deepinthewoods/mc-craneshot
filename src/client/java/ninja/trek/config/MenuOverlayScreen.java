@@ -8,6 +8,7 @@ import net.minecraft.client.gui.widget.CheckboxWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
+import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.lang.reflect.Field;
@@ -84,6 +85,7 @@ public class MenuOverlayScreen extends Screen {
         if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
             int addButtonWidth = 60;
             int typeButtonWidth = 120;
+            int clipboardButtonWidth = 40;
             int spacing = 10;
 
             // Add movement button
@@ -91,22 +93,85 @@ public class MenuOverlayScreen extends Screen {
                     .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
                     .build());
 
+            // Paste button
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste"), button -> pasteMovement(slotIndex))
+                    .dimensions(centerX + addButtonWidth + spacing, centerY + CONTENT_START_Y, clipboardButtonWidth, BUTTON_HEIGHT)
+                    .build());
+
             // Movement type selector
             List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
             String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
                             button -> cycleMovementType())
-                    .dimensions(centerX + addButtonWidth + spacing + 10, centerY + CONTENT_START_Y,
+                    .dimensions(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
                             typeButtonWidth, BUTTON_HEIGHT)
                     .build());
 
             // Wrap checkbox
             this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
-                    .pos(centerX + addButtonWidth + typeButtonWidth + spacing + 20, centerY + CONTENT_START_Y)
+                    .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3, centerY + CONTENT_START_Y)
                     .checked(SlotMenuSettings.getWrapState(slotIndex))
                     .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
                     .build());
         }
+    }
+
+    private void createMovementControls(int slotIndex, int index, ICameraMovement movement, int rowY, int BUTTON_HEIGHT) {
+        int controlX = centerX + 10;
+
+        // Movement control buttons
+        if (index > 0) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
+                            button -> moveMovement(slotIndex, index, index - 1))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        if (index < CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
+                            button -> moveMovement(slotIndex, index, index + 1))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        if (CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("×"),
+                            button -> deleteMovement(slotIndex, index))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        // Rename button
+        if (movement instanceof AbstractMovementSettings settings) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("r"), button -> {
+                        if (client != null) {
+                            client.setScreen(new RenameModal(this, settings, this::reinitialize));
+                        }
+                    })
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                    .build());
+            controlX += 25;
+        }
+
+        // Movement name/expand button
+        int remainingWidth = Math.min(200, guiWidth / 3);
+        String displayName = movement instanceof AbstractMovementSettings ?
+                ((AbstractMovementSettings)movement).getDisplayName() :
+                movement.getName();
+        addDrawableChild(ButtonWidget.builder(
+                        Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + displayName),
+                        button -> {
+                            toggleMovementExpanded(slotIndex, index);
+                            reinitialize();
+                        })
+                .dimensions(controlX, rowY, remainingWidth, BUTTON_HEIGHT)
+                .build());
+
+        // Copy button after the name
+        controlX += remainingWidth + 5;
+        addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), button -> copyMovement(movement))
+                .dimensions(controlX, rowY, 30, BUTTON_HEIGHT)
+                .build());
     }
 
     private void addGeneralSettings() {
@@ -154,58 +219,7 @@ public class MenuOverlayScreen extends Screen {
         updateScrollBounds(yOffset);
     }
 
-    private void createMovementControls(int slotIndex, int index, ICameraMovement movement, int rowY, int BUTTON_HEIGHT) {
-        int controlX = centerX + 10;
 
-        // Movement control buttons
-        if (index > 0) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
-                            button -> moveMovement(slotIndex, index, index - 1))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
-        }
-        controlX += 25;
-
-        if (index < CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
-                            button -> moveMovement(slotIndex, index, index + 1))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
-        }
-        controlX += 25;
-
-        if (CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("×"),
-                            button -> deleteMovement(slotIndex, index))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
-        }
-        controlX += 25;
-
-        // Rename button
-        if (movement instanceof AbstractMovementSettings settings) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("r"), button -> {
-                        if (client != null) {
-                            client.setScreen(new RenameModal(this, settings, this::reinitialize));
-                        }
-                    })
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                    .build());
-            controlX += 25;
-        }
-
-        // Movement name/expand button
-        int remainingWidth = Math.min(200, guiWidth / 3);
-        String displayName = movement instanceof AbstractMovementSettings ?
-                ((AbstractMovementSettings)movement).getDisplayName() :
-                movement.getName();
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + displayName),
-                        button -> {
-                            toggleMovementExpanded(slotIndex, index);
-                            reinitialize();
-                        })
-                .dimensions(controlX, rowY, remainingWidth, BUTTON_HEIGHT)
-                .build());
-    }
 
     private int createSettingsSection(AbstractMovementSettings settings, int rowY, int yOffset,
                                       int visibleStartY, int visibleEndY, int BUTTON_HEIGHT, int SETTING_HEIGHT, int MOVEMENT_SPACING) {
@@ -451,6 +465,22 @@ public class MenuOverlayScreen extends Screen {
             this.client.setScreen(null);
         }
         isMenuOpen = false;
+    }
+
+    private void copyMovement(ICameraMovement movement) {
+        SlotSettingsIO.copyMovementToClipboard(movement);
+    }
+
+    private void pasteMovement(int slotIndex) {
+        try {
+            ICameraMovement newMovement = SlotSettingsIO.createMovementFromClipboard();
+            if (newMovement != null) {
+                CraneshotClient.CAMERA_CONTROLLER.addMovement(slotIndex, newMovement);
+                reinitialize();
+            }
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Failed to paste movement", e);
+        }
     }
 
     @Override
