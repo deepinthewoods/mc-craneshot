@@ -9,27 +9,27 @@ public class CameraTarget {
     private Vec3d position;
     private float yaw;
     private float pitch;
-    private RaycastType raycastType;
 
-    public CameraTarget(Vec3d position, float yaw, float pitch, RaycastType raycastType) {
+
+    public CameraTarget(Vec3d position, float yaw, float pitch) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
-        this.raycastType = raycastType;
+
     }
 
-    public static CameraTarget fromCamera(Camera camera, RaycastType raycastType) {
-        return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), raycastType);
+    public static CameraTarget fromCamera(Camera camera) {
+        return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch());
     }
 
-    public static CameraTarget fromDistance(PlayerEntity player, double distance, RaycastType raycastType) {
+    public static CameraTarget fromDistance(PlayerEntity player, double distance) {
         double yaw = Math.toRadians(player.getYaw());// + Math.toRadians((180));
         double pitch = Math.toRadians(player.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * distance;
         double yOffset = Math.sin(pitch) * distance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * distance;
         Vec3d targetPos = player.getEyePos().add(xOffset, yOffset, zOffset);
-        return new CameraTarget(targetPos, player.getYaw(), player.getPitch(), raycastType);
+        return new CameraTarget(targetPos, player.getYaw(), player.getPitch());
     }
 
     public Vec3d getPosition() {
@@ -44,14 +44,12 @@ public class CameraTarget {
         return pitch;
     }
 
-    public RaycastType getRaycastType() {
-        return raycastType;
-    }
 
-    public CameraTarget withAdjustedPosition(PlayerEntity player) {
+
+    public CameraTarget withAdjustedPosition(PlayerEntity player, RaycastType raycastType) {
 //        Craneshot.LOGGER.info("withAdjustedPosition called with raycastType: {}", this.raycastType);
 
-        Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, this.raycastType);
-        return new CameraTarget(adjustedPos, this.yaw, this.pitch, this.raycastType);
+        Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
+        return new CameraTarget(adjustedPos, this.yaw, this.pitch);
     }
 }

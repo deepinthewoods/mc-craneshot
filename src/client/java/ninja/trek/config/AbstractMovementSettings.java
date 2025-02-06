@@ -17,7 +17,7 @@ public abstract class AbstractMovementSettings {
             description = "Controls how the camera handles collision with blocks"
     )
     private RaycastType raycastType = RaycastType.NEAR;
-
+    
     public RaycastType getRaycastType() {
         return raycastType != null ? raycastType : RaycastType.NONE;
     }

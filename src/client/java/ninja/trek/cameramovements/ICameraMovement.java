@@ -11,5 +11,7 @@ public interface ICameraMovement {
     String getName();
     float getWeight(); // For blending calculations
     boolean isComplete(); // To determine if movement should be removed
+
+    RaycastType getRaycastType();
 }
 

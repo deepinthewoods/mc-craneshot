@@ -41,8 +41,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return;
 
-        currentTarget = CameraTarget.fromCamera(camera, getRaycastType());
-        destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
+        currentTarget = CameraTarget.fromCamera(camera);
+        destinationTarget = CameraTarget.fromDistance(player, targetDistance);
         resetting = false;
         weight = 1.0f;
         alpha = 0.0; // Reset alpha at start
@@ -54,14 +54,13 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (player == null) return new MovementState(currentTarget, true);
 
         if (!resetting) {
-            destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
+            destinationTarget = CameraTarget.fromDistance(player, targetDistance);
             alpha = Math.min(1.0, alpha + positionEasing);
         } else {
             destinationTarget = new CameraTarget(
                     player.getEyePos(),
                     player.getYaw(),
-                    player.getPitch(),
-                    getRaycastType()
+                    player.getPitch()
             );
             alpha = Math.min(1.0, alpha + positionEasing);
         }
@@ -85,8 +84,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         currentTarget = new CameraTarget(
                 desiredPos,
                 destinationTarget.getYaw(),
-                destinationTarget.getPitch(),
-                getRaycastType()
+                destinationTarget.getPitch()
         );
 
         boolean complete = resetting && alpha >= 1.0;

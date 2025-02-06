@@ -6,6 +6,7 @@ import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.MovementState;
+import ninja.trek.cameramovements.RaycastType;
 import ninja.trek.mixin.client.CameraAccessor;
 import java.util.*;
 
@@ -34,7 +35,7 @@ public class CameraMovementManager {
             } else {
                 float weight = movement.getWeight();
                 // Apply raycast collision check to each movement's target
-                CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player);
+                CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, movement.getRaycastType());
                 states.add(new WeightedState(adjustedTarget, weight));
                 totalWeight += weight;
             }
@@ -44,7 +45,7 @@ public class CameraMovementManager {
         if (!states.isEmpty()) {
             CameraTarget blendedTarget = blendStates(states, totalWeight);
             // Final collision check on blended position
-            CameraTarget finalTarget = blendedTarget.withAdjustedPosition(client.player);
+            CameraTarget finalTarget = blendedTarget.withAdjustedPosition(client.player, RaycastType.NONE);
             applyCameraTarget(finalTarget, camera);
         }
     }
@@ -73,8 +74,7 @@ public class CameraMovementManager {
                 .max(Comparator.comparing(ws -> ws.weight))
                 .orElse(states.get(0));
 
-        return new CameraTarget(blendedPos, blendedYaw, blendedPitch,
-                highestWeightState.target.getRaycastType());
+        return new CameraTarget(blendedPos, blendedYaw, blendedPitch);
     }
 
     private void applyCameraTarget(CameraTarget target, Camera camera) {
