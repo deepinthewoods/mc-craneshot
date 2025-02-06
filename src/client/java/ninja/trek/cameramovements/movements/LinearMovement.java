@@ -40,11 +40,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void start(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return;
+
         currentTarget = CameraTarget.fromCamera(camera, getRaycastType());
         destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
-
         resetting = false;
         weight = 1.0f;
+        alpha = 0.0; // Reset alpha at start
     }
 
     @Override
@@ -52,15 +53,23 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(currentTarget, true);
 
-        // Update destination target if not resetting
         if (!resetting) {
             destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
+            alpha = Math.min(1.0, alpha + positionEasing);
+        } else {
+            destinationTarget = new CameraTarget(
+                    player.getEyePos(),
+                    player.getYaw(),
+                    player.getPitch(),
+                    getRaycastType()
+            );
+            alpha = Math.min(1.0, alpha + positionEasing);
         }
 
-        // Calculate position movement
+        // Calculate position based on alpha
         Vec3d currentPos = currentTarget.getPosition();
         Vec3d targetPos = destinationTarget.getPosition();
-        Vec3d desiredPos = currentPos.lerp(targetPos, positionEasing);
+        Vec3d desiredPos = currentPos.lerp(targetPos, alpha);
 
         // Apply position speed limit
         Vec3d moveVector = desiredPos.subtract(currentPos);
@@ -73,7 +82,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             }
         }
 
-        // Create new camera target with calculated position
         currentTarget = new CameraTarget(
                 desiredPos,
                 destinationTarget.getYaw(),
@@ -81,9 +89,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 getRaycastType()
         );
 
-        // Check if movement is complete
-        boolean complete = resetting && currentPos.distanceTo(targetPos) < 0.01;
-
+        boolean complete = resetting && alpha >= 1.0;
         return new MovementState(currentTarget, complete);
     }
 
@@ -91,12 +97,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
-        destinationTarget = new CameraTarget(
-                client.player.getEyePos(),
-                client.player.getYaw(),
-                client.player.getPitch(),
-                getRaycastType()
-        );
+        alpha = 0.0; // Reset alpha when starting reset
     }
 
     @Override
@@ -117,7 +118,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        return resetting && MinecraftClient.getInstance().player != null &&
-                currentTarget.getPosition().distanceTo(MinecraftClient.getInstance().player.getEyePos()) < 0.1;
+        return resetting && alpha >= 1.0;
     }
 }

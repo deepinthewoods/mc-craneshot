@@ -80,7 +80,8 @@ public class CameraMovementManager {
     private void applyCameraTarget(CameraTarget target, Camera camera) {
         CameraAccessor accessor = (CameraAccessor) camera;
         accessor.invokesetPos(target.getPosition());
-        accessor.invokeSetRotation(target.getYaw()+18, target.getPitch());
+        accessor.invokeSetRotation(target.getYaw(), target.getPitch());
+
     }
 
     private static class WeightedState {

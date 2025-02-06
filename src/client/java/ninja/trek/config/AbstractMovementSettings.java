@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 
 public abstract class AbstractMovementSettings {
     private String customName = null;
+    protected double alpha = 0.0; // Tracks movement progress from 0.0 to 1.0
 
     @MovementSetting(
             label = "Raycast Type",

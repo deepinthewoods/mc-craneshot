@@ -8,6 +8,7 @@ import net.minecraft.world.BlockView;
 import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.*;
+import ninja.trek.mixin.client.CameraAccessor;
 
 import java.util.*;
 
@@ -228,5 +229,6 @@ public class CameraController {
 
     public void handleCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, Camera camera) {
         tick(MinecraftClient.getInstance(), camera);
+
     }
 }
