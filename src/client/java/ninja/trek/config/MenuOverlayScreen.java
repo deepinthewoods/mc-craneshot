@@ -10,8 +10,6 @@ import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.movements.EasingMovement;
-
 import java.lang.reflect.Field;
 import java.util.*;
 
@@ -43,12 +41,28 @@ public class MenuOverlayScreen extends Screen {
         this.guiHeight = this.height - (MARGIN * 2);
         this.centerX = MARGIN;
         this.centerY = MARGIN;
-
         int visibleStartY = centerY + CONTENT_START_Y;
         int visibleEndY = centerY + guiHeight;
         int height = 0;
 
         // Create tab buttons
+        createTabButtons();
+
+        int BUTTON_HEIGHT = 20;
+        int MOVEMENT_SPACING = BUTTON_HEIGHT - 5;
+        int MOVEMENT_ROW_HEIGHT = BUTTON_HEIGHT + 5;
+        int SETTING_HEIGHT = BUTTON_HEIGHT + 5;
+
+        if (selectedTab > 0) {
+            int slotIndex = selectedTab - 1;
+            createControlsBar(slotIndex, visibleStartY, BUTTON_HEIGHT);
+            createMovementList(slotIndex, visibleStartY, visibleEndY, BUTTON_HEIGHT, MOVEMENT_ROW_HEIGHT, MOVEMENT_SPACING, SETTING_HEIGHT);
+        } else if (selectedTab == 0) {
+            addGeneralSettings();
+        }
+    }
+
+    private void createTabButtons() {
         int tabCount = CraneshotClient.CAMERA_CONTROLLER.getMovementCount() + 1;
         int tabWidth = Math.min(100, (guiWidth - 20) / tabCount);
 
@@ -57,203 +71,222 @@ public class MenuOverlayScreen extends Screen {
             String tabName = (i == 0) ? "General" : "Slot " + i;
             Text buttonText = Text.literal(tabName);
 
-            // Apply color formatting based on selection state
             if (i != selectedTab) {
-                buttonText = buttonText.copy().formatted(Formatting.BLACK);
+                buttonText = buttonText.copy().formatted(Formatting.GRAY);
             }
 
             ButtonWidget slotBtn = ButtonWidget.builder(buttonText, button -> switchTab(tabIndex))
                     .dimensions(centerX + (i * (tabWidth + 5)), centerY, tabWidth, 20)
                     .build();
-            height = slotBtn.getHeight();
             this.addDrawableChild(slotBtn);
         }
+    }
 
-        int BUTTON_HEIGHT = height;
-        int MOVEMENT_SPACING = BUTTON_HEIGHT - 5;
-        int MOVEMENT_ROW_HEIGHT = BUTTON_HEIGHT + 5;
-        int SETTING_HEIGHT = BUTTON_HEIGHT + 5;
+    private void createControlsBar(int slotIndex, int visibleStartY, int BUTTON_HEIGHT) {
+        if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
+            int addButtonWidth = 60;
+            int typeButtonWidth = 120;
+            int spacing = 10;
 
-        if (selectedTab > 0) {
-            int slotIndex = selectedTab - 1;
+            // Add movement button
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addMovement(slotIndex))
+                    .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
+                    .build());
 
-            // Add controls bar if within visible area
-            if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
-                int addButtonWidth = 60;
-                int typeButtonWidth = 120;
-                int spacing = 10;
+            // Movement type selector
+            List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
+            String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
+                            button -> cycleMovementType())
+                    .dimensions(centerX + addButtonWidth + spacing + 10, centerY + CONTENT_START_Y,
+                            typeButtonWidth, BUTTON_HEIGHT)
+                    .build());
 
-                // Add movement button
-                this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addMovement(slotIndex))
-                        .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
-                        .build());
-
-                // Get current movement type for display
-                List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
-                String currentTypeName = movements.isEmpty() ? "None" :
-                        movements.get(selectedMovementTypeIndex).getName();
-
-                // Movement type selector button
-                this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
-                                button -> cycleMovementType())
-                        .dimensions(centerX + addButtonWidth + spacing + 10, centerY + CONTENT_START_Y,
-                                typeButtonWidth, BUTTON_HEIGHT)
-                        .build());
-
-                // Wrap checkbox
-                this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
-                        .pos(centerX + addButtonWidth + typeButtonWidth + spacing + 20, centerY + CONTENT_START_Y)
-                        .checked(WrapSettings.getWrapState(slotIndex))
-                        .callback((checkbox, checked) -> WrapSettings.setWrapState(slotIndex, checked))
-                        .build());
-            }
-
-            // Render movement list
-            List<ICameraMovement> movements = CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex);
-            int yOffset = CONTENT_START_Y + BUTTON_HEIGHT + 10;
-
-            for (int i = 0; i < movements.size(); i++) {
-                int index = i;
-                ICameraMovement movement = movements.get(i);
-                int rowY = centerY + yOffset - scrollOffset;
-
-                if (rowY >= visibleStartY - BUTTON_HEIGHT && rowY <= visibleEndY) {
-                    // Control buttons on the left
-                    int controlX = centerX + 10;
-
-                    // Up arrow (if not first)
-                    if (i > 0) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
-                                        button -> moveMovement(slotIndex, index, index - 1))
-                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-                    controlX += 25;
-
-                    // Down arrow (if not last)
-                    if (i < movements.size() - 1) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
-                                        button -> moveMovement(slotIndex, index, index + 1))
-                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-                    controlX += 25;
-
-                    // Delete button (if more than one movement)
-                    if (movements.size() > 1) {
-                        this.addDrawableChild(ButtonWidget.builder(Text.literal("×"),
-                                        button -> deleteMovement(slotIndex, index))
-                                .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
-                                .build());
-                    }
-                    controlX += 25;
-
-                    // Movement name button with expand/collapse indicator
-                    int movementButtonWidth = Math.min(200, guiWidth / 3);
-                    this.addDrawableChild(ButtonWidget.builder(
-                                    Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + movement.getName()),
-                                    button -> {
-                                        toggleMovementExpanded(slotIndex, index);
-                                        reinitialize();
-                                    })
-                            .dimensions(controlX, rowY, movementButtonWidth, BUTTON_HEIGHT)
-                            .build());
-                }
-
-                yOffset += MOVEMENT_ROW_HEIGHT;
-
-                // Settings section (when expanded)
-                if (movement instanceof AbstractMovementSettings settings && isMovementExpanded(slotIndex, index)) {
-                    List<Field> settingFields = new ArrayList<>();
-                    // Get fields from the concrete class
-                    for (Field field : settings.getClass().getDeclaredFields()) {
-                        if (field.isAnnotationPresent(MovementSetting.class)) {
-                            settingFields.add(field);
-                        }
-                    }
-                    // Get fields from AbstractMovementSettings
-                    for (Field field : AbstractMovementSettings.class.getDeclaredFields()) {
-                        if (field.isAnnotationPresent(MovementSetting.class)) {
-                            settingFields.add(field);
-                        }
-                    }
-
-                    // Calculate layout for settings
-                    int totalWidth = guiWidth - 40;
-                    int labelWidth = Math.min(150, totalWidth / 4);
-                    int controlWidth = Math.min(200, totalWidth / 2);
-                    int settingWidth = labelWidth + controlWidth + 10;
-                    int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
-                    int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
-
-                    for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
-                        Field field = settingFields.get(fieldIndex);
-                        MovementSetting annotation = field.getAnnotation(MovementSetting.class);
-                        field.setAccessible(true);
-                        try {
-                            int column = fieldIndex / settingsPerColumn;
-                            int row = fieldIndex % settingsPerColumn;
-                            int settingX = centerX + 20 + column * (settingWidth + 20);
-                            int settingY = centerY + yOffset + (row * SETTING_HEIGHT) - scrollOffset;
-
-                            if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
-                                // Label button for all setting types
-                                ButtonWidget labelButton = ButtonWidget.builder(
-                                                Text.literal(annotation.label()),
-                                                button -> {}
-                                        )
-                                        .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
-                                        .build();
-                                this.addDrawableChild(labelButton);
-
-                                // Create control based on setting type
-                                if (annotation.type() == MovementSettingType.ENUM) {
-                                    ButtonWidget enumButton = SettingWidget.createEnumButton(
-                                            settingX + labelWidth + 10,
-                                            settingY,
-                                            controlWidth,
-                                            BUTTON_HEIGHT,
-                                            field.getName(),
-                                            settings,
-                                            annotation
-                                    );
-                                    if (enumButton != null) {
-                                        this.addDrawableChild(enumButton);
-                                    }
-                                } else {
-                                    double value = ((Number) field.get(settings)).doubleValue();
-                                    this.addDrawableChild(SettingWidget.createSlider(
-                                            settingX + labelWidth + 10,
-                                            settingY,
-                                            controlWidth,
-                                            BUTTON_HEIGHT,
-                                            Text.literal(annotation.label()),
-                                            annotation.min(),
-                                            annotation.max(),
-                                            value,
-                                            field.getName(),
-                                            settings
-                                    ));
-                                }
-                            }
-                        } catch (IllegalAccessException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    yOffset += (settingsPerColumn * SETTING_HEIGHT) + MOVEMENT_SPACING;
-                } else {
-                    yOffset += MOVEMENT_SPACING;
-                }
-            }
-
-            int contentHeight = yOffset - (CONTENT_START_Y + BUTTON_HEIGHT + 10);
-            int visibleHeight = guiHeight - CONTENT_START_Y - 10;
-            maxScroll = Math.max(0, contentHeight - visibleHeight);
-
-        } else if (selectedTab == 0) {
-            addGeneralSettings();
+            // Wrap checkbox
+            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
+                    .pos(centerX + addButtonWidth + typeButtonWidth + spacing + 20, centerY + CONTENT_START_Y)
+                    .checked(WrapSettings.getWrapState(slotIndex))
+                    .callback((checkbox, checked) -> WrapSettings.setWrapState(slotIndex, checked))
+                    .build());
         }
     }
+
+    private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
+                                    int BUTTON_HEIGHT, int MOVEMENT_ROW_HEIGHT, int MOVEMENT_SPACING, int SETTING_HEIGHT) {
+        List<ICameraMovement> movements = CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex);
+        int yOffset = CONTENT_START_Y + BUTTON_HEIGHT + 10;
+
+        for (int i = 0; i < movements.size(); i++) {
+            int index = i;
+            ICameraMovement movement = movements.get(i);
+            int rowY = centerY + yOffset - scrollOffset;
+
+            if (rowY >= visibleStartY - BUTTON_HEIGHT && rowY <= visibleEndY) {
+                createMovementControls(slotIndex, index, movement, rowY, BUTTON_HEIGHT);
+            }
+
+            yOffset += MOVEMENT_ROW_HEIGHT;
+
+            if (movement instanceof AbstractMovementSettings settings && isMovementExpanded(slotIndex, index)) {
+                yOffset = createSettingsSection(settings, rowY, yOffset, visibleStartY, visibleEndY,
+                        BUTTON_HEIGHT, SETTING_HEIGHT, MOVEMENT_SPACING);
+            } else {
+                yOffset += MOVEMENT_SPACING;
+            }
+        }
+
+        updateScrollBounds(yOffset);
+    }
+
+    private void createMovementControls(int slotIndex, int index, ICameraMovement movement, int rowY, int BUTTON_HEIGHT) {
+        int controlX = centerX + 10;
+
+        // Movement control buttons
+        if (index > 0) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
+                            button -> moveMovement(slotIndex, index, index - 1))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        if (index < CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
+                            button -> moveMovement(slotIndex, index, index + 1))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        if (CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("×"),
+                            button -> deleteMovement(slotIndex, index))
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+        }
+        controlX += 25;
+
+        // Rename button
+        if (movement instanceof AbstractMovementSettings settings) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("r"), button -> {
+                        if (client != null) {
+                            client.setScreen(new RenameModal(this, settings, this::reinitialize));
+                        }
+                    })
+                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                    .build());
+            controlX += 25;
+        }
+
+        // Movement name/expand button
+        int remainingWidth = Math.min(200, guiWidth / 3);
+        String displayName = movement instanceof AbstractMovementSettings ?
+                ((AbstractMovementSettings)movement).getDisplayName() :
+                movement.getName();
+
+        addDrawableChild(ButtonWidget.builder(
+                        Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + displayName),
+                        button -> {
+                            toggleMovementExpanded(slotIndex, index);
+                            reinitialize();
+                        })
+                .dimensions(controlX, rowY, remainingWidth, BUTTON_HEIGHT)
+                .build());
+    }
+
+    private int createSettingsSection(AbstractMovementSettings settings, int rowY, int yOffset,
+                                      int visibleStartY, int visibleEndY, int BUTTON_HEIGHT, int SETTING_HEIGHT, int MOVEMENT_SPACING) {
+        List<Field> settingFields = new ArrayList<>();
+        collectSettingFields(settings, settingFields);
+
+        int totalWidth = guiWidth - 40;
+        int labelWidth = Math.min(150, totalWidth / 4);
+        int controlWidth = Math.min(200, totalWidth / 2);
+        int settingWidth = labelWidth + controlWidth + 10;
+        int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+        int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+        for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+            Field field = settingFields.get(fieldIndex);
+            MovementSetting annotation = field.getAnnotation(MovementSetting.class);
+            field.setAccessible(true);
+
+            try {
+                int column = fieldIndex / settingsPerColumn;
+                int row = fieldIndex % settingsPerColumn;
+                int settingX = centerX + 20 + column * (settingWidth + 20);
+                int settingY = centerY + yOffset + (row * SETTING_HEIGHT) - scrollOffset;
+
+                if (settingY >= visibleStartY - BUTTON_HEIGHT && settingY <= visibleEndY) {
+                    createSettingControl(settings, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, BUTTON_HEIGHT);
+                }
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return yOffset + (settingsPerColumn * SETTING_HEIGHT) + MOVEMENT_SPACING;
+    }
+
+    private void createSettingControl(AbstractMovementSettings settings, Field field,
+                                      MovementSetting annotation, int settingX, int settingY, int labelWidth,
+                                      int controlWidth, int BUTTON_HEIGHT) throws IllegalAccessException {
+        // Label button
+        addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
+                .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+                .build());
+
+        // Control
+        if (annotation.type() == MovementSettingType.ENUM) {
+            ButtonWidget enumButton = SettingWidget.createEnumButton(
+                    settingX + labelWidth + 10,
+                    settingY,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    field.getName(),
+                    settings,
+                    annotation
+            );
+            if (enumButton != null) {
+                addDrawableChild(enumButton);
+            }
+        } else {
+            double value = ((Number) field.get(settings)).doubleValue();
+            addDrawableChild(SettingWidget.createSlider(
+                    settingX + labelWidth + 10,
+                    settingY,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal(annotation.label()),
+                    annotation.min(),
+                    annotation.max(),
+                    value,
+                    field.getName(),
+                    settings
+            ));
+        }
+    }
+
+    private void collectSettingFields(AbstractMovementSettings settings, List<Field> settingFields) {
+        // Get fields from the concrete class
+        for (Field field : settings.getClass().getDeclaredFields()) {
+            if (field.isAnnotationPresent(MovementSetting.class)) {
+                settingFields.add(field);
+            }
+        }
+        // Get fields from AbstractMovementSettings
+        for (Field field : AbstractMovementSettings.class.getDeclaredFields()) {
+            if (field.isAnnotationPresent(MovementSetting.class)) {
+                settingFields.add(field);
+            }
+        }
+    }
+
+    private void updateScrollBounds(int yOffset) {
+        int contentHeight = yOffset - (CONTENT_START_Y + 20 + 10);
+        int visibleHeight = guiHeight - CONTENT_START_Y - 10;
+        maxScroll = Math.max(0, contentHeight - visibleHeight);
+    }
+
+
 
     private void cycleMovementType() {
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
@@ -278,8 +311,6 @@ public class MenuOverlayScreen extends Screen {
             }
         }
     }
-
-    // ... rest of the existing methods (deleteMovement, moveMovement, etc.) remain unchanged
 
     @Override
     public void resize(MinecraftClient client, int width, int height) {

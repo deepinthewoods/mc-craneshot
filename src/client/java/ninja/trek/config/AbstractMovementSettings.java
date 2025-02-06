@@ -1,5 +1,4 @@
 package ninja.trek.config;
-
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.RaycastType;
 import java.lang.reflect.Field;
@@ -9,6 +8,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 public abstract class AbstractMovementSettings {
+    private String customName = null;
+
     @MovementSetting(
             label = "Raycast Type",
             type = MovementSettingType.ENUM,
@@ -17,13 +18,20 @@ public abstract class AbstractMovementSettings {
     private RaycastType raycastType = RaycastType.NEAR;
 
     public RaycastType getRaycastType() {
-//        Craneshot.LOGGER.debug("Getting raycast type: {}", raycastType);
         return raycastType != null ? raycastType : RaycastType.NONE;
     }
 
     public void setRaycastType(RaycastType type) {
         this.raycastType = type;
-//        Craneshot.LOGGER.debug("Setting raycast type to: {} : {}", type);
+    }
+
+    public String getDisplayName() {
+        return customName != null ? customName : getClass().getSimpleName();
+    }
+
+    public void setCustomName(String name) {
+        this.customName = name;
+        MovementConfigManager.updateMovementSettings(this.getClass().getSimpleName(), getSettings());
     }
 
     public Map<String, Object> getSettings() {
@@ -32,19 +40,18 @@ public abstract class AbstractMovementSettings {
                         Arrays.stream(this.getClass().getDeclaredFields()),
                         Arrays.stream(AbstractMovementSettings.class.getDeclaredFields())
                 )
-                .filter(field -> field.isAnnotationPresent(MovementSetting.class))
+                .filter(field -> field.isAnnotationPresent(MovementSetting.class) || field.getName().equals("customName"))
                 .forEach(field -> {
                     field.setAccessible(true);
                     try {
                         Object value = field.get(this);
                         if (value instanceof Enum<?>) {
                             settings.put(field.getName(), ((Enum<?>) value).name());
-//                            Craneshot.LOGGER.debug("Serializing {}: {}", field.getName(), value);
                         } else {
                             settings.put(field.getName(), value);
                         }
                     } catch (IllegalAccessException e) {
-//                        Craneshot.LOGGER.error("Error accessing field: " + field.getName(), e);
+                        Craneshot.LOGGER.error("Error accessing field: " + field.getName(), e);
                     }
                 });
         return settings;
@@ -52,6 +59,11 @@ public abstract class AbstractMovementSettings {
 
     public void updateSetting(String key, Object value) {
         try {
+            if (key.equals("customName")) {
+                setCustomName((String)value);
+                return;
+            }
+
             Field field = findField(key);
             if (field != null && field.isAnnotationPresent(MovementSetting.class)) {
                 field.setAccessible(true);
@@ -60,21 +72,17 @@ public abstract class AbstractMovementSettings {
                         @SuppressWarnings("unchecked")
                         Enum<?> enumValue = Enum.valueOf(field.getType().asSubclass(Enum.class), (String) value);
                         field.set(this, enumValue);
-//                        Craneshot.LOGGER.debug("Updated enum {} to {}", key, enumValue);
-
                         if (key.equals("raycastType")) {
                             setRaycastType((RaycastType)enumValue);
-                            Craneshot.LOGGER.info("Updated RAYCAST {} to {}", key, enumValue);
                         }
                     }
                 } else {
                     field.set(this, value);
-//                    Craneshot.LOGGER.debug("Updated setting {} to {}", key, value);
                 }
                 MovementConfigManager.updateMovementSettings(this.getClass().getSimpleName(), getSettings());
             }
         } catch (Exception e) {
-//            Craneshot.LOGGER.error("Error updating setting " + key, e);
+            Craneshot.LOGGER.error("Error updating setting " + key, e);
         }
     }
 
