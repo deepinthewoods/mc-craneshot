@@ -87,25 +87,30 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
 
-        // Calculate shortest rotation path
+        // Calculate rotation with easing first
         float yawDiff = targetYaw - current.getYaw();
+        float pitchDiff = targetPitch - current.getPitch();
+
+// Normalize angles to [-180, 180]
         while (yawDiff > 180) yawDiff -= 360;
         while (yawDiff < -180) yawDiff += 360;
 
-        float pitchDiff = targetPitch - current.getPitch();
+// Apply easing to get desired rotation speed
+        float desiredYawSpeed = (float)(yawDiff * rotationEasing);
+        float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
 
-        // Apply rotation speed limit
+// Apply rotation speed limit
         float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
-        if (Math.abs(yawDiff) > maxRotation) {
-            yawDiff = Math.signum(yawDiff) * maxRotation;
+        if (Math.abs(desiredYawSpeed) > maxRotation) {
+            desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
         }
-        if (Math.abs(pitchDiff) > maxRotation) {
-            pitchDiff = Math.signum(pitchDiff) * maxRotation;
+        if (Math.abs(desiredPitchSpeed) > maxRotation) {
+            desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
         }
 
-        // Apply rotation easing
-        float newYaw = current.getYaw() + (float)(yawDiff * rotationEasing);
-        float newPitch = current.getPitch() + (float)(pitchDiff * rotationEasing);
+        // Apply the final rotation
+        float newYaw = current.getYaw() + desiredYawSpeed;
+        float newPitch = current.getPitch() + desiredPitchSpeed;
 
         current = new CameraTarget(
                 desired,

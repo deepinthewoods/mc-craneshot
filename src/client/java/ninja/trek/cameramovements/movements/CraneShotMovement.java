@@ -153,28 +153,30 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
                 (float)t
         );
 
-        // Get current rotation
-        float currentYaw = current.getYaw();
-        float currentPitch = current.getPitch();
+// Calculate rotation differences
+        float yawDiff = targetYaw - current.getYaw();
+        float pitchDiff = targetPitch - current.getPitch();
 
-        // Calculate shortest path differences
-        float yawDiff = targetYaw - currentYaw;
+// Normalize angles to [-180, 180]
         while (yawDiff > 180) yawDiff -= 360;
         while (yawDiff < -180) yawDiff += 360;
-        float pitchDiff = targetPitch - currentPitch;
 
-        // Apply rotation speed limit (in degrees per tick)
-        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0));
-        if (Math.abs(yawDiff) > maxRotation) {
-            yawDiff = Math.signum(yawDiff) * maxRotation;
+// Apply easing first to get desired rotation speed
+        float desiredYawSpeed = (float)(yawDiff * rotationEasing);
+        float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
+
+// Apply rotation speed limit
+        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
+        if (Math.abs(desiredYawSpeed) > maxRotation) {
+            desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
         }
-        if (Math.abs(pitchDiff) > maxRotation) {
-            pitchDiff = Math.signum(pitchDiff) * maxRotation;
+        if (Math.abs(desiredPitchSpeed) > maxRotation) {
+            desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
         }
 
-        // Apply easing to the speed-limited rotation
-        float newYaw = currentYaw + (float)(yawDiff * rotationEasing);
-        float newPitch = currentPitch + (float)(pitchDiff * rotationEasing);
+// Apply the final rotation
+        float newYaw = current.getYaw() + desiredYawSpeed;
+        float newPitch = current.getPitch() + desiredPitchSpeed;
 
         // Update current position and rotation
         current = new CameraTarget(currentPos, newYaw, newPitch);
