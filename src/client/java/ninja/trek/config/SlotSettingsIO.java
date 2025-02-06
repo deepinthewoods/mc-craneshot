@@ -5,7 +5,6 @@ import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.EasingMovement;
-import ninja.trek.cameramovements.movements.LinearMovement;
 
 import java.io.File;
 import java.io.FileReader;
@@ -16,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class SettingsIO {
+public class SlotSettingsIO {
     private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_slots.json");
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()

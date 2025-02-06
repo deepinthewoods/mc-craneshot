@@ -43,9 +43,7 @@ public class MenuOverlayScreen extends Screen {
         this.centerY = MARGIN;
         int visibleStartY = centerY + CONTENT_START_Y;
         int visibleEndY = centerY + guiHeight;
-        int height = 0;
 
-        // Create tab buttons
         createTabButtons();
 
         int BUTTON_HEIGHT = 20;
@@ -56,7 +54,8 @@ public class MenuOverlayScreen extends Screen {
         if (selectedTab > 0) {
             int slotIndex = selectedTab - 1;
             createControlsBar(slotIndex, visibleStartY, BUTTON_HEIGHT);
-            createMovementList(slotIndex, visibleStartY, visibleEndY, BUTTON_HEIGHT, MOVEMENT_ROW_HEIGHT, MOVEMENT_SPACING, SETTING_HEIGHT);
+            createMovementList(slotIndex, visibleStartY, visibleEndY, BUTTON_HEIGHT,
+                    MOVEMENT_ROW_HEIGHT, MOVEMENT_SPACING, SETTING_HEIGHT);
         } else if (selectedTab == 0) {
             addGeneralSettings();
         }
@@ -70,7 +69,6 @@ public class MenuOverlayScreen extends Screen {
             int tabIndex = i;
             String tabName = (i == 0) ? "General" : "Slot " + i;
             Text buttonText = Text.literal(tabName);
-
             if (i != selectedTab) {
                 buttonText = buttonText.copy().formatted(Formatting.GRAY);
             }
@@ -105,10 +103,28 @@ public class MenuOverlayScreen extends Screen {
             // Wrap checkbox
             this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
                     .pos(centerX + addButtonWidth + typeButtonWidth + spacing + 20, centerY + CONTENT_START_Y)
-                    .checked(WrapSettings.getWrapState(slotIndex))
-                    .callback((checkbox, checked) -> WrapSettings.setWrapState(slotIndex, checked))
+                    .checked(SlotMenuSettings.getWrapState(slotIndex))
+                    .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
                     .build());
         }
+    }
+
+    private void addGeneralSettings() {
+        int yOffset = CONTENT_START_Y + 20;
+        int buttonWidth = 200;
+        int buttonX = centerX + (guiWidth - buttonWidth) / 2;
+
+        this.addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Transition Mode: " + GeneralMenuSettings.getCurrentTransitionMode().getDisplayName()),
+                        button -> {
+                            TransitionMode[] modes = TransitionMode.values();
+                            int currentIndex = Arrays.asList(modes).indexOf(GeneralMenuSettings.getCurrentTransitionMode());
+                            int nextIndex = (currentIndex + 1) % modes.length;
+                            GeneralMenuSettings.setCurrentTransitionMode(modes[nextIndex]);
+                            button.setMessage(Text.literal("Transition Mode: " + modes[nextIndex].getDisplayName()));
+                        })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
+                .build());
     }
 
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
@@ -352,31 +368,6 @@ public class MenuOverlayScreen extends Screen {
         }
     }
 
-
-
-
-
-
-    private void addGeneralSettings() {
-        int yOffset = CONTENT_START_Y + 20;
-        int buttonWidth = 200;
-        int buttonX = centerX + (guiWidth - buttonWidth) / 2;
-
-        // Add Transition Mode selection
-        this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Transition Mode: " + TransitionModeManager.getCurrentMode().getDisplayName()),
-                        button -> {
-                            // Cycle through transition modes
-                            TransitionMode[] modes = TransitionMode.values();
-                            int currentIndex = Arrays.asList(modes).indexOf(TransitionModeManager.getCurrentMode());
-                            int nextIndex = (currentIndex + 1) % modes.length;
-                            TransitionModeManager.setCurrentMode(modes[nextIndex]);
-                            button.setMessage(Text.literal("Transition Mode: " + modes[nextIndex].getDisplayName()));
-                        })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
-                .build());
-    }
-
     // Keep existing helper methods
     private boolean isMovementExpanded(int slotIndex, int movementIndex) {
         return expandedMovements.computeIfAbsent(slotIndex, k -> new HashSet<>()).contains(movementIndex);
@@ -453,7 +444,7 @@ public class MenuOverlayScreen extends Screen {
         for (int i = 0; i < CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
             slots.add(CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(i));
         }
-        SettingsIO.saveSlots(slots);
+        SlotSettingsIO.saveSlots(slots);
 
         if (this.client != null) {
             this.client.setScreen(null);

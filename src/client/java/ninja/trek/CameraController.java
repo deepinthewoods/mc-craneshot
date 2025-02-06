@@ -5,9 +5,7 @@ import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.EasingMovement;
-import ninja.trek.config.TransitionMode;
-import ninja.trek.config.TransitionModeManager;
-import ninja.trek.config.WrapSettings;
+import ninja.trek.config.*;
 
 import java.util.*;
 
@@ -39,7 +37,8 @@ public class CameraController {
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
 
-        switch (TransitionModeManager.getCurrentMode()) {
+        switch (GeneralMenuSettings.getCurrentTransitionMode()) {
+
             case INTERPOLATE -> {
                 ICameraMovement previousMovement = activeMovementSlots.put(movementIndex, movement);
                 if (previousMovement != null) {
@@ -141,7 +140,7 @@ public class CameraController {
             int slotIndex = entry.getKey();
             List<ICameraMovement> slotMovements = slots.get(slotIndex);
             int currentType = currentTypes.get(slotIndex);
-            boolean wrap = WrapSettings.getWrapState(slotIndex);
+            boolean wrap = SlotMenuSettings.getWrapState(slotIndex);
             if (forward) {
                 if (currentType < slotMovements.size() - 1 || wrap) {
                     currentTypes.set(slotIndex, wrap ?

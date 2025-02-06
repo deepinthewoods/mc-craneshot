@@ -2,14 +2,12 @@ package ninja.trek;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.config.MenuOverlayScreen;
-import ninja.trek.config.SettingsIO;
+import ninja.trek.config.SlotSettingsIO;
 import org.lwjgl.glfw.GLFW;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 
 import java.util.List;
 
@@ -59,7 +57,7 @@ public class CraneshotClient implements ClientModInitializer {
 				))
 		};
 		CameraMovementRegistry.initialize();
-		List<List<ICameraMovement>> savedSlots = SettingsIO.loadSlots();
+		List<List<ICameraMovement>> savedSlots = SlotSettingsIO.loadSlots();
 		CAMERA_CONTROLLER.setAllSlots(savedSlots);
 		CraneShotEventHandler.register();
 	}
