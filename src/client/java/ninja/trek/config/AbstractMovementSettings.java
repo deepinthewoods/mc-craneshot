@@ -66,6 +66,8 @@ public abstract class AbstractMovementSettings {
             Field field = findField(key);
             if (field != null && field.isAnnotationPresent(MovementSetting.class)) {
                 field.setAccessible(true);
+
+                // Handle different field types
                 if (field.getType().isEnum()) {
                     if (value instanceof String) {
                         @SuppressWarnings("unchecked")
@@ -75,12 +77,43 @@ public abstract class AbstractMovementSettings {
                             setRaycastType((RaycastType)enumValue);
                         }
                     }
+                } else if (field.getType() == double.class || field.getType() == Double.class) {
+                    double doubleValue;
+                    if (value instanceof Number) {
+                        doubleValue = ((Number)value).doubleValue();
+                    } else if (value instanceof String) {
+                        doubleValue = Double.parseDouble((String)value);
+                    } else {
+                        throw new IllegalArgumentException("Cannot convert " + value + " to double");
+                    }
+                    field.setDouble(this, doubleValue);
+                } else if (field.getType() == float.class || field.getType() == Float.class) {
+                    float floatValue;
+                    if (value instanceof Number) {
+                        floatValue = ((Number)value).floatValue();
+                    } else if (value instanceof String) {
+                        floatValue = Float.parseFloat((String)value);
+                    } else {
+                        throw new IllegalArgumentException("Cannot convert " + value + " to float");
+                    }
+                    field.setFloat(this, floatValue);
+                } else if (field.getType() == int.class || field.getType() == Integer.class) {
+                    int intValue;
+                    if (value instanceof Number) {
+                        intValue = ((Number)value).intValue();
+                    } else if (value instanceof String) {
+                        intValue = Integer.parseInt((String)value);
+                    } else {
+                        throw new IllegalArgumentException("Cannot convert " + value + " to integer");
+                    }
+                    field.setInt(this, intValue);
                 } else {
+                    // Default fallback for other types
                     field.set(this, value);
                 }
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error updating setting " + key, e);
+            Craneshot.LOGGER.error("Error updating setting {} with value {}: {}", key, value, e.getMessage());
         }
     }
 
