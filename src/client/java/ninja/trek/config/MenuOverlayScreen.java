@@ -445,6 +445,7 @@ public class MenuOverlayScreen extends Screen {
             slots.add(CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(i));
         }
         SlotSettingsIO.saveSlots(slots);
+        GeneralSettingsIO.saveSettings();
 
         if (this.client != null) {
             this.client.setScreen(null);
