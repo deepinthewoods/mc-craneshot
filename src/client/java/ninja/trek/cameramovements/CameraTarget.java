@@ -18,6 +18,10 @@ public class CameraTarget {
 
     }
 
+    public CameraTarget() {
+        position = new Vec3d(0,0,0);
+    }
+
     public static CameraTarget fromCamera(Camera camera) {
         return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch());
     }
@@ -51,5 +55,17 @@ public class CameraTarget {
 
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
         return new CameraTarget(adjustedPos, this.yaw, this.pitch);
+    }
+
+    public void set(Vec3d v, float yaw, float pitch) {
+        position = v;
+        this.yaw = yaw;
+        this.pitch = pitch;
+    }
+
+    public void set(CameraTarget t) {
+        position = t.position;
+        this.pitch = t.pitch;
+        this.yaw = t.yaw;
     }
 }

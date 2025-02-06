@@ -1,4 +1,5 @@
-package ninja.trek.cameramovements.movements;
+
+        package ninja.trek.cameramovements.movements;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -31,8 +32,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    private CameraTarget currentTarget;
-    private CameraTarget destinationTarget;
+    //private CameraTarget currentTarget;
+    //private CameraTarget destinationTarget;
+    public CameraTarget start = new CameraTarget(), end = new CameraTarget(), current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
 
@@ -41,61 +43,74 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return;
 
-        currentTarget = CameraTarget.fromCamera(camera);
-        destinationTarget = CameraTarget.fromDistance(player, targetDistance);
+        start = CameraTarget.fromCamera(camera);
+        current = CameraTarget.fromCamera(camera);
+        end = CameraTarget.fromDistance(player, targetDistance);
         resetting = false;
         weight = 1.0f;
-        alpha = 0.0; // Reset alpha at start
     }
 
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
-        if (player == null) return new MovementState(currentTarget, true);
-
+        if (player == null) return new MovementState(current, true);
+        start.set(player.getEyePos(),
+                player.getYaw(),
+                player.getPitch());
+        end.set(CameraTarget.fromDistance(player, targetDistance));
+        CameraTarget a, b;
         if (!resetting) {
-            destinationTarget = CameraTarget.fromDistance(player, targetDistance);
-            alpha = Math.min(1.0, alpha + positionEasing);
+            a = start;
+            b = end;
         } else {
-            destinationTarget = new CameraTarget(
-                    player.getEyePos(),
-                    player.getYaw(),
-                    player.getPitch()
-            );
-            alpha = Math.min(1.0, alpha + positionEasing);
+            a = end;
+            b = start;
         }
 
-        // Calculate position based on alpha
-        Vec3d currentPos = currentTarget.getPosition();
-        Vec3d targetPos = destinationTarget.getPosition();
-        Vec3d desiredPos = currentPos.lerp(targetPos, alpha);
+        // Calculate position
+//        Vec3d currentPos = currentTarget.getPosition();
+//        Vec3d targetPos = destinationTarget.getPosition();
+//        Vec3d desiredPos = currentPos.lerp(targetPos, positionEasing);
+
+        Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
 
         // Apply position speed limit
-        Vec3d moveVector = desiredPos.subtract(currentPos);
+        Vec3d moveVector = desired.subtract(current.getPosition());
         double moveDistance = moveVector.length();
         if (moveDistance > 0.01) {
             double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
             if (moveDistance > maxMove) {
                 Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
-                desiredPos = currentPos.add(limitedMove);
+                desired = current.getPosition().add(limitedMove);
             }
         }
+//        // Apply position speed limit
+//        Vec3d moveVector = desiredPos.subtract(currentPos);
+//        double moveDistance = moveVector.length();
+//        if (moveDistance > 0.01) {
+//            double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
+//            if (moveDistance > maxMove) {
+//                Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
+//                desiredPos = currentPos.add(limitedMove);
+//            }
+//        }
 
-        currentTarget = new CameraTarget(
-                desiredPos,
-                destinationTarget.getYaw(),
-                destinationTarget.getPitch()
+        current = new CameraTarget(
+                desired,
+                end.getYaw(),
+                end.getPitch()
         );
 
-        boolean complete = resetting && alpha >= 1.0;
-        return new MovementState(currentTarget, complete);
+        boolean complete = resetting && moveDistance < 0.01;
+        return new MovementState(current, complete);
     }
+
+
 
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
-        alpha = 0.0; // Reset alpha when starting reset
     }
 
     @Override
@@ -116,6 +131,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        return resetting && alpha >= 1.0;
+        return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.01;
     }
 }
