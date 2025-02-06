@@ -32,8 +32,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    //private CameraTarget currentTarget;
-    //private CameraTarget destinationTarget;
+
     public CameraTarget start = new CameraTarget(), end = new CameraTarget(), current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
@@ -67,11 +66,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             b = start;
         }
 
-        // Calculate position
-//        Vec3d currentPos = currentTarget.getPosition();
-//        Vec3d targetPos = destinationTarget.getPosition();
-//        Vec3d desiredPos = currentPos.lerp(targetPos, positionEasing);
-
         Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
 
         // Apply position speed limit
@@ -84,16 +78,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 desired = current.getPosition().add(limitedMove);
             }
         }
-//        // Apply position speed limit
-//        Vec3d moveVector = desiredPos.subtract(currentPos);
-//        double moveDistance = moveVector.length();
-//        if (moveDistance > 0.01) {
-//            double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
-//            if (moveDistance > maxMove) {
-//                Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
-//                desiredPos = currentPos.add(limitedMove);
-//            }
-//        }
 
         current = new CameraTarget(
                 desired,
@@ -104,9 +88,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         boolean complete = resetting && moveDistance < 0.01;
         return new MovementState(current, complete);
     }
-
-
-
+    
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
