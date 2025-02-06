@@ -103,51 +103,81 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
 
-        // Calculate the current point on the curve
+        // Calculate the desired point on the curve
         Vec3d p0 = start.getPosition();
         Vec3d p1 = midpoint.getPosition();
         Vec3d p2 = end.getPosition();
 
-        // Calculate current position on curve
-        double t = progress;
+        // Progress determines our target position
+        double t = resetting ? 0.0 : 1.0;  // Target either start or end based on direction
         double oneMinusT = 1.0 - t;
-        Vec3d currentPos = p0.multiply(oneMinusT * oneMinusT)
+        Vec3d targetPos = p0.multiply(oneMinusT * oneMinusT)
                 .add(p1.multiply(2 * oneMinusT * t))
                 .add(p2.multiply(t * t));
 
-        // Calculate tangent vector for speed computation
-        // dB/dt = 2(1-t)(P1-P0) + 2t(P2-P1)
-        Vec3d tangent = p1.subtract(p0).multiply(2 * oneMinusT)
-                .add(p2.subtract(p1).multiply(2 * t));
+        // Current curve progress for rotation calculation
+        double curveT = progress;
 
-        // Calculate speed factor based on curve length
-        double currentSpeed = tangent.length();
-        double speedFactor = currentSpeed > 0 ? positionSpeedLimit / (currentSpeed * pathLength) : 0;
+        // Calculate movement with speed limit
+        Vec3d moveVector = targetPos.subtract(current.getPosition());
+        double moveDistance = moveVector.length();
 
-        // Update progress based on direction and speed
-        double progressDelta = (1.0/20.0) * speedFactor; // Convert to progress per tick
-        if (resetting) {
-            progress -= progressDelta;
-            if (progress < 0.0) progress = 0.0;
-        } else {
-            progress += progressDelta;
-            if (progress > 1.0) progress = 1.0;
+        // Apply position speed limit
+        double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
+        if (moveDistance > maxMove) {
+            moveVector = moveVector.normalize().multiply(maxMove);
         }
 
-        // Interpolate rotation
-        float yaw = lerpAngle(
+        // Apply position easing
+        moveVector = moveVector.multiply(positionEasing);
+        Vec3d currentPos = current.getPosition().add(moveVector);
+
+        // Update progress based on position along path
+        if (resetting) {
+            double startDist = currentPos.distanceTo(start.getPosition());
+            progress = Math.max(0.0, startDist / pathLength);
+        } else {
+            double endDist = currentPos.distanceTo(end.getPosition());
+            progress = Math.min(1.0, 1.0 - (endDist / pathLength));
+        }
+
+        // Calculate desired target rotation at current progress point
+        float targetYaw = lerpAngle(
                 lerpAngle(start.getYaw(), midpoint.getYaw(), (float)t),
                 lerpAngle(midpoint.getYaw(), end.getYaw(), (float)t),
                 (float)t
         );
-        float pitch = lerpAngle(
+        float targetPitch = lerpAngle(
                 lerpAngle(start.getPitch(), midpoint.getPitch(), (float)t),
                 lerpAngle(midpoint.getPitch(), end.getPitch(), (float)t),
                 (float)t
         );
 
+        // Get current rotation
+        float currentYaw = current.getYaw();
+        float currentPitch = current.getPitch();
+
+        // Calculate shortest path differences
+        float yawDiff = targetYaw - currentYaw;
+        while (yawDiff > 180) yawDiff -= 360;
+        while (yawDiff < -180) yawDiff += 360;
+        float pitchDiff = targetPitch - currentPitch;
+
+        // Apply rotation speed limit (in degrees per tick)
+        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0));
+        if (Math.abs(yawDiff) > maxRotation) {
+            yawDiff = Math.signum(yawDiff) * maxRotation;
+        }
+        if (Math.abs(pitchDiff) > maxRotation) {
+            pitchDiff = Math.signum(pitchDiff) * maxRotation;
+        }
+
+        // Apply easing to the speed-limited rotation
+        float newYaw = currentYaw + (float)(yawDiff * rotationEasing);
+        float newPitch = currentPitch + (float)(pitchDiff * rotationEasing);
+
         // Update current position and rotation
-        current = new CameraTarget(currentPos, yaw, pitch);
+        current = new CameraTarget(currentPos, newYaw, newPitch);
 
         // Return completion state based on direction
         return new MovementState(current, resetting && progress <= 0.0);
