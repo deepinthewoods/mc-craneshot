@@ -7,41 +7,37 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.text.Text;
 import ninja.trek.cameramovements.ICameraMovement;
+import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.MouseAccessor;
-
 import java.util.HashMap;
 import java.util.Map;
 
 public class CraneShotEventHandler {
     private static final double SCROLL_COOLDOWN = 0.1;
     private static double lastScrollTime = 0;
-    private static String currentMessage = "";
-    private static long messageTimer = 0;
-    private static final long MESSAGE_DURATION = 2000;
     private static final Map<Integer, Boolean> keyStates = new HashMap<>();
+    private static final Map<Integer, Boolean> toggledStates = new HashMap<>();
 
     public static void register() {
         // Register client tick event for input handling
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             handleScrollInput(client);
-            updateMessageTimer();
             CraneshotClient.checkKeybinds();
         });
 
         // Register HUD rendering for messages
         HudRenderCallback.EVENT.register((context, tickDelta) -> {
-            if (!currentMessage.isEmpty() && System.currentTimeMillis() < messageTimer) {
-                MinecraftClient client = MinecraftClient.getInstance();
-                if (client.player != null) {
-                    int width = client.getWindow().getScaledWidth();
-                    context.drawTextWithShadow(
-                            client.textRenderer,
-                            Text.literal(currentMessage),
-                            width / 2 - client.textRenderer.getWidth(currentMessage) / 2,
-                            60,
-                            0xFFFFFF
-                    );
-                }
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && CraneshotClient.CAMERA_CONTROLLER.hasActiveMessage()) {
+                String message = CraneshotClient.CAMERA_CONTROLLER.getCurrentMessage();
+                int width = client.getWindow().getScaledWidth();
+                context.drawTextWithShadow(
+                        client.textRenderer,
+                        Text.literal(message),
+                        width / 2 - client.textRenderer.getWidth(message) / 2,
+                        60,
+                        0xFFFFFF
+                );
             }
         });
 
@@ -55,26 +51,40 @@ public class CraneShotEventHandler {
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isPressed();
                 boolean wasPressed = keyStates.getOrDefault(i, false);
+                boolean isToggled = toggledStates.getOrDefault(i, false);
+                boolean isToggleMode = SlotMenuSettings.getToggleState(i);
 
-                if (currentlyPressed) {
-                    if (!wasPressed) {
-                        // Key just pressed - start movement
-                        CraneshotClient.CAMERA_CONTROLLER.startTransition(client, camera, i);
+                if (isToggleMode) {
+                    // Handle toggle mode
+                    if (currentlyPressed && !wasPressed) {
+                        // Key just pressed - toggle the state
+                        isToggled = !isToggled;
+                        toggledStates.put(i, isToggled);
+                        if (isToggled) {
+                            CraneshotClient.CAMERA_CONTROLLER.startTransition(client, camera, i);
+                        }
                     }
-                    anyPressed = true;
+                    if (isToggled) {
+                        anyPressed = true;
+                    }
+                } else {
+                    // Handle momentary mode (original behavior)
+                    if (currentlyPressed) {
+                        if (!wasPressed) {
+                            // Key just pressed - start movement
+                            CraneshotClient.CAMERA_CONTROLLER.startTransition(client, camera, i);
+                        }
+                        anyPressed = true;
+                    }
                 }
-
                 keyStates.put(i, currentlyPressed);
             }
 
-            // If no keys are pressed, reset the camera
+            // If no keys are pressed or toggled, reset the camera
             if (!anyPressed) {
                 CraneshotClient.CAMERA_CONTROLLER.queueFinish(client, camera);
-            }
-
-            // Update camera movements
-            if (client.player != null) {
-                //CraneshotClient.CAMERA_CONTROLLER.tick(client, camera);
+                // Clear toggle states when resetting
+                toggledStates.clear();
             }
         });
     }
@@ -100,14 +110,7 @@ public class CraneShotEventHandler {
             // Find the active movement to display its type
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
-                    ICameraMovement movement = CraneshotClient.CAMERA_CONTROLLER.getMovementAt(i);
-                    if (movement != null) {
-                        showMovementTypeMessage(String.format(
-                                "Camera %d: %s Movement",
-                                i + 1,
-                                movement.getName()
-                        ));
-                    }
+                    CraneshotClient.CAMERA_CONTROLLER.showMovementTypeMessage(i);
                     break;
                 }
             }
@@ -125,17 +128,6 @@ public class CraneShotEventHandler {
                     break;
                 }
             }
-        }
-    }
-
-    private static void showMovementTypeMessage(String message) {
-        currentMessage = message;
-        messageTimer = System.currentTimeMillis() + MESSAGE_DURATION;
-    }
-
-    private static void updateMessageTimer() {
-        if (System.currentTimeMillis() >= messageTimer) {
-            currentMessage = "";
         }
     }
 }

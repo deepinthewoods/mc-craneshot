@@ -1,5 +1,4 @@
 package ninja.trek;
-
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
@@ -9,7 +8,6 @@ import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.*;
 import ninja.trek.mixin.client.CameraAccessor;
-
 import java.util.*;
 
 public class CameraController {
@@ -19,6 +17,10 @@ public class CameraController {
     private final Map<Integer, ICameraMovement> activeMovementSlots;
     private static final double FIRST_PERSON_THRESHOLD = 2.0;
 
+    // Message handling fields
+    private String currentMessage = "";
+    private long messageTimer = 0;
+    private static final long MESSAGE_DURATION = 2000;
 
     public CameraController() {
         slots = new ArrayList<>();
@@ -26,7 +28,7 @@ public class CameraController {
         movementManager = new CameraMovementManager();
         activeMovementSlots = new HashMap<>();
 
-//         Initialize slots ?
+        // Initialize slots
         for (int i = 0; i < 3; i++) {
             currentTypes.add(0);
         }
@@ -37,22 +39,18 @@ public class CameraController {
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
         Craneshot.LOGGER.info("startt notnull");
-
-
         clearAllMovements(client, camera);
         activeMovementSlots.clear();
         activeMovementSlots.put(movementIndex, movement);
         movement.start(client, camera);
         movementManager.addMovement(movement, client, camera);
-
-
     }
 
     public void tick(MinecraftClient client, Camera camera) {
         movementManager.update(client, camera);
         updatePerspective(client, camera);
         clearCompletedMovements(client, camera);
-
+        updateMessageTimer();
     }
 
     private void clearAllMovements(MinecraftClient client, Camera camera) {
@@ -89,6 +87,37 @@ public class CameraController {
         } else if (distance < FIRST_PERSON_THRESHOLD &&
                 client.options.getPerspective() != Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.FIRST_PERSON);
+        }
+    }
+
+    // Message handling methods
+    public void showMessage(String message) {
+        currentMessage = message;
+        messageTimer = System.currentTimeMillis() + MESSAGE_DURATION;
+    }
+
+    public String getCurrentMessage() {
+        return currentMessage;
+    }
+
+    public boolean hasActiveMessage() {
+        return System.currentTimeMillis() < messageTimer;
+    }
+
+    private void updateMessageTimer() {
+        if (System.currentTimeMillis() >= messageTimer) {
+            currentMessage = "";
+        }
+    }
+
+    public void showMovementTypeMessage(int slotIndex) {
+        ICameraMovement movement = getMovementAt(slotIndex);
+        if (movement != null) {
+            showMessage(String.format(
+                    "Camera %d: %s Movement",
+                    slotIndex + 1,
+                    movement.getName()
+            ));
         }
     }
 
@@ -164,13 +193,6 @@ public class CameraController {
         return new ArrayList<>();
     }
 
-    public int getCurrentTypeForSlot(int slotIndex) {
-        if (slotIndex >= 0 && slotIndex < currentTypes.size()) {
-            return currentTypes.get(slotIndex);
-        }
-        return 0;
-    }
-
     public void swapMovements(int slotIndex, int index1, int index2) {
         if (slotIndex >= 0 && slotIndex < slots.size()) {
             List<ICameraMovement> slotMovements = slots.get(slotIndex);
@@ -187,6 +209,5 @@ public class CameraController {
 
     public void handleCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, Camera camera) {
         tick(MinecraftClient.getInstance(), camera);
-
     }
 }

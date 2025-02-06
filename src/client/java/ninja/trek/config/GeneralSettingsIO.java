@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
-
 import java.io.*;
 
 public class GeneralSettingsIO {
@@ -17,19 +16,18 @@ public class GeneralSettingsIO {
             if (!CONFIG_FILE.getParentFile().exists()) {
                 CONFIG_FILE.getParentFile().mkdirs();
             }
-
             try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
                 JsonObject settingsObj = new JsonObject();
 
-                // Save TransitionMode
-                settingsObj.addProperty("transitionMode", GeneralMenuSettings.getCurrentTransitionMode().name());
-
-                // Save wrap states for each slot
+                // Save wrap states and toggle states for each slot
                 JsonObject wrapStatesObj = new JsonObject();
-                for (int i = 0; i < 3; i++) {  // Assuming 3 slots
+                JsonObject toggleStatesObj = new JsonObject();
+                for (int i = 0; i < 3; i++) {
                     wrapStatesObj.addProperty("slot" + i, SlotMenuSettings.getWrapState(i));
+                    toggleStatesObj.addProperty("slot" + i, SlotMenuSettings.getToggleState(i));
                 }
                 settingsObj.add("wrapStates", wrapStatesObj);
+                settingsObj.add("toggleStates", toggleStatesObj);
 
                 GSON.toJson(settingsObj, writer);
                 Craneshot.LOGGER.info("Saved general settings configuration");
@@ -44,29 +42,31 @@ public class GeneralSettingsIO {
             Craneshot.LOGGER.info("No general settings file found, using defaults");
             return;
         }
-
         try (FileReader reader = new FileReader(CONFIG_FILE)) {
             JsonObject settingsObj = GSON.fromJson(reader, JsonObject.class);
 
-            // Load TransitionMode
-            if (settingsObj.has("transitionMode")) {
-                String modeName = settingsObj.get("transitionMode").getAsString();
-                try {
-                    TransitionMode mode = TransitionMode.valueOf(modeName);
-                    GeneralMenuSettings.setCurrentTransitionMode(mode);
-                } catch (IllegalArgumentException e) {
-                    Craneshot.LOGGER.warn("Invalid transition mode in config: " + modeName);
-                }
-            }
+
 
             // Load wrap states
             if (settingsObj.has("wrapStates")) {
                 JsonObject wrapStatesObj = settingsObj.getAsJsonObject("wrapStates");
-                for (int i = 0; i < 3; i++) {  // Assuming 3 slots
+                for (int i = 0; i < 3; i++) {
                     String key = "slot" + i;
                     if (wrapStatesObj.has(key)) {
                         boolean wrapState = wrapStatesObj.get(key).getAsBoolean();
                         SlotMenuSettings.setWrapState(i, wrapState);
+                    }
+                }
+            }
+
+            // Load toggle states
+            if (settingsObj.has("toggleStates")) {
+                JsonObject toggleStatesObj = settingsObj.getAsJsonObject("toggleStates");
+                for (int i = 0; i < 3; i++) {
+                    String key = "slot" + i;
+                    if (toggleStatesObj.has(key)) {
+                        boolean toggleState = toggleStatesObj.get(key).getAsBoolean();
+                        SlotMenuSettings.setToggleState(i, toggleState);
                     }
                 }
             }

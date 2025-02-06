@@ -113,6 +113,13 @@ public class MenuOverlayScreen extends Screen {
                     .checked(SlotMenuSettings.getWrapState(slotIndex))
                     .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
                     .build());
+
+            // Toggle checkbox - add right after Wrap checkbox
+            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Toggle"), this.textRenderer)
+                    .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3 + 100, centerY + CONTENT_START_Y)
+                    .checked(SlotMenuSettings.getToggleState(slotIndex))
+                    .callback((checkbox, checked) -> SlotMenuSettings.setToggleState(slotIndex, checked))
+                    .build());
         }
     }
 
@@ -179,17 +186,7 @@ public class MenuOverlayScreen extends Screen {
         int buttonWidth = 200;
         int buttonX = centerX + (guiWidth - buttonWidth) / 2;
 
-        this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Transition Mode: " + GeneralMenuSettings.getCurrentTransitionMode().getDisplayName()),
-                        button -> {
-                            TransitionMode[] modes = TransitionMode.values();
-                            int currentIndex = Arrays.asList(modes).indexOf(GeneralMenuSettings.getCurrentTransitionMode());
-                            int nextIndex = (currentIndex + 1) % modes.length;
-                            GeneralMenuSettings.setCurrentTransitionMode(modes[nextIndex]);
-                            button.setMessage(Text.literal("Transition Mode: " + modes[nextIndex].getDisplayName()));
-                        })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
-                .build());
+
     }
 
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,

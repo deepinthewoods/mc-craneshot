@@ -1,5 +1,4 @@
-
-        package ninja.trek.cameramovements.movements;
+package ninja.trek.cameramovements.movements;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
@@ -23,6 +22,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
     private double positionSpeedLimit = 2.0;
 
+    @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
+    private double rotationEasing = 0.1;
+
+    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 3600.0)
+    private double rotationSpeedLimit = 45.0;
+
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
 
@@ -40,7 +45,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void start(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return;
-
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
         end = getEndTarget(player, targetDistance);
@@ -52,10 +56,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public MovementState calculateState(MinecraftClient client, Camera camera) {
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
+
         start.set(player.getEyePos(),
                 player.getYaw(),
                 player.getPitch());
         end.set(getEndTarget(player, targetDistance));
+
         CameraTarget a, b;
         if (!resetting) {
             a = start;
@@ -65,9 +71,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             b = start;
         }
 
+        // Position interpolation with speed limit
         Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
-
-        // Apply position speed limit
         Vec3d moveVector = desired.subtract(current.getPosition());
         double moveDistance = moveVector.length();
         if (moveDistance > 0.01) {
@@ -78,13 +83,37 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             }
         }
 
+        // Rotation interpolation with speed limit
+        float targetYaw = b.getYaw();
+        float targetPitch = b.getPitch();
+
+        // Calculate shortest rotation path
+        float yawDiff = targetYaw - current.getYaw();
+        while (yawDiff > 180) yawDiff -= 360;
+        while (yawDiff < -180) yawDiff += 360;
+
+        float pitchDiff = targetPitch - current.getPitch();
+
+        // Apply rotation speed limit
+        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
+        if (Math.abs(yawDiff) > maxRotation) {
+            yawDiff = Math.signum(yawDiff) * maxRotation;
+        }
+        if (Math.abs(pitchDiff) > maxRotation) {
+            pitchDiff = Math.signum(pitchDiff) * maxRotation;
+        }
+
+        // Apply rotation easing
+        float newYaw = current.getYaw() + (float)(yawDiff * rotationEasing);
+        float newPitch = current.getPitch() + (float)(pitchDiff * rotationEasing);
+
         current = new CameraTarget(
                 desired,
-                end.getYaw(),
-                end.getPitch()
+                newYaw,
+                newPitch
         );
-        alpha = current.getPosition().distanceTo(b.getPosition()) / a.getPosition().distanceTo(b.getPosition());
 
+        alpha = current.getPosition().distanceTo(b.getPosition()) / a.getPosition().distanceTo(b.getPosition());
         boolean complete = resetting && moveDistance < 0.01;
         return new MovementState(current, complete);
     }
