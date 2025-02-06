@@ -31,7 +31,6 @@ public abstract class AbstractMovementSettings {
 
     public void setCustomName(String name) {
         this.customName = name;
-        MovementConfigManager.updateMovementSettings(this.getClass().getSimpleName(), getSettings());
     }
 
     public Map<String, Object> getSettings() {
@@ -79,7 +78,6 @@ public abstract class AbstractMovementSettings {
                 } else {
                     field.set(this, value);
                 }
-                MovementConfigManager.updateMovementSettings(this.getClass().getSimpleName(), getSettings());
             }
         } catch (Exception e) {
             Craneshot.LOGGER.error("Error updating setting " + key, e);

@@ -12,7 +12,7 @@ import ninja.trek.config.WrapSettings;
 import java.util.*;
 
 public class CameraController {
-    private final List<List<ICameraMovement>> slots;
+    private List<List<ICameraMovement>> slots;
     private final ArrayList<Integer> currentTypes;
     private CameraMovementManager movementManager;
     private final Map<Integer, ICameraMovement> activeMovementSlots;
@@ -222,5 +222,9 @@ public class CameraController {
                 Collections.swap(slotMovements, index1, index2);
             }
         }
+    }
+
+    public void setAllSlots(List<List<ICameraMovement>> savedSlots) {
+        this.slots = savedSlots;
     }
 }

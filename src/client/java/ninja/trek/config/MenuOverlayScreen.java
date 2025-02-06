@@ -32,7 +32,7 @@ public class MenuOverlayScreen extends Screen {
 
     public MenuOverlayScreen() {
         super(Text.literal("CraneShot Settings"));
-        isMenuOpen = true;
+        isMenuOpen = false;
     }
 
     @Override
@@ -356,6 +356,7 @@ public class MenuOverlayScreen extends Screen {
 
 
 
+
     private void addGeneralSettings() {
         int yOffset = CONTENT_START_Y + 20;
         int buttonWidth = 200;
@@ -435,15 +436,29 @@ public class MenuOverlayScreen extends Screen {
         init();
     }
 
-    public static void toggleMenu() {
+    public void toggleMenu() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (isMenuOpen) {
-            client.setScreen(null);
-            isMenuOpen = false;
+            close();
         } else {
-            client.setScreen(new MenuOverlayScreen());
+            client.setScreen(this);
             isMenuOpen = true;
         }
+    }
+
+    @Override
+    public void close() {
+        // Save the current slots configuration before closing
+        List<List<ICameraMovement>> slots = new ArrayList<>();
+        for (int i = 0; i < CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
+            slots.add(CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(i));
+        }
+        SettingsIO.saveSlots(slots);
+
+        if (this.client != null) {
+            this.client.setScreen(null);
+        }
+        isMenuOpen = false;
     }
 
     @Override

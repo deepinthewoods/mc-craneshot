@@ -5,9 +5,13 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.config.MenuOverlayScreen;
+import ninja.trek.config.SettingsIO;
 import org.lwjgl.glfw.GLFW;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+
+import java.util.List;
 
 
 public class CraneshotClient implements ClientModInitializer {
@@ -16,6 +20,7 @@ public class CraneshotClient implements ClientModInitializer {
 	public static final CameraController CAMERA_CONTROLLER = new CameraController();
 	public static KeyBinding toggleMenuKey;
 	private static boolean isMenuOpen = false;
+	public static MenuOverlayScreen MENU = new MenuOverlayScreen();
 
 	@Override
 	public void onInitializeClient() {
@@ -54,12 +59,14 @@ public class CraneshotClient implements ClientModInitializer {
 				))
 		};
 		CameraMovementRegistry.initialize();
+		List<List<ICameraMovement>> savedSlots = SettingsIO.loadSlots();
+		CAMERA_CONTROLLER.setAllSlots(savedSlots);
 		CraneShotEventHandler.register();
 	}
 	public static void checkKeybinds() {
 
 		if (toggleMenuKey.wasPressed()) {
-			MenuOverlayScreen.toggleMenu();
+			MENU.toggleMenu();
 		}
 
 	}
