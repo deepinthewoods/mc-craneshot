@@ -128,44 +128,23 @@ public class SlotSettingsIO {
         return slots;
     }
 
-    // Here's the updated clipboard handling function for SlotSettingsIO.java
     public static void copyMovementToClipboard(ICameraMovement movement) {
         try {
             JsonObject movementJson = movementToJson(movement);
             String jsonStr = GSON.toJson(movementJson);
 
-            try {
-                // First try system clipboard
-                StringSelection selection = new StringSelection(jsonStr);
-                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
-            } catch (HeadlessException he) {
-                // Fallback to storing in a static field when system clipboard is unavailable
-                tempClipboardStorage = jsonStr;
-            }
+            // Use Minecraft's clipboard handling
+            MinecraftClient.getInstance().keyboard.setClipboard(jsonStr);
             Craneshot.LOGGER.info("Copied movement settings to clipboard");
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to copy movement settings", e);
         }
     }
 
-    // Add a static field to store clipboard content when system clipboard is unavailable
-    private static String tempClipboardStorage = null;
-
     public static ICameraMovement createMovementFromClipboard() {
         try {
-            String clipboardText;
-            try {
-                // First try system clipboard
-                clipboardText = (String) Toolkit.getDefaultToolkit()
-                        .getSystemClipboard().getData(DataFlavor.stringFlavor);
-            } catch (HeadlessException he) {
-                // Fallback to our temporary storage
-                if (tempClipboardStorage == null) {
-                    throw new IllegalStateException("No clipboard content available");
-                }
-                clipboardText = tempClipboardStorage;
-            }
-
+            // Use Minecraft's clipboard handling
+            String clipboardText = MinecraftClient.getInstance().keyboard.getClipboard();
             JsonObject movementObj = JsonParser.parseString(clipboardText).getAsJsonObject();
             return jsonToMovement(movementObj);
         } catch (Exception e) {
