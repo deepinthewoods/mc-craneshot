@@ -22,10 +22,6 @@ public class CameraTarget {
         return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), raycastType);
     }
 
-    public static CameraTarget fromPlayer(PlayerEntity player, RaycastType raycastType) {
-        return new CameraTarget(player.getEyePos(), player.getYaw(), player.getPitch(), raycastType);
-    }
-
     public static CameraTarget fromDistance(PlayerEntity player, double distance, RaycastType raycastType) {
         double yaw = Math.toRadians(player.getYaw());
         double pitch = Math.toRadians(player.getPitch());
@@ -34,20 +30,6 @@ public class CameraTarget {
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * distance;
         Vec3d targetPos = player.getEyePos().add(xOffset, yOffset, zOffset);
         return new CameraTarget(targetPos, player.getYaw(), player.getPitch(), raycastType);
-    }
-
-    public CameraTarget lerp(CameraTarget other, double t) {
-        Vec3d lerpedPos = this.position.lerp(other.position, t);
-        float lerpedYaw = lerpAngle(this.yaw, other.yaw, (float)t);
-        float lerpedPitch = lerpAngle(this.pitch, other.pitch, (float)t);
-        return new CameraTarget(lerpedPos, lerpedYaw, lerpedPitch, this.raycastType);
-    }
-
-    private float lerpAngle(float start, float end, float t) {
-        float diff = end - start;
-        while (diff > 180) diff -= 360;
-        while (diff < -180) diff += 360;
-        return start + diff * t;
     }
 
     public Vec3d getPosition() {
@@ -66,12 +48,8 @@ public class CameraTarget {
         return raycastType;
     }
 
-    public void setPosition(Vec3d position) {
-        this.position = position;
-    }
-
     public CameraTarget withAdjustedPosition(PlayerEntity player) {
-        Craneshot.LOGGER.info("withAdjustedPosition called with raycastType: {}", this.raycastType);
+//        Craneshot.LOGGER.info("withAdjustedPosition called with raycastType: {}", this.raycastType);
 
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, this.raycastType);
         return new CameraTarget(adjustedPos, this.yaw, this.pitch, this.raycastType);

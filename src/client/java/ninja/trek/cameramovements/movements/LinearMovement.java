@@ -13,11 +13,20 @@ import ninja.trek.config.MovementSetting;
 
 @CameraMovementType(
         name = "Linear Movement",
-        description = "Moves the camera in a straight line at constant speed"
+        description = "Moves the camera with linear interpolation and separate position/rotation controls"
 )
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
-    @MovementSetting(label = "Movement Speed", min = 0.1, max = 5.0)
-    private double movementSpeed = 1.0;
+    @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
+    private double positionEasing = 0.1;
+
+    @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
+    private double rotationEasing = 0.1;
+
+    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
+    private double positionSpeedLimit = 2.0;
+
+    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 360.0)
+    private double rotationSpeedLimit = 45.0;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
@@ -53,57 +62,72 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
         }
 
-        // Calculate movement for this frame
-        double distanceToMove = movementSpeed * (1.0/20.0); // Convert to blocks per tick
+        // Calculate position movement
         Vec3d currentPos = currentTarget.getPosition();
         Vec3d targetPos = destinationTarget.getPosition();
+        Vec3d desiredPos = currentPos.lerp(targetPos, positionEasing);
 
-        // Calculate direction vector
-        double dx = targetPos.x - currentPos.x;
-        double dy = targetPos.y - currentPos.y;
-        double dz = targetPos.z - currentPos.z;
-        double totalDistance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        boolean complete = false;
-        if (totalDistance < distanceToMove) {
-            // If we're close enough, snap to the destination
-            currentTarget = destinationTarget;
-            complete = resetting && totalDistance < 0.1;
-        } else {
-            // Normalize direction vector and multiply by speed
-            double scale = distanceToMove / totalDistance;
-            double newX = currentPos.x + dx * scale;
-            double newY = currentPos.y + dy * scale;
-            double newZ = currentPos.z + dz * scale;
-
-            // Linear interpolation of rotation
-            float progress = (float)(distanceToMove / totalDistance);
-            float newYaw = lerpAngle(currentTarget.getYaw(), destinationTarget.getYaw(), progress);
-            float newPitch = lerpAngle(currentTarget.getPitch(), destinationTarget.getPitch(), progress);
-
-            currentTarget = new CameraTarget(
-                    new Vec3d(newX, newY, newZ),
-                    newYaw,
-                    newPitch,
-                    getRaycastType()
-            );
+        // Apply position speed limit
+        Vec3d moveVector = desiredPos.subtract(currentPos);
+        double moveDistance = moveVector.length();
+        if (moveDistance > 0.01) {
+            double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
+            if (moveDistance > maxMove) {
+                Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
+                desiredPos = currentPos.add(limitedMove);
+            }
         }
+
+        // Calculate rotation movement
+        float currentYaw = currentTarget.getYaw();
+        float currentPitch = currentTarget.getPitch();
+        float targetYaw = destinationTarget.getYaw();
+        float targetPitch = destinationTarget.getPitch();
+
+        // First calculate desired rotation with easing
+        float desiredYaw = lerpAngle(currentYaw, targetYaw, (float)rotationEasing);
+        float desiredPitch = lerpAngle(currentPitch, targetPitch, (float)rotationEasing);
+
+        // Apply rotation speed limit
+        float yawDiff = angleDifference(currentYaw, desiredYaw);
+        float pitchDiff = angleDifference(currentPitch, desiredPitch);
+        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
+
+        if (Math.abs(yawDiff) > maxRotation) {
+            desiredYaw = currentYaw + Math.signum(yawDiff) * maxRotation;
+        }
+        if (Math.abs(pitchDiff) > maxRotation) {
+            desiredPitch = currentPitch + Math.signum(pitchDiff) * maxRotation;
+        }
+
+        // Create new camera target with calculated position and rotation
+        currentTarget = new CameraTarget(desiredPos, desiredYaw, desiredPitch, getRaycastType());
+
+        // Check if movement is complete
+        boolean complete = resetting &&
+                currentPos.distanceTo(targetPos) < 0.01 &&
+                Math.abs(angleDifference(currentYaw, targetYaw)) < 0.1 &&
+                Math.abs(angleDifference(currentPitch, targetPitch)) < 0.1;
+
         return new MovementState(currentTarget, complete);
     }
 
     private float lerpAngle(float start, float end, float t) {
+        float diff = angleDifference(start, end);
+        return start + diff * t;
+    }
+
+    private float angleDifference(float start, float end) {
         float diff = end - start;
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
-        return start + diff * t;
+        return diff;
     }
 
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
-        // Instead of using fromPlayer which defaults to NONE,
-        // create a new CameraTarget using the current raycast type.
         destinationTarget = new CameraTarget(
                 client.player.getEyePos(),
                 client.player.getYaw(),
@@ -111,7 +135,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 getRaycastType()
         );
     }
-
 
     @Override
     public void adjustDistance(boolean increase) {

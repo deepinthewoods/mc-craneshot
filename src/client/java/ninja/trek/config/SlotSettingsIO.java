@@ -4,11 +4,8 @@ import com.google.gson.*;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.movements.EasingMovement;
+import ninja.trek.cameramovements.movements.LinearMovement;
 
-import java.awt.*;
-import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -82,7 +79,7 @@ public class SlotSettingsIO {
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to load movement: " + type, e);
             // Return default movement if loading fails
-            return new EasingMovement();
+            return new LinearMovement();
         }
     }
 
@@ -93,7 +90,7 @@ public class SlotSettingsIO {
             // Return default configuration with one EasingMovement per slot
             for (int i = 0; i < 3; i++) {
                 List<ICameraMovement> slot = new ArrayList<>();
-                slot.add(new EasingMovement());
+                slot.add(new LinearMovement());
                 slots.add(slot);
             }
             return slots;
@@ -120,7 +117,7 @@ public class SlotSettingsIO {
             // Return default configuration on error
             for (int i = 0; i < 3; i++) {
                 List<ICameraMovement> slot = new ArrayList<>();
-                slot.add(new EasingMovement());
+                slot.add(new LinearMovement());
                 slots.add(slot);
             }
         }
@@ -149,7 +146,7 @@ public class SlotSettingsIO {
             return jsonToMovement(movementObj);
         } catch (Exception e) {
             Craneshot.LOGGER.error("Failed to create movement from clipboard", e);
-            return new EasingMovement(); // Return default movement if parsing fails
+            return new LinearMovement(); // Return default movement if parsing fails
         }
     }
 

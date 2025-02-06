@@ -4,7 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.*;
-import ninja.trek.cameramovements.movements.EasingMovement;
+import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.*;
 
 import java.util.*;
@@ -24,11 +24,8 @@ public class CameraController {
         movementManager = new CameraMovementManager();
         activeMovementSlots = new HashMap<>();
 
-        // Initialize slots with default configurations
+//         Initialize slots ?
         for (int i = 0; i < 3; i++) {
-            ArrayList<ICameraMovement> arr = new ArrayList<>();
-            arr.add(new EasingMovement());
-            slots.add(arr);
             currentTypes.add(0);
         }
     }
