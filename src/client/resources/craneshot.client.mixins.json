@@ -5,6 +5,7 @@
 	"client": [
 		"MouseMixin",
 		"CameraAccessor",
+		"CameraMixin",
 		"MouseAccessor"
 	],
 	"injectors": {

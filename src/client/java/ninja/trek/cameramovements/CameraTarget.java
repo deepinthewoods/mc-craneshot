@@ -23,7 +23,7 @@ public class CameraTarget {
     }
 
     public static CameraTarget fromDistance(PlayerEntity player, double distance, RaycastType raycastType) {
-        double yaw = Math.toRadians(player.getYaw());
+        double yaw = Math.toRadians(player.getYaw());// + Math.toRadians((180));
         double pitch = Math.toRadians(player.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * distance;
         double yOffset = Math.sin(pitch) * distance;

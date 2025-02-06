@@ -74,7 +74,7 @@ public class CraneShotEventHandler {
 
             // Update camera movements
             if (client.player != null) {
-                CraneshotClient.CAMERA_CONTROLLER.tick(client, camera);
+                //CraneshotClient.CAMERA_CONTROLLER.tick(client, camera);
             }
         });
     }

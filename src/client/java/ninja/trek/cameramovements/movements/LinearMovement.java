@@ -13,20 +13,14 @@ import ninja.trek.config.MovementSetting;
 
 @CameraMovementType(
         name = "Linear Movement",
-        description = "Moves the camera with linear interpolation and separate position/rotation controls"
+        description = "Moves the camera with linear interpolation and position controls"
 )
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
 
-    @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
-    private double rotationEasing = 0.1;
-
     @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
     private double positionSpeedLimit = 2.0;
-
-    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 360.0)
-    private double rotationSpeedLimit = 45.0;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
@@ -48,6 +42,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (player == null) return;
         currentTarget = CameraTarget.fromCamera(camera, getRaycastType());
         destinationTarget = CameraTarget.fromDistance(player, targetDistance, getRaycastType());
+
         resetting = false;
         weight = 1.0f;
     }
@@ -78,50 +73,18 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             }
         }
 
-        // Calculate rotation movement
-        float currentYaw = currentTarget.getYaw();
-        float currentPitch = currentTarget.getPitch();
-        float targetYaw = destinationTarget.getYaw();
-        float targetPitch = destinationTarget.getPitch();
-
-        // First calculate desired rotation with easing
-        float desiredYaw = lerpAngle(currentYaw, targetYaw, (float)rotationEasing);
-        float desiredPitch = lerpAngle(currentPitch, targetPitch, (float)rotationEasing);
-
-        // Apply rotation speed limit
-        float yawDiff = angleDifference(currentYaw, desiredYaw);
-        float pitchDiff = angleDifference(currentPitch, desiredPitch);
-        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
-
-        if (Math.abs(yawDiff) > maxRotation) {
-            desiredYaw = currentYaw + Math.signum(yawDiff) * maxRotation;
-        }
-        if (Math.abs(pitchDiff) > maxRotation) {
-            desiredPitch = currentPitch + Math.signum(pitchDiff) * maxRotation;
-        }
-
-        // Create new camera target with calculated position and rotation
-        currentTarget = new CameraTarget(desiredPos, desiredYaw, desiredPitch, getRaycastType());
+        // Create new camera target with calculated position
+        currentTarget = new CameraTarget(
+                desiredPos,
+                destinationTarget.getYaw(),
+                destinationTarget.getPitch(),
+                getRaycastType()
+        );
 
         // Check if movement is complete
-        boolean complete = resetting &&
-                currentPos.distanceTo(targetPos) < 0.01 &&
-                Math.abs(angleDifference(currentYaw, targetYaw)) < 0.1 &&
-                Math.abs(angleDifference(currentPitch, targetPitch)) < 0.1;
+        boolean complete = resetting && currentPos.distanceTo(targetPos) < 0.01;
 
         return new MovementState(currentTarget, complete);
-    }
-
-    private float lerpAngle(float start, float end, float t) {
-        float diff = angleDifference(start, end);
-        return start + diff * t;
-    }
-
-    private float angleDifference(float start, float end) {
-        float diff = end - start;
-        while (diff > 180) diff -= 360;
-        while (diff < -180) diff += 360;
-        return diff;
     }
 
     @Override
