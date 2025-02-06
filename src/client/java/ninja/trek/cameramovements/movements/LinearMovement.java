@@ -32,7 +32,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-
     public CameraTarget start = new CameraTarget(), end = new CameraTarget(), current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
@@ -44,7 +43,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
-        end = CameraTarget.fromDistance(player, targetDistance);
+        end = getEndTarget(player, targetDistance);
         resetting = false;
         weight = 1.0f;
     }
@@ -56,7 +55,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         start.set(player.getEyePos(),
                 player.getYaw(),
                 player.getPitch());
-        end.set(CameraTarget.fromDistance(player, targetDistance));
+        end.set(getEndTarget(player, targetDistance));
         CameraTarget a, b;
         if (!resetting) {
             a = start;
@@ -84,11 +83,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 end.getYaw(),
                 end.getPitch()
         );
+        alpha = current.getPosition().distanceTo(b.getPosition()) / a.getPosition().distanceTo(b.getPosition());
 
         boolean complete = resetting && moveDistance < 0.01;
         return new MovementState(current, complete);
     }
-    
+
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;

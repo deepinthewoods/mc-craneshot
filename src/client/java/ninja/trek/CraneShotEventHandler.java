@@ -119,7 +119,7 @@ public class CraneShotEventHandler {
         else {
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
-                    CraneshotClient.CAMERA_CONTROLLER.adjustDistance(i, scrollUp);
+                    CraneshotClient.CAMERA_CONTROLLER.adjustDistance(i, !scrollUp);
                     lastScrollTime = currentTime;
                     mouseAccessor.setEventDeltaVerticalWheel(0);
                     break;

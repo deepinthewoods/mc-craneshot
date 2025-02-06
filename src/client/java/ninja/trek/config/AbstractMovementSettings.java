@@ -1,5 +1,7 @@
 package ninja.trek.config;
+import net.minecraft.entity.player.PlayerEntity;
 import ninja.trek.Craneshot;
+import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.RaycastType;
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -16,6 +18,27 @@ public abstract class AbstractMovementSettings {
             description = "Controls how the camera handles collision with blocks"
     )
     private RaycastType raycastType = RaycastType.NEAR;
+    public double alpha;
+
+    public enum START_TARGET {PLAYER};
+    public enum END_TARGET {BACK, FRONT}
+
+    @MovementSetting(
+            label = "Camera Position",
+            type = MovementSettingType.ENUM,
+            description = "Determines if camera follows in front or behind the player"
+    )
+    private END_TARGET endTarget = END_TARGET.BACK;
+
+    protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
+        switch (endTarget){
+            default:
+            case BACK: return CameraTarget.fromDistanceBack(player, targetDistance);
+            case FRONT: return CameraTarget.fromDistanceFront(player, targetDistance);
+        }
+
+
+    }
     
     public RaycastType getRaycastType() {
         return raycastType != null ? raycastType : RaycastType.NONE;

@@ -219,15 +219,13 @@ public class MenuOverlayScreen extends Screen {
         updateScrollBounds(yOffset);
     }
 
-
-
     private int createSettingsSection(AbstractMovementSettings settings, int rowY, int yOffset,
                                       int visibleStartY, int visibleEndY, int BUTTON_HEIGHT, int SETTING_HEIGHT, int MOVEMENT_SPACING) {
         List<Field> settingFields = new ArrayList<>();
         collectSettingFields(settings, settingFields);
 
         int totalWidth = guiWidth - 40;
-        int labelWidth = Math.min(150, totalWidth / 4);
+        int labelWidth = Math.min(200, totalWidth / 3);  // Increased from 150 to 200
         int controlWidth = Math.min(200, totalWidth / 2);
         int settingWidth = labelWidth + controlWidth + 10;
         int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
@@ -237,7 +235,6 @@ public class MenuOverlayScreen extends Screen {
             Field field = settingFields.get(fieldIndex);
             MovementSetting annotation = field.getAnnotation(MovementSetting.class);
             field.setAccessible(true);
-
             try {
                 int column = fieldIndex / settingsPerColumn;
                 int row = fieldIndex % settingsPerColumn;
@@ -252,24 +249,18 @@ public class MenuOverlayScreen extends Screen {
                 e.printStackTrace();
             }
         }
-
         return yOffset + (settingsPerColumn * SETTING_HEIGHT) + MOVEMENT_SPACING;
     }
 
     private void createSettingControl(AbstractMovementSettings settings, Field field,
                                       MovementSetting annotation, int settingX, int settingY, int labelWidth,
                                       int controlWidth, int BUTTON_HEIGHT) throws IllegalAccessException {
-        // Label button
-        addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
-                .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
-                .build());
-
-        // Control
         if (annotation.type() == MovementSettingType.ENUM) {
+            // For enums, create a wider button and skip the label
             ButtonWidget enumButton = SettingWidget.createEnumButton(
-                    settingX + labelWidth + 10,
+                    settingX,  // Use settingX directly instead of adding labelWidth
                     settingY,
-                    controlWidth,
+                    labelWidth + controlWidth + 10,  // Use full width
                     BUTTON_HEIGHT,
                     field.getName(),
                     settings,
@@ -279,7 +270,11 @@ public class MenuOverlayScreen extends Screen {
                 addDrawableChild(enumButton);
             }
         } else {
-            double value = ((Number) field.get(settings)).doubleValue();
+            // For non-enum settings, keep the original label + control layout
+            addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
+                    .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+                    .build());
+
             addDrawableChild(SettingWidget.createSlider(
                     settingX + labelWidth + 10,
                     settingY,
@@ -288,7 +283,7 @@ public class MenuOverlayScreen extends Screen {
                     Text.literal(annotation.label()),
                     annotation.min(),
                     annotation.max(),
-                    value,
+                    ((Number) field.get(settings)).doubleValue(),
                     field.getName(),
                     settings
             ));
