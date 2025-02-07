@@ -32,13 +32,13 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private double positionEasing = 0.1;
 
     @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
-    private double positionSpeedLimit = 2.0;
+    private double positionSpeedLimit = 10;
 
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
     private double rotationEasing = 0.1;
 
     @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 3600.0)
-    private double rotationSpeedLimit = 45.0;
+    private double rotationSpeedLimit = 500;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
@@ -49,8 +49,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    @MovementSetting(label = "Control Point Displacement", min = 0.0, max = 10.0)
-    private double controlPointDisplacement = 2.0;
+    @MovementSetting(label = "Control Point Displacement", min = 0.0, max = 30)
+    private double controlPointDisplacement = 5;
+
+    // --- New settings for the displacement angle ---
+    // These angles (in degrees) are between -180 and 180, with 0 meaning an offset directly upward.
+    @MovementSetting(label = "Displacement Angle Min", min = -180.0, max = 180.0)
+    private double displacementAngleMin = 0.0;
+
+    @MovementSetting(label = "Displacement Angle Max", min = -180.0, max = 180.0)
+    private double displacementAngleMax = 0.0;
 
     // --- Internal fields for the canonical Bézier path ---
     // These vectors are expressed in canonical (local) space, defined so that:
@@ -85,16 +93,39 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         canonicalStart = unrotateVectorByYawPitch(absStart.subtract(playerEye), playerYaw, playerPitch);
         canonicalEnd   = unrotateVectorByYawPitch(absEnd.subtract(playerEye), playerYaw, playerPitch);
 
-        // Compute the canonical control point as the midpoint plus a random displacement.
+        // --- Modified control point computation ---
+        // Compute the midpoint between start and end in canonical space.
         Vec3d mid = canonicalStart.add(canonicalEnd).multiply(0.5);
-        double theta = Math.random() * 2 * Math.PI;
-        double phi = Math.acos(2 * Math.random() - 1);
-        double x = Math.sin(phi) * Math.cos(theta);
-        double y = Math.sin(phi) * Math.sin(theta);
-        double z = Math.cos(phi);
-        Vec3d randomDir = new Vec3d(x, y, z);
-        Vec3d offset = randomDir.multiply(controlPointDisplacement);
-        canonicalControl = mid.add(offset);
+        Vec3d diff = canonicalEnd.subtract(canonicalStart);
+        if (diff.lengthSquared() < 1e-6) {
+            // If the start and end are nearly identical, simply move upward.
+            canonicalControl = mid.add(new Vec3d(0, controlPointDisplacement, 0));
+        } else {
+            Vec3d tangent = diff.normalize();
+            Vec3d worldUp = new Vec3d(0, 1, 0);
+            // Project worldUp onto the plane perpendicular to tangent.
+            Vec3d projectedUp = worldUp.subtract(tangent.multiply(worldUp.dotProduct(tangent)));
+            if (projectedUp.lengthSquared() < 1e-6) {
+                // If tangent is parallel to worldUp, use an arbitrary perpendicular vector.
+                Vec3d arbitrary = new Vec3d(1, 0, 0);
+                projectedUp = arbitrary.subtract(tangent.multiply(arbitrary.dotProduct(tangent)));
+            }
+            projectedUp = projectedUp.normalize();
+            // Ensure the projected vector points upward (i.e. positive Y). I had to reverse this for it to work right.
+            if (projectedUp.y > 0) {
+                projectedUp = projectedUp.multiply(-1);
+            }
+            // Choose a random angle between the configured min and max.
+            double angleDegrees = displacementAngleMin + Math.random() * (displacementAngleMax - displacementAngleMin);
+            double angleRadians = Math.toRadians(angleDegrees);
+            // Rotate projectedUp about the tangent axis by the random angle.
+            // Since projectedUp is perpendicular to tangent, we can use:
+            //   rotated = projectedUp*cos(theta) + (tangent cross projectedUp)*sin(theta)
+            Vec3d rotatedUp = projectedUp.multiply(Math.cos(angleRadians))
+                    .add(tangent.crossProduct(projectedUp).multiply(Math.sin(angleRadians)));
+            Vec3d offset = rotatedUp.multiply(controlPointDisplacement);
+            canonicalControl = mid.add(offset);
+        }
 
         progress = 0.0;
         resetting = false;
@@ -184,6 +215,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         alpha = totalDistance != 0 ? remaining / totalDistance : 0.0;
 
         boolean complete = resetting && progress >= 0.999;
+
         return new MovementState(current, complete);
     }
 
@@ -216,7 +248,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     public boolean isComplete() {
         return resetting && progress >= 0.999;
     }
-
 
     /**
      * Converts a canonical (local) vector into world space.
@@ -283,6 +314,4 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         double zCanonical = worldVec.dotProduct(forward);
         return new Vec3d(xCanonical, yCanonical, zCanonical);
     }
-
-
 }
