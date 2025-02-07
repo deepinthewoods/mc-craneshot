@@ -217,71 +217,75 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         return resetting && progress >= 0.999;
     }
 
-    // --- Conversion Functions ---
-    //
-    // These functions convert between the world coordinate system and the canonical (local)
-    // coordinate system. In our canonical system a level, south–facing view (yaw=0, pitch=0)
-    // has:
-    //     forward = (0, 0, 1), right = (1, 0, 0), and up = (0, 1, 0).
-    //
-    // Note: Minecraft’s yaw increases clockwise, and yaw=0 means south.
-    //
-    // When converting from canonical (local) to world coordinates, we “rotate” by -yaw.
-    // Conversely, to get the canonical coordinates from a world offset we “unrotate” by +yaw.
-    //
-    // Adjust these if your observations suggest a different convention.
-
     /**
-     * Converts a vector expressed in canonical (local) space into world space by applying
-     * the player’s current yaw and pitch.
+     * Converts a canonical (local) vector into world space.
+     * In canonical coordinates a level, south–facing view (yaw=0, pitch=0)
+     * has right = (1,0,0), up = (0,1,0) and forward = (0,0,1).
      *
-     * @param vec   The canonical vector.
-     * @param yaw   The player’s current yaw (in degrees).
-     * @param pitch The player’s current pitch (in degrees).
-     * @return The vector rotated into world space.
+     * This method builds the player’s local coordinate axes from the current yaw and pitch
+     * (with the pitch “inversion” so that if the player looks down, the camera moves up)
+     * and then recombines the canonical coordinates.
      */
-    private Vec3d rotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
-        // Invert yaw: Minecraft’s yaw rotates the view clockwise.
-        double yawRad = Math.toRadians(-yaw);
-        double cosYaw = Math.cos(yawRad);
-        double sinYaw = Math.sin(yawRad);
-        double x1 = vec.x * cosYaw - vec.z * sinYaw;
-        double z1 = vec.x * sinYaw + vec.z * cosYaw;
-        double y1 = vec.y;
+    private Vec3d rotateVectorByYawPitch(Vec3d canonical, float playerYaw, float playerPitch) {
+        double yawRad   = Math.toRadians(playerYaw);
+        double pitchRad = Math.toRadians(playerPitch);
 
-        // Apply pitch (rotate about the X axis)
-        double pitchRad = Math.toRadians(pitch);
-        double cosPitch = Math.cos(pitchRad);
-        double sinPitch = Math.sin(pitchRad);
-        double y2 = y1 * cosPitch - z1 * sinPitch;
-        double z2 = y1 * sinPitch + z1 * cosPitch;
+        // Compute forward. (Note: using +sin(pitch) here makes the camera move opposite to the head—
+        // i.e. when the player looks down (positive pitch) the camera goes up. Adjust if needed.)
+        Vec3d forward = new Vec3d(
+                -Math.sin(yawRad) * Math.cos(pitchRad),
+                Math.sin(pitchRad),
+                Math.cos(yawRad) * Math.cos(pitchRad)
+        );
 
-        return new Vec3d(x1, y2, z2);
+        // Right vector is independent of pitch.
+        Vec3d right = new Vec3d(
+                Math.cos(yawRad),
+                0,
+                Math.sin(yawRad)
+        );
+
+        // Up vector from cross product. (Make sure your coordinate system is right–handed.)
+        Vec3d up = right.crossProduct(forward);
+
+        // Recompose: canonical.x is in the right direction,
+        // canonical.y is in the up direction, and canonical.z is forward.
+        return right.multiply(canonical.x)
+                .add(up.multiply(canonical.y))
+                .add(forward.multiply(canonical.z));
     }
 
     /**
-     * Converts a world–space offset into canonical (local) space by undoing the player's rotation.
-     *
-     * @param vec   The world–space vector (typically the offset from the player's eye).
-     * @param yaw   The player’s current yaw (in degrees).
-     * @param pitch The player’s current pitch (in degrees).
-     * @return The vector expressed in canonical (local) coordinates.
+     * Converts a world–space offset (typically relative to the player’s eye) into canonical space.
+     * This is simply the inverse of the above function.
      */
-    private Vec3d unrotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
-        // Undo the pitch rotation first.
-        double pitchRad = Math.toRadians(-pitch);
-        double cosPitch = Math.cos(pitchRad);
-        double sinPitch = Math.sin(pitchRad);
-        double y1 = vec.y * cosPitch - vec.z * sinPitch;
-        double z1 = vec.y * sinPitch + vec.z * cosPitch;
+    private Vec3d unrotateVectorByYawPitch(Vec3d worldVec, float playerYaw, float playerPitch) {
+        double yawRad   = Math.toRadians(playerYaw);
+        double pitchRad = Math.toRadians(playerPitch);
 
-        // Undo the yaw rotation.
-        double yawRad = Math.toRadians(yaw);  // note: opposite sign to the above rotate function
-        double cosYaw = Math.cos(yawRad);
-        double sinYaw = Math.sin(yawRad);
-        double x1 = vec.x * cosYaw - z1 * sinYaw;
-        double z2 = vec.x * sinYaw + z1 * cosYaw;
+        Vec3d forward = new Vec3d(
+                -Math.sin(yawRad) * Math.cos(pitchRad),
+                Math.sin(pitchRad),
+                Math.cos(yawRad) * Math.cos(pitchRad)
+        );
 
-        return new Vec3d(x1, y1, z2);
+        Vec3d right = new Vec3d(
+                Math.cos(yawRad),
+                0,
+                Math.sin(yawRad)
+        );
+
+        Vec3d up = right.crossProduct(forward);
+
+        // Now solve for the canonical coordinates by projecting worldVec onto each axis.
+        double xCanonical = worldVec.dotProduct(right);
+        double yCanonical = worldVec.dotProduct(up);
+        double zCanonical = worldVec.dotProduct(forward);
+        return new Vec3d(xCanonical, yCanonical, zCanonical);
     }
+
+
+
+
+
 }
