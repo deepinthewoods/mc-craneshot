@@ -44,7 +44,6 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
     @MovementSetting(label = "Max Displacement", min = 0.0, max = 20.0)
     private double maxDisplacement = 5.0;
 
-    // Store relative positions instead of world positions
     private Vec3d relativeStartPos;
     private Vec3d relativeMidPos;
     private Vec3d relativeEndPos;
@@ -54,14 +53,12 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
     private float relativeMidPitch;
     private float relativeEndYaw;
     private float relativeEndPitch;
-
     private CameraTarget current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
     private double progress = 0.0;
     private double pathLength;
     private Random random = new Random();
-
     private Vec3d initialPlayerPos;
     private float initialPlayerYaw;
     private float initialPlayerPitch;
@@ -71,64 +68,66 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         PlayerEntity player = client.player;
         if (player == null) return;
 
-        // Store initial player state
         initialPlayerPos = player.getEyePos();
         initialPlayerYaw = player.getYaw();
         initialPlayerPitch = player.getPitch();
 
-        // Calculate and store relative positions
         calculateRelativePositions(player, camera);
-
-        // Initialize current camera position
         current = CameraTarget.fromCamera(camera);
-
         resetting = false;
         weight = 1.0f;
         progress = 0.0;
     }
 
-    // Update these methods in CraneShotMovement.java
-
     private void calculateRelativePositions(PlayerEntity player, Camera camera) {
         // Store start position relative to player
         relativeStartPos = camera.getPos().subtract(player.getEyePos());
         relativeStartYaw = camera.getYaw() - player.getYaw();
-        relativeStartPitch = camera.getPitch();  // Store absolute pitch instead of relative
+        relativeStartPitch = camera.getPitch();
 
-        // Calculate relative end position
-        double yaw = Math.toRadians(player.getYaw() + 180);
-        double pitch = Math.toRadians(player.getPitch());
-        Vec3d endDirection = new Vec3d(
-                Math.sin(yaw) * Math.cos(pitch),
-                -Math.sin(pitch), // Invert pitch for correct vertical direction
-                -Math.cos(yaw) * Math.cos(pitch)
-        ).multiply(targetDistance);
-
+        // Calculate end position based on endTarget setting
+        Vec3d endDirection;
+        if (endTarget == END_TARGET.BACK) {
+            double yaw = Math.toRadians(player.getYaw());
+            double pitch = Math.toRadians(player.getPitch());
+            endDirection = new Vec3d(
+                    Math.sin(yaw) * Math.cos(pitch),
+                    Math.sin(pitch),
+                    -Math.cos(yaw) * Math.cos(pitch)
+            ).multiply(targetDistance);
+            relativeEndYaw = 0; // Relative to player's view
+        } else { // FRONT
+            double yaw = Math.toRadians(player.getYaw() + 180);
+            double pitch = Math.toRadians(-player.getPitch());
+            endDirection = new Vec3d(
+                    Math.sin(yaw) * Math.cos(pitch),
+                    Math.sin(pitch),
+                    -Math.cos(yaw) * Math.cos(pitch)
+            ).multiply(targetDistance);
+            relativeEndYaw = 180; // Face player
+        }
         relativeEndPos = endDirection;
-        relativeEndYaw = 180; // Relative to player viewing direction
-        relativeEndPitch = player.getPitch(); // Store absolute pitch
+        relativeEndPitch = endTarget == END_TARGET.BACK ? player.getPitch() : -player.getPitch();
 
-        // Calculate relative midpoint with displacement
+        // Calculate mid position with displacement
         Vec3d midDirection = relativeEndPos.subtract(relativeStartPos);
         Vec3d perpVector = midDirection.crossProduct(new Vec3d(0, 1, 0)).normalize();
         double displacement = minDisplacement + random.nextDouble() * (maxDisplacement - minDisplacement);
         relativeMidPos = relativeStartPos.add(midDirection.multiply(0.5)).add(perpVector.multiply(displacement));
 
-        // Calculate mid rotations
-        relativeMidYaw = (relativeStartYaw + relativeEndYaw) / 2.0f;
-        relativeMidPitch = (relativeStartPitch + relativeEndPitch) / 2.0f;
+        // Calculate mid rotation as smooth interpolation
+        relativeMidYaw = lerpAngle(relativeStartYaw, relativeEndYaw, 0.5f);
+        relativeMidPitch = lerpAngle(relativeStartPitch, relativeEndPitch, 0.5f);
 
-        // Calculate approximate path length
+        // Calculate path length for progress tracking
         pathLength = relativeMidPos.subtract(relativeStartPos).length() +
                 relativeEndPos.subtract(relativeMidPos).length();
     }
 
     private Vec3d rotateVector(Vec3d vec, float yawDiff, float pitchDiff) {
-        // Convert angles to radians
         double yawRad = Math.toRadians(yawDiff);
         double pitchRad = Math.toRadians(pitchDiff);
 
-        // Get trig values
         double sy = Math.sin(yawRad);
         double cy = Math.cos(yawRad);
         double sp = Math.sin(pitchRad);
@@ -139,7 +138,6 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         double z1 = vec.x * sy + vec.z * cy;
 
         // Then rotate around X axis (pitch)
-        // Only rotate the vertical component and the new forward component
         double y2 = z1 * sp + vec.y * cp;
         double z2 = z1 * cp - vec.y * sp;
 
@@ -156,7 +154,7 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         float playerYaw = player.getYaw();
         float playerPitch = player.getPitch();
 
-        // Calculate world space positions based on current player state
+        // Calculate world space positions
         Vec3d worldStartPos = playerPos.add(rotateVector(relativeStartPos,
                 playerYaw - initialPlayerYaw,
                 playerPitch - initialPlayerPitch));
@@ -203,26 +201,34 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         // Update position
         Vec3d newPos = current.getPosition().add(moveVector);
 
-        // Calculate target rotation - use absolute pitch values
-        float targetYaw = resetting ?
-                playerYaw + relativeStartYaw :
-                lerpAngle(
-                        lerpAngle(playerYaw + relativeStartYaw,
-                                playerYaw + relativeMidYaw, (float)t),
-                        lerpAngle(playerYaw + relativeMidYaw,
-                                playerYaw + relativeEndYaw, (float)t),
-                        (float)t
-                );
+        // Calculate target rotation
+        float targetYaw;
+        float targetPitch;
+        if (resetting) {
+            targetYaw = playerYaw + relativeStartYaw;
+            targetPitch = relativeStartPitch;
+        } else {
+            // Interpolate rotations based on endTarget setting
+            float startYaw = playerYaw + relativeStartYaw;
+            float midYaw = playerYaw + relativeMidYaw;
+            float endYaw = playerYaw + (endTarget == END_TARGET.BACK ? 0 : 180);
 
-        float targetPitch = resetting ?
-                relativeStartPitch :
-                lerpAngle(
-                        lerpAngle(relativeStartPitch,
-                                relativeMidPitch, (float)t),
-                        lerpAngle(relativeMidPitch,
-                                relativeEndPitch, (float)t),
-                        (float)t
-                );
+            targetYaw = lerpAngle(
+                    lerpAngle(startYaw, midYaw, (float)t),
+                    lerpAngle(midYaw, endYaw, (float)t),
+                    (float)t
+            );
+
+            float startPitch = relativeStartPitch;
+            float midPitch = relativeMidPitch;
+            float endPitch = endTarget == END_TARGET.BACK ? playerPitch : -playerPitch;
+
+            targetPitch = lerpAngle(
+                    lerpAngle(startPitch, midPitch, (float)t),
+                    lerpAngle(midPitch, endPitch, (float)t),
+                    (float)t
+            );
+        }
 
         // Apply rotation constraints
         float yawDiff = targetYaw - current.getYaw();
@@ -248,7 +254,7 @@ public class CraneShotMovement extends AbstractMovementSettings implements ICame
         // Update current state
         current = new CameraTarget(newPos, newYaw, newPitch);
 
-        // Update progress based on camera position along the path
+        // Update progress
         if (resetting) {
             double endDist = newPos.distanceTo(worldStartPos);
             progress = Math.min(1.0, 1.0 - (endDist / pathLength));

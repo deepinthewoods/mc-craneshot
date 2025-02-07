@@ -29,7 +29,7 @@ public abstract class AbstractMovementSettings {
             type = MovementSettingType.ENUM,
             description = "Determines if camera follows in front or behind the player"
     )
-    private END_TARGET endTarget = END_TARGET.BACK;
+    protected END_TARGET endTarget = END_TARGET.BACK;
 
     protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
         switch (endTarget){
