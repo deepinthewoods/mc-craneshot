@@ -1,8 +1,9 @@
-package ninja.trek.config;
+package ninja.trek.cameramovements;
 import net.minecraft.entity.player.PlayerEntity;
 import ninja.trek.Craneshot;
-import ninja.trek.cameramovements.CameraTarget;
-import ninja.trek.cameramovements.RaycastType;
+import ninja.trek.config.MovementSetting;
+import ninja.trek.config.MovementSettingType;
+
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -39,7 +40,7 @@ public abstract class AbstractMovementSettings {
 
 
     }
-    
+
     public RaycastType getRaycastType() {
         return raycastType != null ? raycastType : RaycastType.NONE;
     }

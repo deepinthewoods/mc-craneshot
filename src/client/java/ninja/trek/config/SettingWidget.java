@@ -4,6 +4,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.SliderWidget;
 import net.minecraft.text.Text;
 import ninja.trek.Craneshot;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 
 import java.lang.reflect.Field;
 

@@ -5,6 +5,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.client.gui.DrawContext;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 
 public class RenameModal extends Screen {
     private final Screen parent;

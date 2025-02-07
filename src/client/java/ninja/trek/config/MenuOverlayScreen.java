@@ -10,6 +10,7 @@ import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
 import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.lang.reflect.Field;
 import java.util.*;

@@ -8,7 +8,7 @@ import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.MovementState;
-import ninja.trek.config.AbstractMovementSettings;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.config.MovementSetting;
 
 @CameraMovementType(

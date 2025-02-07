@@ -3,6 +3,7 @@ package ninja.trek.config;
 import com.google.gson.*;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.LinearMovement;
 
