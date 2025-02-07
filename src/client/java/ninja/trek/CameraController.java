@@ -2,6 +2,7 @@ package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
+import net.minecraft.client.option.SimpleOption;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
@@ -27,7 +28,6 @@ public class CameraController {
     private Vec3d freeCamPosition;
     private float freeCamYaw;
     private float freeCamPitch;
-    private static final float MOUSE_SENSITIVITY = 0.15f;
 
     public CameraController() {
         slots = new ArrayList<>();
@@ -46,11 +46,12 @@ public class CameraController {
             handleKeyboardMovement(client, camera);
         }
         if (mouseControlEnabled && client.mouse instanceof IMouseMixin) {
+            Double mouseSensitivity = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
             double deltaX = mouseMixin.getCapturedDeltaX();
-            double deltaY = mouseMixin.getCapturedDeltaY();
-            freeCamYaw += (float)(deltaX * MOUSE_SENSITIVITY);
-            freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float)(deltaY * MOUSE_SENSITIVITY)));
+            double deltaY = -mouseMixin.getCapturedDeltaY();
+            freeCamYaw += (float)(deltaX * mouseSensitivity);
+            freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float)(deltaY * mouseSensitivity)));
             ((CameraAccessor)camera).invokeSetRotation(freeCamYaw, freeCamPitch);
         }
         // Force the camera to keep the freeCamPosition.
@@ -200,28 +201,6 @@ public class CameraController {
             }
         }
     }
-
-
-
-
-
-    private void handleMouseMovement(MinecraftClient client, Camera camera) {
-        MouseAccessor mouseAccessor = (MouseAccessor)client.mouse;
-        double deltaX = mouseAccessor.getEventDeltaVerticalWheel();
-        double deltaY = mouseAccessor.getEventDeltaVerticalWheel();
-
-//        if (deltaX != 0 || deltaY != 0) {
-            float sensitivity = 0.15f;
-            float newYaw = freeCamYaw + (float)deltaX * sensitivity;
-            float newPitch = Math.max(-90, Math.min(90, freeCamPitch + (float)deltaY * sensitivity));
-
-            ((CameraAccessor)camera).invokeSetRotation(newYaw, newPitch);
-            freeCamYaw = newYaw;
-            freeCamPitch = newPitch;
-//        }
-    }
-
-
 
 
 
