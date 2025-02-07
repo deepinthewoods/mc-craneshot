@@ -9,6 +9,7 @@
 		"MouseAccessor",
 		"KeyboardInputMixin",
 		"WorldRendererMixin"
+
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -2,7 +2,6 @@ package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.Perspective;
-import net.minecraft.client.option.SimpleOption;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
@@ -19,7 +18,10 @@ public class CameraController {
     private final ArrayList<Integer> currentTypes;
     private CameraMovementManager movementManager;
     private final Map<Integer, ICameraMovement> activeMovementSlots;
-    private static final double FIRST_PERSON_THRESHOLD = 2.0;
+    public static final double FIRST_PERSON_THRESHOLD_MIN = 2.0;
+    public static final double FIRST_PERSON_THRESHOLD_MAX = 5.0;
+
+
     private String currentMessage = "";
     private long messageTimer = 0;
     private static final long MESSAGE_DURATION = 2000;
@@ -87,8 +89,8 @@ public class CameraController {
 
             if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
             if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
-            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
-            if (client.options.rightKey.isPressed()) movement = movement.add(right);
+            if (client.options.leftKey.isPressed()) movement = movement.add(right);
+            if (client.options.rightKey.isPressed()) movement = movement.subtract(right);
             if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
             if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
         } else {
@@ -110,8 +112,8 @@ public class CameraController {
 
             if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
             if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
-            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
-            if (client.options.rightKey.isPressed()) movement = movement.add(right);
+            if (client.options.leftKey.isPressed()) movement = movement.add(right);
+            if (client.options.rightKey.isPressed()) movement = movement.subtract(right);
             if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
             if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
         }
@@ -155,8 +157,7 @@ public class CameraController {
         if (!inFreeControlMode) {
             // Run the movement tick first.
             movementManager.update(client, camera);
-            // Only update perspective if we're still in normal (non‑free) mode.
-            updatePerspective(client, camera);
+
             // Now check if any active movement has completed its out phase.
             // (This check also captures the camera state and sets free mode.)
             for (ICameraMovement movement : activeMovementSlots.values()) {
@@ -179,9 +180,6 @@ public class CameraController {
                         ((CameraAccessor)camera).invokesetPos(freeCamPosition);
                         ((CameraAccessor)camera).invokeSetRotation(freeCamYaw, freeCamPitch);
 
-                        // Optionally force the perspective to a mode that suits free control.
-                        // For example, if free mode should work in first person:
-                        client.options.setPerspective(Perspective.FIRST_PERSON);
                         if (mouseControlEnabled) {
                             MouseInterceptor.setIntercepting(true);
                         }
@@ -191,6 +189,7 @@ public class CameraController {
                 }
             }
         }
+        updatePerspective(client, camera);
     }
 
 
@@ -236,10 +235,10 @@ public class CameraController {
 
 
     public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
-        Craneshot.LOGGER.info("startt");
+//        Craneshot.LOGGER.info("startt");
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
-        Craneshot.LOGGER.info("startt notnull");
+//        Craneshot.LOGGER.info("startt notnull");
         clearAllMovements(client, camera);
         activeMovementSlots.clear();
         activeMovementSlots.put(movementIndex, movement);
@@ -253,11 +252,14 @@ public class CameraController {
         //we do this just to switch the player model rendering on or off
         if (client.player == null) return;
         double distance = camera.getPos().distanceTo(client.player.getEyePos());
-        if (distance > FIRST_PERSON_THRESHOLD &&
+        if (distance > FIRST_PERSON_THRESHOLD_MIN &&
                 client.options.getPerspective() == Perspective.FIRST_PERSON) {
+            Craneshot.LOGGER.info("first person p");
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-        } else if (distance < FIRST_PERSON_THRESHOLD &&
+        } else if (distance < FIRST_PERSON_THRESHOLD_MIN &&
                 client.options.getPerspective() != Perspective.FIRST_PERSON) {
+            Craneshot.LOGGER.info("threds person p");
+
             client.options.setPerspective(Perspective.FIRST_PERSON);
         }
     }
