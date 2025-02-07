@@ -53,12 +53,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private double controlPointDisplacement = 5;
 
     // --- New settings for the displacement angle ---
-    // These angles (in degrees) are between -180 and 180, with 0 meaning an offset directly upward.
-    @MovementSetting(label = "Displacement Angle Min", min = -180.0, max = 180.0)
-    private double displacementAngleMin = 0.0;
+    // Instead of specifying a min and max, we now specify a central angle and a variance.
+    @MovementSetting(label = "Displacement Angle", min = -180.0, max = 180.0)
+    private double displacementAngle = 0.0;
 
-    @MovementSetting(label = "Displacement Angle Max", min = -180.0, max = 180.0)
-    private double displacementAngleMax = 0.0;
+    @MovementSetting(label = "Displacement Angle Variance", min = 0.0, max = 180.0)
+    private double displacementAngleVariance = 0.0;
 
     // --- Internal fields for the canonical Bézier path ---
     // These vectors are expressed in canonical (local) space, defined so that:
@@ -115,8 +115,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             if (projectedUp.y > 0) {
                 projectedUp = projectedUp.multiply(-1);
             }
-            // Choose a random angle between the configured min and max.
-            double angleDegrees = displacementAngleMin + Math.random() * (displacementAngleMax - displacementAngleMin);
+            // Choose a random angle based on the configured angle and variance.
+            // Math.random() returns a value in [0,1], remap it to [-1,1] then multiply by the variance.
+            double randomOffset = (Math.random() * 2 - 1) * displacementAngleVariance;
+            double angleDegrees = displacementAngle + randomOffset;
             double angleRadians = Math.toRadians(angleDegrees);
             // Rotate projectedUp about the tangent axis by the random angle.
             // Since projectedUp is perpendicular to tangent, we can use:
