@@ -182,12 +182,59 @@ public class MenuOverlayScreen extends Screen {
                 .build());
     }
 
+    // Update the addGeneralSettings() method in MenuOverlayScreen.java
     private void addGeneralSettings() {
         int yOffset = CONTENT_START_Y + 20;
         int buttonWidth = 200;
         int buttonX = centerX + (guiWidth - buttonWidth) / 2;
+        int spacing = 25;
 
+        // Define the necessary dimensions
+        int BUTTON_HEIGHT = 20;
+        int totalWidth = guiWidth - 40;
+        int labelWidth = Math.min(200, totalWidth / 3);
+        int controlWidth = Math.min(200, totalWidth / 2);
 
+        // Move Speed Slider
+        float currentSpeed = FreeCamSettings.getMoveSpeed();
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
+                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                centerY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Free Camera Speed"),
+                0.1f,
+                2.0f,
+                currentSpeed,
+                "moveSpeed",
+                new AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("moveSpeed") && value instanceof Number) {
+                            FreeCamSettings.setMoveSpeed(((Number)value).floatValue());
+                        }
+                    }
+                }
+        ));
+
+        yOffset += spacing;
+
+        // Movement Mode Button
+        FreeCamSettings.MovementMode currentMode = FreeCamSettings.getMovementMode();
+        this.addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Movement Mode: " + currentMode.name()),
+                        button -> {
+                            FreeCamSettings.MovementMode[] modes = FreeCamSettings.MovementMode.values();
+                            int nextOrdinal = (currentMode.ordinal() + 1) % modes.length;
+                            FreeCamSettings.setMovementMode(modes[nextOrdinal]);
+                            button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
+                        })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
+                .build()
+        );
     }
 
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,

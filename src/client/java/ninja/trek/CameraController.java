@@ -8,6 +8,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
 import ninja.trek.cameramovements.*;
+import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.*;
 
@@ -24,8 +25,8 @@ public class CameraController {
     private static final long MESSAGE_DURATION = 2000;
     private boolean mouseControlEnabled = false;
     private boolean moveControlEnabled = false;
-    private boolean inFreeControlMode = false;
-    private Vec3d freeCamPosition;
+    public static boolean inFreeControlMode = false;
+    public static Vec3d freeCamPosition;
     private float freeCamYaw;
     private float freeCamPitch;
 
@@ -47,11 +48,13 @@ public class CameraController {
         }
         if (mouseControlEnabled && client.mouse instanceof IMouseMixin) {
             Double mouseSensitivity = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
+            double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity + 0.2;
+
             IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
             double deltaX = mouseMixin.getCapturedDeltaX();
             double deltaY = -mouseMixin.getCapturedDeltaY();
-            freeCamYaw += (float)(deltaX * mouseSensitivity);
-            freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float)(deltaY * mouseSensitivity)));
+            freeCamYaw += (float)(deltaX * scaledSensitivity);
+            freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float)(deltaY * scaledSensitivity)));
             ((CameraAccessor)camera).invokeSetRotation(freeCamYaw, freeCamPitch);
         }
         // Force the camera to keep the freeCamPosition.
@@ -62,38 +65,63 @@ public class CameraController {
 
 
     private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
-        float speed = 0.2f;
+        float speed = FreeCamSettings.getMoveSpeed();
         Vec3d movement = Vec3d.ZERO;
 
-        // Use stored angles for consistent movement
-        float yaw = freeCamYaw;
-        float pitch = freeCamPitch;
+        if (FreeCamSettings.getMovementMode() == FreeCamSettings.MovementMode.CAMERA) {
+            // Full camera-relative movement including pitch
+            float yaw = freeCamYaw;
+            float pitch = freeCamPitch;
 
-        Vec3d forward = new Vec3d(
-                -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)),
-                -Math.sin(Math.toRadians(pitch)),
-                Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch))
-        );
+            Vec3d forward = new Vec3d(
+                    -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)),
+                    -Math.sin(Math.toRadians(pitch)),
+                    Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch))
+            );
 
-        Vec3d right = new Vec3d(
-                Math.cos(Math.toRadians(yaw)),
-                0,
-                Math.sin(Math.toRadians(yaw))
-        );
+            Vec3d right = new Vec3d(
+                    Math.cos(Math.toRadians(yaw)),
+                    0,
+                    Math.sin(Math.toRadians(yaw))
+            );
 
-        if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
-        if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
-        if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
-        if (client.options.rightKey.isPressed()) movement = movement.add(right);
-        if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
-        if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
+            if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
+            if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
+            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
+            if (client.options.rightKey.isPressed()) movement = movement.add(right);
+            if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
+            if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
+        } else {
+            // Y-axis locked camera-relative movement
+            float yaw = freeCamYaw;
 
-//        if (movement.lengthSquared() > 0) {
+            // Create horizontal-only forward and right vectors
+            Vec3d forward = new Vec3d(
+                    -Math.sin(Math.toRadians(yaw)),
+                    0,
+                    Math.cos(Math.toRadians(yaw))
+            );
+
+            Vec3d right = new Vec3d(
+                    Math.cos(Math.toRadians(yaw)),
+                    0,
+                    Math.sin(Math.toRadians(yaw))
+            );
+
+            if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
+            if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
+            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
+            if (client.options.rightKey.isPressed()) movement = movement.add(right);
+            if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
+            if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
+        }
+
+        if (movement.lengthSquared() > 0) {
             movement = movement.normalize().multiply(speed);
             Vec3d newPos = freeCamPosition.add(movement);
             ((CameraAccessor)camera).invokesetPos(newPos);
             freeCamPosition = newPos;
-//        }
+        }
     }
 
     public void queueFinish(MinecraftClient client, Camera camera) {

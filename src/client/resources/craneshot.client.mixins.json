@@ -7,7 +7,8 @@
 		"CameraAccessor",
 		"CameraMixin",
 		"MouseAccessor",
-		"KeyboardInputMixin"
+		"KeyboardInputMixin",
+		"WorldRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
