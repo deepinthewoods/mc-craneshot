@@ -217,24 +217,25 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         return resetting && progress >= 0.999;
     }
 
+
     /**
      * Converts a canonical (local) vector into world space.
      * In canonical coordinates a level, south–facing view (yaw=0, pitch=0)
      * has right = (1,0,0), up = (0,1,0) and forward = (0,0,1).
      *
-     * This method builds the player’s local coordinate axes from the current yaw and pitch
-     * (with the pitch “inversion” so that if the player looks down, the camera moves up)
-     * and then recombines the canonical coordinates.
+     * Here we build the player’s local axes from the current yaw and pitch.
+     * Note that we use -Math.sin(pitchRad) for the forward’s Y component so that
+     * the camera will move in the same direction as the head.
      */
     private Vec3d rotateVectorByYawPitch(Vec3d canonical, float playerYaw, float playerPitch) {
         double yawRad   = Math.toRadians(playerYaw);
         double pitchRad = Math.toRadians(playerPitch);
 
-        // Compute forward. (Note: using +sin(pitch) here makes the camera move opposite to the head—
-        // i.e. when the player looks down (positive pitch) the camera goes up. Adjust if needed.)
+        // Compute forward vector.
+        // Using -Math.sin(pitchRad) reverses the pitch contribution relative to our previous version.
         Vec3d forward = new Vec3d(
                 -Math.sin(yawRad) * Math.cos(pitchRad),
-                Math.sin(pitchRad),
+                -Math.sin(pitchRad), // flipped sign here
                 Math.cos(yawRad) * Math.cos(pitchRad)
         );
 
@@ -245,11 +246,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 Math.sin(yawRad)
         );
 
-        // Up vector from cross product. (Make sure your coordinate system is right–handed.)
+        // Up vector computed via cross product.
         Vec3d up = right.crossProduct(forward);
 
-        // Recompose: canonical.x is in the right direction,
-        // canonical.y is in the up direction, and canonical.z is forward.
+        // Recompose the world offset from the canonical coordinates.
         return right.multiply(canonical.x)
                 .add(up.multiply(canonical.y))
                 .add(forward.multiply(canonical.z));
@@ -257,7 +257,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     /**
      * Converts a world–space offset (typically relative to the player’s eye) into canonical space.
-     * This is simply the inverse of the above function.
+     * This function is the inverse of rotateVectorByYawPitch().
      */
     private Vec3d unrotateVectorByYawPitch(Vec3d worldVec, float playerYaw, float playerPitch) {
         double yawRad   = Math.toRadians(playerYaw);
@@ -265,7 +265,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         Vec3d forward = new Vec3d(
                 -Math.sin(yawRad) * Math.cos(pitchRad),
-                Math.sin(pitchRad),
+                -Math.sin(pitchRad), // flipped sign here as well
                 Math.cos(yawRad) * Math.cos(pitchRad)
         );
 
@@ -277,15 +277,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         Vec3d up = right.crossProduct(forward);
 
-        // Now solve for the canonical coordinates by projecting worldVec onto each axis.
+        // Project the world vector onto the local axes.
         double xCanonical = worldVec.dotProduct(right);
         double yCanonical = worldVec.dotProduct(up);
         double zCanonical = worldVec.dotProduct(forward);
         return new Vec3d(xCanonical, yCanonical, zCanonical);
     }
-
-
-
 
 
 }
