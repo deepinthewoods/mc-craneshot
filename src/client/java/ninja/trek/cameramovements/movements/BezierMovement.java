@@ -278,10 +278,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         return new MovementState(current, complete);
     }
 
-
-
-
-
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
@@ -289,11 +285,13 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // When resetting, exit linear mode and return along a Bézier curve that goes back to the original state.
             resetting = true;
             linearMode = false;
-            progress = 0.0;
+            // Mirror the current progress: if we are 30% along, then start at 70% along the reverse curve.
+            progress = 1.0 - progress;
             // Recompute the control point using canonicalEnd as the start and the original canonical start as the destination.
             canonicalControl = generateControlPoint(canonicalEnd, originalCanonicalStart);
         }
     }
+
 
     @Override
     public void adjustDistance(boolean increase) {
