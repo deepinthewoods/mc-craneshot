@@ -6,7 +6,8 @@
 		"MouseMixin",
 		"CameraAccessor",
 		"CameraMixin",
-		"MouseAccessor"
+		"MouseAccessor",
+		"KeyboardInputMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

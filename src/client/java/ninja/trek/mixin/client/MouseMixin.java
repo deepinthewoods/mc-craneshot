@@ -10,8 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Mouse.class)
 public class MouseMixin {
-    @Shadow
-    private double eventDeltaVerticalWheel;
+    @Shadow private double eventDeltaVerticalWheel;
     @Shadow private double cursorDeltaX;
     @Shadow private double cursorDeltaY;
 
@@ -19,23 +18,26 @@ public class MouseMixin {
     private double lastDeltaX;
     private double lastDeltaY;
 
-    @Inject(method = "onMouseScroll", at = @At("HEAD"), cancellable = true)
-    private void onScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
-        if (CraneshotClient.selectMovementType.isPressed() ||
-                CraneshotClient.cameraKeyBinds[0].isPressed() ||
-                CraneshotClient.cameraKeyBinds[1].isPressed() ||
-                CraneshotClient.cameraKeyBinds[2].isPressed()) {
-
-            eventDeltaVerticalWheel = vertical;
+    @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
+    private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
+        if (interceptMouse) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
-    private void onUpdateMouse(double timeDelta, CallbackInfo ci) {
-        if (interceptMouse) {
+    @Inject(method = "onCursorPos", at = @At("HEAD"))
+    private void onCursorPos(long window, double x, double y, CallbackInfo ci) {
+        if (!interceptMouse) {
             lastDeltaX = cursorDeltaX;
             lastDeltaY = cursorDeltaY;
+        }
+    }
+
+    @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
+    private void onUpdateMouse(CallbackInfo ci) {
+        if (interceptMouse) {
+            cursorDeltaX = 0;
+            cursorDeltaY = 0;
             ci.cancel();
         }
     }

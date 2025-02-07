@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -127,6 +128,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
+        if (CraneshotClient.CAMERA_CONTROLLER.getMovementManager() != null) {
+            CraneshotClient.CAMERA_CONTROLLER.getMovementManager().resetMovement(this);
+        }
     }
 
     @Override
@@ -148,5 +152,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public boolean isComplete() {
         return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.01;
+    }
+    @Override
+    public boolean hasCompletedOutPhase() {
+        return !resetting && current.getPosition().distanceTo(end.getPosition()) < 0.01;
     }
 }

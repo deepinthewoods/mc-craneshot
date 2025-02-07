@@ -5,6 +5,7 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.Craneshot;
+import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -282,15 +283,17 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         if (!resetting) {
-            // When resetting, exit linear mode and return along a Bézier curve that goes back to the original state.
             resetting = true;
             linearMode = false;
-            // Mirror the current progress: if we are 30% along, then start at 70% along the reverse curve.
             progress = 1.0 - progress;
-            // Recompute the control point using canonicalEnd as the start and the original canonical start as the destination.
             canonicalControl = generateControlPoint(canonicalEnd, originalCanonicalStart);
+
+            if (CraneshotClient.CAMERA_CONTROLLER.getMovementManager() != null) {
+                CraneshotClient.CAMERA_CONTROLLER.getMovementManager().resetMovement(this);
+            }
         }
     }
+
 
 
     @Override
@@ -373,5 +376,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         double yCanonical = worldVec.dotProduct(up);
         double zCanonical = worldVec.dotProduct(forward);
         return new Vec3d(xCanonical, yCanonical, zCanonical);
+    }
+
+    @Override
+    public boolean hasCompletedOutPhase() {
+        return !resetting && progress >= 0.999;
     }
 }

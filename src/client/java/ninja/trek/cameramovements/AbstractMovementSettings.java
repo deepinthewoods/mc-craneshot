@@ -23,6 +23,22 @@ public abstract class AbstractMovementSettings {
 
     public enum START_TARGET {PLAYER};
     public enum END_TARGET {BACK, FRONT}
+    public enum POST_MOVE_ACTION {
+        NONE,       // Default behavior
+        FREE_MOUSE, // Allow free mouse control after movement
+        FREE_MOVE   // Allow WASD movement after movement
+    }
+
+    @MovementSetting(
+            label = "Post-Movement Action",
+            type = MovementSettingType.ENUM,
+            description = "Controls camera behavior after movement completes"
+    )
+    protected POST_MOVE_ACTION postMoveAction = POST_MOVE_ACTION.NONE;
+    public POST_MOVE_ACTION getPostMoveAction() {
+        return postMoveAction;
+    }
+
 
     @MovementSetting(
             label = "Camera Position",

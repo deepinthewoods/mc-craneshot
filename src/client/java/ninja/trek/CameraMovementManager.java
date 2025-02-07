@@ -3,25 +3,24 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.client.render.Camera;
-import ninja.trek.cameramovements.CameraTarget;
-import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.MovementState;
-import ninja.trek.cameramovements.RaycastType;
+import ninja.trek.cameramovements.*;
 import ninja.trek.mixin.client.CameraAccessor;
 import java.util.*;
 
 public class CameraMovementManager {
     private final List<ICameraMovement> activeMovements = new ArrayList<>();
+    private Map<ICameraMovement, CameraTarget> originalTargets = new HashMap<>();
+    private Map<ICameraMovement, CameraTarget> freeMovementTargets = new HashMap<>();
 
     public void addMovement(ICameraMovement movement, MinecraftClient client, Camera camera) {
         movement.start(client, camera);
         activeMovements.add(movement);
+        originalTargets.put(movement, CameraTarget.fromCamera(camera));
     }
 
     public void update(MinecraftClient client, Camera camera) {
         if (activeMovements.isEmpty() || client.player == null) return;
 
-        // Calculate states and total weight
         float totalWeight = 0;
         List<WeightedState> states = new ArrayList<>();
         Iterator<ICameraMovement> iterator = activeMovements.iterator();
@@ -32,21 +31,51 @@ public class CameraMovementManager {
 
             if (state.isComplete()) {
                 iterator.remove();
+                originalTargets.remove(movement);
+                freeMovementTargets.remove(movement);
             } else {
                 float weight = movement.getWeight();
-                // Apply raycast collision check to each movement's target
-                CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, movement.getRaycastType());
-                states.add(new WeightedState(adjustedTarget, weight));
+
+                CameraTarget targetToUse;
+                if (movement instanceof AbstractMovementSettings &&
+                        ((ICameraMovement)movement).hasCompletedOutPhase() &&
+                        ((AbstractMovementSettings)movement).getPostMoveAction() != AbstractMovementSettings.POST_MOVE_ACTION.NONE) {
+
+                    // Use stored free movement target if it exists, otherwise create one
+                    targetToUse = freeMovementTargets.computeIfAbsent(movement,
+                            k -> CameraTarget.fromCamera(camera));
+                } else {
+                    targetToUse = state.getCameraTarget()
+                            .withAdjustedPosition(client.player, movement.getRaycastType());
+                }
+
+                states.add(new WeightedState(targetToUse, weight));
                 totalWeight += weight;
             }
         }
 
-        // Blend states based on weights
         if (!states.isEmpty()) {
             CameraTarget blendedTarget = blendStates(states, totalWeight);
-            // Final collision check on blended position
-            CameraTarget finalTarget = blendedTarget.withAdjustedPosition(client.player, RaycastType.NONE);
+            CameraTarget finalTarget = blendedTarget
+                    .withAdjustedPosition(client.player, RaycastType.NONE);
             applyCameraTarget(finalTarget, camera);
+
+            // Store current position for active free movement cameras
+            for (ICameraMovement movement : activeMovements) {
+                if (movement instanceof AbstractMovementSettings &&
+                        ((ICameraMovement)movement).hasCompletedOutPhase() &&
+                        ((AbstractMovementSettings)movement).getPostMoveAction() != AbstractMovementSettings.POST_MOVE_ACTION.NONE) {
+                    freeMovementTargets.put(movement, CameraTarget.fromCamera(camera));
+                }
+            }
+        }
+    }
+
+    public void resetMovement(ICameraMovement movement) {
+        // When resetting, restore the original target
+        CameraTarget originalTarget = originalTargets.get(movement);
+        if (originalTarget != null) {
+            freeMovementTargets.put(movement, originalTarget);
         }
     }
 
