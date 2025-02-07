@@ -12,15 +12,18 @@ import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.config.MovementSetting;
 
 /**
- * Moves the camera along a quadratic Bézier curve calculated in coordinates relative to the player's head.
- * The relative control points are computed once at start(), and on each update the relative position is
- * transformed using the player's current head rotation.
+ * Moves the camera along a quadratic Bézier curve. The curve’s control points are
+ * computed in a fixed local (“canonical”) coordinate system (in which a level, south–facing
+ * view corresponds to yaw=0, pitch=0 and forward = (0,0,1)), and on every update the
+ * current player yaw/pitch is applied to transform the canonical offset back to world coordinates.
  *
- * When resetting the curve is retraced in reverse.
+ * (If you see that the motion works when looking flat (yaw=0) but is off when looking up/down
+ * or east/west, then it’s likely that the coordinate conversion wasn’t matching Minecraft’s conventions.
+ * This version uses conversion functions tuned for Minecraft.)
  */
 @CameraMovementType(
-        name = "Bezier Movement (Relative)",
-        description = "Moves the camera along a quadratic Bézier curve in relative coordinates, applying player head rotation"
+        name = "Bezier Movement (Canonical Relative)",
+        description = "Moves the camera along a quadratic Bézier curve in a fixed local coordinate system (canonical), then converts to world space using the current head rotation"
 )
 public class BezierMovement extends AbstractMovementSettings implements ICameraMovement {
 
@@ -46,15 +49,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    // New setting controlling how far the Bézier control point is displaced
     @MovementSetting(label = "Control Point Displacement", min = 0.0, max = 10.0)
     private double controlPointDisplacement = 2.0;
 
-    // --- Internal fields for the relative Bézier path ---
-    // These are stored in a coordinate system defined by the player's head (eye) position and orientation at start()
-    private Vec3d initialRelativeStart;
-    private Vec3d initialRelativeEnd;
-    private Vec3d controlPointRelative;
+    // --- Internal fields for the canonical Bézier path ---
+    // These vectors are expressed in canonical (local) space, defined so that:
+    //   - a level player looking south (yaw=0, pitch=0) has forward = (0,0,1)
+    //   - right = (1,0,0) and up = (0,1,0)
+    private Vec3d canonicalStart;
+    private Vec3d canonicalEnd;
+    private Vec3d canonicalControl;
     private double progress;
     private boolean resetting = false;
     private float weight = 1.0f;
@@ -65,26 +69,24 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return;
 
-        // Get player's head (eye) position and orientation at the moment of starting.
+        // Get the player's eye (head) position and current rotation.
         Vec3d playerEye = player.getEyePos();
-        float playerYaw = player.getYaw();
+        float playerYaw = player.getYaw();     // In Minecraft, yaw=0 means south.
         float playerPitch = player.getPitch();
 
-        // Capture the current camera target (absolute position) as our starting point.
-        CameraTarget camTarget = CameraTarget.fromCamera(camera);
-        Vec3d absStart = camTarget.getPosition();
-        // Convert the absolute start to a relative offset using the player's current head rotation.
-        initialRelativeStart = unrotateVectorByYawPitch(absStart.subtract(playerEye), playerYaw, playerPitch);
-
-        // Compute the absolute end target using the inherited helper.
-        // (Renamed to camEndTarget to avoid clashing with the inherited field "endTarget".)
+        // Capture the current camera start position (world space).
+        Vec3d absStart = CameraTarget.fromCamera(camera).getPosition();
+        // Determine the absolute end target using our helper.
         CameraTarget camEndTarget = getEndTarget(player, targetDistance);
         Vec3d absEnd = camEndTarget.getPosition();
-        // Convert the end target to a relative offset.
-        initialRelativeEnd = unrotateVectorByYawPitch(absEnd.subtract(playerEye), playerYaw, playerPitch);
 
-        // Compute the control point (in relative coordinates) as the midpoint plus a random displacement.
-        Vec3d mid = initialRelativeStart.add(initialRelativeEnd).multiply(0.5);
+        // Convert the absolute offsets (relative to the eye) into canonical local space.
+        // (The canonical space is defined as if the player were looking south and level.)
+        canonicalStart = unrotateVectorByYawPitch(absStart.subtract(playerEye), playerYaw, playerPitch);
+        canonicalEnd   = unrotateVectorByYawPitch(absEnd.subtract(playerEye), playerYaw, playerPitch);
+
+        // Compute the canonical control point as the midpoint plus a random displacement.
+        Vec3d mid = canonicalStart.add(canonicalEnd).multiply(0.5);
         double theta = Math.random() * 2 * Math.PI;
         double phi = Math.acos(2 * Math.random() - 1);
         double x = Math.sin(phi) * Math.cos(theta);
@@ -92,12 +94,13 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         double z = Math.cos(phi);
         Vec3d randomDir = new Vec3d(x, y, z);
         Vec3d offset = randomDir.multiply(controlPointDisplacement);
-        controlPointRelative = mid.add(offset);
+        canonicalControl = mid.add(offset);
 
         progress = 0.0;
         resetting = false;
-        // Compute the initial absolute camera position by transforming the relative start back using the player's head rotation.
-        Vec3d desiredPos = playerEye.add(rotateVectorByYawPitch(initialRelativeStart, playerYaw, playerPitch));
+
+        // Compute the initial absolute camera position by converting canonicalStart back to world space.
+        Vec3d desiredPos = playerEye.add(rotateVectorByYawPitch(canonicalStart, playerYaw, playerPitch));
         current = new CameraTarget(desiredPos, playerYaw, playerPitch);
         weight = 1.0f;
     }
@@ -106,53 +109,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
      * Returns the point on a quadratic Bézier curve defined by points p0, p1, p2 at parameter t.
      */
     private Vec3d quadraticBezier(Vec3d p0, Vec3d p1, Vec3d p2, double t) {
-        double oneMinusT = 1 - t;
+        double oneMinusT = 1.0 - t;
         return p0.multiply(oneMinusT * oneMinusT)
                 .add(p1.multiply(2 * oneMinusT * t))
                 .add(p2.multiply(t * t));
-    }
-
-    /**
-     * Rotates a vector by the given yaw and pitch (in degrees).
-     * First rotates around the Y-axis (yaw), then around the X-axis (pitch).
-     */
-    private Vec3d rotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
-        double yawRad = Math.toRadians(yaw);
-        double cosYaw = Math.cos(yawRad);
-        double sinYaw = Math.sin(yawRad);
-        double x1 = vec.x * cosYaw - vec.z * sinYaw;
-        double z1 = vec.x * sinYaw + vec.z * cosYaw;
-        double y1 = vec.y;
-
-        double pitchRad = Math.toRadians(pitch);
-        double cosPitch = Math.cos(pitchRad);
-        double sinPitch = Math.sin(pitchRad);
-        double y2 = y1 * cosPitch - z1 * sinPitch;
-        double z2 = y1 * sinPitch + z1 * cosPitch;
-
-        return new Vec3d(x1, y2, z2);
-    }
-
-    /**
-     * Inversely rotates a vector by the given yaw and pitch.
-     * (This undoes the rotation applied by rotateVectorByYawPitch.)
-     */
-    private Vec3d unrotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
-        // Inverse of pitch rotation (rotate by -pitch)
-        double pitchRad = Math.toRadians(-pitch);
-        double cosPitch = Math.cos(pitchRad);
-        double sinPitch = Math.sin(pitchRad);
-        double y1 = vec.y * cosPitch - vec.z * sinPitch;
-        double z1 = vec.y * sinPitch + vec.z * cosPitch;
-
-        // Inverse of yaw rotation (rotate by -yaw)
-        double yawRad = Math.toRadians(-yaw);
-        double cosYaw = Math.cos(yawRad);
-        double sinYaw = Math.sin(yawRad);
-        double x1 = vec.x * cosYaw - z1 * sinYaw;
-        double z2 = vec.x * sinYaw + z1 * cosYaw;
-
-        return new Vec3d(x1, y1, z2);
     }
 
     @Override
@@ -160,55 +120,52 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
 
-        // Choose the appropriate relative endpoints depending on whether we are resetting.
-        Vec3d relStart, relEnd;
+        // Select canonical endpoints based on whether we are resetting.
+        Vec3d startCanon, endCanon;
         if (!resetting) {
-            relStart = initialRelativeStart;
-            relEnd = initialRelativeEnd;
+            startCanon = canonicalStart;
+            endCanon = canonicalEnd;
         } else {
-            relStart = initialRelativeEnd;
-            relEnd = initialRelativeStart;
+            startCanon = canonicalEnd;
+            endCanon = canonicalStart;
         }
 
-        // --- Update progress using easing and a speed limit based on the straight-line distance ---
+        // Update progress using easing and a speed limit.
         double potentialDelta = (1.0 - progress) * positionEasing;
-        double totalDistance = relStart.distanceTo(relEnd);
-        double maxMove = positionSpeedLimit * (1.0 / 20.0); // max movement per tick (world units)
+        double totalDistance = startCanon.distanceTo(endCanon);
+        double maxMove = positionSpeedLimit * (1.0 / 20.0); // movement per tick (world units)
         double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
         double progressDelta = Math.min(potentialDelta, allowedDelta);
         progress = Math.min(1.0, progress + progressDelta);
 
-        // --- Compute the desired position based solely on the Bézier progress ---
-        Vec3d desiredRel = quadraticBezier(relStart, controlPointRelative, relEnd, progress);
+        // Compute the desired canonical position along the Bézier curve.
+        Vec3d desiredCanonical = quadraticBezier(startCanon, canonicalControl, endCanon, progress);
 
-        // Get the player's current head (eye) position and rotation.
+        // Convert the canonical desired position back into world coordinates.
         Vec3d playerEye = player.getEyePos();
-        float currentYaw = player.getYaw();
-        float currentPitch = player.getPitch();
+        float playerYaw = player.getYaw();
+        float playerPitch = player.getPitch();
+        Vec3d desiredAbs = playerEye.add(rotateVectorByYawPitch(desiredCanonical, playerYaw, playerPitch));
 
-        // Transform the relative desired position into world coordinates using the current head rotation.
-        Vec3d desiredAbs = playerEye.add(rotateVectorByYawPitch(desiredRel, currentYaw, currentPitch));
-
-        // --- Rotation: determine target rotation ---
-        // When moving out (not resetting) in FRONT mode, rotate 180° in yaw and invert the pitch.
-        // When resetting, always target the player's current view.
+        // --- Rotation easing ---
+        // Determine the target rotation. (If moving forward in FRONT mode, flip yaw/pitch.)
         float targetYaw;
         float targetPitch;
         if (!resetting && this.endTarget == END_TARGET.FRONT) {
-            targetYaw = currentYaw + 180f;
-            targetPitch = -currentPitch;
+            targetYaw = playerYaw + 180f;
+            targetPitch = -playerPitch;
         } else {
-            targetYaw = currentYaw;
-            targetPitch = currentPitch;
+            targetYaw = playerYaw;
+            targetPitch = playerPitch;
         }
 
-        // Apply easing to the rotation.
-        float yawDiff = targetYaw - current.getYaw();
-        float pitchDiff = targetPitch - current.getPitch();
-        while (yawDiff > 180) yawDiff -= 360;
-        while (yawDiff < -180) yawDiff += 360;
-        float desiredYawSpeed = (float)(yawDiff * rotationEasing);
-        float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
+        // Easing for rotation.
+        float yawError = targetYaw - current.getYaw();
+        float pitchError = targetPitch - current.getPitch();
+        while (yawError > 180) yawError -= 360;
+        while (yawError < -180) yawError += 360;
+        float desiredYawSpeed = (float)(yawError * rotationEasing);
+        float desiredPitchSpeed = (float)(pitchError * rotationEasing);
         float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
         if (Math.abs(desiredYawSpeed) > maxRotation) {
             desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
@@ -219,14 +176,13 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
 
-        // Directly set the camera target using the Bézier–computed position and eased rotation.
+        // Update the camera target.
         current = new CameraTarget(desiredAbs, newYaw, newPitch);
 
-        // (Optional) Update an alpha value based on the remaining straight–line distance.
-        double remaining = desiredRel.distanceTo(relEnd);
+        // Update alpha (if used) based on the remaining distance in canonical space.
+        double remaining = desiredCanonical.distanceTo(endCanon);
         alpha = totalDistance != 0 ? remaining / totalDistance : 0.0;
 
-        // Consider the movement complete if we are resetting and progress has essentially reached 1.
         boolean complete = resetting && progress >= 0.999;
         return new MovementState(current, complete);
     }
@@ -248,7 +204,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public String getName() {
-        return "Bezier (Relative)";
+        return "Bezier (Canonical Relative)";
     }
 
     @Override
@@ -259,5 +215,73 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public boolean isComplete() {
         return resetting && progress >= 0.999;
+    }
+
+    // --- Conversion Functions ---
+    //
+    // These functions convert between the world coordinate system and the canonical (local)
+    // coordinate system. In our canonical system a level, south–facing view (yaw=0, pitch=0)
+    // has:
+    //     forward = (0, 0, 1), right = (1, 0, 0), and up = (0, 1, 0).
+    //
+    // Note: Minecraft’s yaw increases clockwise, and yaw=0 means south.
+    //
+    // When converting from canonical (local) to world coordinates, we “rotate” by -yaw.
+    // Conversely, to get the canonical coordinates from a world offset we “unrotate” by +yaw.
+    //
+    // Adjust these if your observations suggest a different convention.
+
+    /**
+     * Converts a vector expressed in canonical (local) space into world space by applying
+     * the player’s current yaw and pitch.
+     *
+     * @param vec   The canonical vector.
+     * @param yaw   The player’s current yaw (in degrees).
+     * @param pitch The player’s current pitch (in degrees).
+     * @return The vector rotated into world space.
+     */
+    private Vec3d rotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
+        // Invert yaw: Minecraft’s yaw rotates the view clockwise.
+        double yawRad = Math.toRadians(-yaw);
+        double cosYaw = Math.cos(yawRad);
+        double sinYaw = Math.sin(yawRad);
+        double x1 = vec.x * cosYaw - vec.z * sinYaw;
+        double z1 = vec.x * sinYaw + vec.z * cosYaw;
+        double y1 = vec.y;
+
+        // Apply pitch (rotate about the X axis)
+        double pitchRad = Math.toRadians(pitch);
+        double cosPitch = Math.cos(pitchRad);
+        double sinPitch = Math.sin(pitchRad);
+        double y2 = y1 * cosPitch - z1 * sinPitch;
+        double z2 = y1 * sinPitch + z1 * cosPitch;
+
+        return new Vec3d(x1, y2, z2);
+    }
+
+    /**
+     * Converts a world–space offset into canonical (local) space by undoing the player's rotation.
+     *
+     * @param vec   The world–space vector (typically the offset from the player's eye).
+     * @param yaw   The player’s current yaw (in degrees).
+     * @param pitch The player’s current pitch (in degrees).
+     * @return The vector expressed in canonical (local) coordinates.
+     */
+    private Vec3d unrotateVectorByYawPitch(Vec3d vec, float yaw, float pitch) {
+        // Undo the pitch rotation first.
+        double pitchRad = Math.toRadians(-pitch);
+        double cosPitch = Math.cos(pitchRad);
+        double sinPitch = Math.sin(pitchRad);
+        double y1 = vec.y * cosPitch - vec.z * sinPitch;
+        double z1 = vec.y * sinPitch + vec.z * cosPitch;
+
+        // Undo the yaw rotation.
+        double yawRad = Math.toRadians(yaw);  // note: opposite sign to the above rotate function
+        double cosYaw = Math.cos(yawRad);
+        double sinYaw = Math.sin(yawRad);
+        double x1 = vec.x * cosYaw - z1 * sinYaw;
+        double z2 = vec.x * sinYaw + z1 * cosYaw;
+
+        return new Vec3d(x1, y1, z2);
     }
 }
