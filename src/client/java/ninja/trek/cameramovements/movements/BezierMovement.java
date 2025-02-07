@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -42,7 +43,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
     private double rotationEasing = 0.1;
 
-    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 3600.0)
+    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 1000)
     private double rotationSpeedLimit = 500;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
@@ -166,6 +167,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
+        if (linearMode) Craneshot.LOGGER.info("linear");
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
 
@@ -180,24 +182,57 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             endCanon = originalCanonicalStart;
         }
 
-        // Update progress.
-        double potentialDelta = (1.0 - progress) * positionEasing;
+        // Compute the total distance between the endpoints (used later for alpha).
         double totalDistance = startCanon.distanceTo(endCanon);
-        double maxMove = positionSpeedLimit * (1.0 / 20.0); // movement per tick
-        double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
-        double progressDelta = Math.min(potentialDelta, allowedDelta);
-        progress = Math.min(1.0, progress + progressDelta);
 
-        // Compute the desired canonical position along the Bézier curve.
-        Vec3d desiredCanonical = quadraticBezier(startCanon, canonicalControl, endCanon, progress);
+        Vec3d desiredCanonical;
+        if (!linearMode) {
+            // --- Bezier movement mode ---
+            // Advance the progress along the curve using positionEasing and limiting the delta so that
+            // the movement does not exceed positionSpeedLimit per tick.
+            double potentialDelta = (1.0 - progress) * positionEasing;
+            double maxMove = positionSpeedLimit * (1.0 / 20.0); // maximum allowed movement per tick
+            double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
+            double progressDelta = Math.min(potentialDelta, allowedDelta);
+            progress = Math.min(1.0, progress + progressDelta);
 
-        // Always use the player's current eye position and head rotation.
+            // Get the canonical position along the quadratic Bézier curve.
+            desiredCanonical = quadraticBezier(startCanon, canonicalControl, endCanon, progress);
+        } else {
+            // --- Linear movement mode ---
+            // Instead of moving along the Bézier, convert the current camera position into canonical space,
+            // then move it directly toward the target endpoint.
+            Vec3d playerEye = player.getEyePos();
+            float playerYaw = player.getYaw();
+            float playerPitch = player.getPitch();
+            // Convert current absolute camera position to canonical coordinates.
+            Vec3d currentCanon = unrotateVectorByYawPitch(current.getPosition().subtract(playerEye), playerYaw, playerPitch);
+            // Compute the difference from the current position to the target.
+            Vec3d delta = endCanon.subtract(currentCanon);
+            double deltaLength = delta.length();
+            double maxMove = positionSpeedLimit * (1.0 / 20.0); // maximum movement per tick
+
+            // Calculate the movement step: scale the delta by positionEasing, but clamp its length to maxMove.
+            Vec3d move;
+            if (deltaLength > 0) {
+                move = delta.multiply(positionEasing);
+                if (move.length() > maxMove) {
+                    move = move.normalize().multiply(maxMove);
+                }
+            } else {
+                move = Vec3d.ZERO;
+            }
+            // The new canonical target is the current position plus the clamped move vector.
+            desiredCanonical = currentCanon.add(move);
+        }
+
+        // Convert the desired canonical position back to absolute world space using the player's current eye position and rotation.
         Vec3d conversionEye = player.getEyePos();
         float conversionYaw = player.getYaw();
         float conversionPitch = player.getPitch();
         Vec3d desiredAbs = conversionEye.add(rotateVectorByYawPitch(desiredCanonical, conversionYaw, conversionPitch));
 
-        // Rotation easing using current parameters.
+        // --- Rotation easing (remains the same) ---
         float targetYaw, targetPitch;
         if (!resetting && this.endTarget == END_TARGET.FRONT) {
             targetYaw = conversionYaw + 180f;
@@ -224,6 +259,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         current = new CameraTarget(desiredAbs, newYaw, newPitch);
 
+        // Compute a normalized "alpha" value (fraction remaining) for use by other systems if needed.
         double remaining = desiredCanonical.distanceTo(endCanon);
         alpha = totalDistance != 0 ? remaining / totalDistance : 0.0;
 
@@ -241,6 +277,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         boolean complete = resetting && progress >= 0.999;
         return new MovementState(current, complete);
     }
+
+
+
 
 
     @Override

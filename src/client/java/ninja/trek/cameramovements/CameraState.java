@@ -1,6 +1,7 @@
 package ninja.trek.cameramovements;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.Input;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 
