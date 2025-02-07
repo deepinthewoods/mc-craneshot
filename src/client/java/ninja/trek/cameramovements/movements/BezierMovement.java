@@ -77,8 +77,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         initialRelativeStart = unrotateVectorByYawPitch(absStart.subtract(playerEye), playerYaw, playerPitch);
 
         // Compute the absolute end target using the inherited helper.
-        CameraTarget endTarget = getEndTarget(player, targetDistance);
-        Vec3d absEnd = endTarget.getPosition();
+        // (Renamed to camEndTarget to avoid clashing with the inherited field "endTarget".)
+        CameraTarget camEndTarget = getEndTarget(player, targetDistance);
+        Vec3d absEnd = camEndTarget.getPosition();
         // Convert the end target to a relative offset.
         initialRelativeEnd = unrotateVectorByYawPitch(absEnd.subtract(playerEye), playerYaw, playerPitch);
 
@@ -159,7 +160,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         PlayerEntity player = client.player;
         if (player == null) return new MovementState(current, true);
 
-        // Depending on whether we are resetting, choose the appropriate relative endpoints.
+        // Choose the appropriate relative endpoints depending on whether we are resetting.
         Vec3d relStart, relEnd;
         if (!resetting) {
             relStart = initialRelativeStart;
@@ -170,9 +171,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         }
 
         // --- Update progress using easing and a speed limit based on the straight-line distance ---
-        // The easing term (positionEasing) gives a potential progress delta of (1 - progress) * positionEasing.
-        // We then compute the allowed progress delta such that:
-        //      (allowedDelta * totalDistance) <= (positionSpeedLimit * tickTime)
         double potentialDelta = (1.0 - progress) * positionEasing;
         double totalDistance = relStart.distanceTo(relEnd);
         double maxMove = positionSpeedLimit * (1.0 / 20.0); // max movement per tick (world units)
@@ -191,9 +189,20 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Transform the relative desired position into world coordinates using the current head rotation.
         Vec3d desiredAbs = playerEye.add(rotateVectorByYawPitch(desiredRel, currentYaw, currentPitch));
 
-        // --- Rotation: apply the player's current head rotation with easing ---
-        float targetYaw = currentYaw;
-        float targetPitch = currentPitch;
+        // --- Rotation: determine target rotation ---
+        // When moving out (not resetting) in FRONT mode, rotate 180° in yaw and invert the pitch.
+        // When resetting, always target the player's current view.
+        float targetYaw;
+        float targetPitch;
+        if (!resetting && this.endTarget == END_TARGET.FRONT) {
+            targetYaw = currentYaw + 180f;
+            targetPitch = -currentPitch;
+        } else {
+            targetYaw = currentYaw;
+            targetPitch = currentPitch;
+        }
+
+        // Apply easing to the rotation.
         float yawDiff = targetYaw - current.getYaw();
         float pitchDiff = targetPitch - current.getPitch();
         while (yawDiff > 180) yawDiff -= 360;
@@ -210,7 +219,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
 
-        // Directly set the camera target using the Bézier–computed position.
+        // Directly set the camera target using the Bézier–computed position and eased rotation.
         current = new CameraTarget(desiredAbs, newYaw, newPitch);
 
         // (Optional) Update an alpha value based on the remaining straight–line distance.
@@ -249,7 +258,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        // Consider the movement complete when resetting and progress has nearly reached 1.
         return resetting && progress >= 0.999;
     }
 }
