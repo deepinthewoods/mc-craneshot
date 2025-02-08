@@ -61,6 +61,16 @@ public abstract class AbstractMovementSettings {
     )
     protected END_TARGET endTarget = END_TARGET.BACK;
 
+//    @MovementSetting(
+//            label = "Head Locked To Camera",
+//            type = MovementSettingType.BOOLEAN,
+//            description = "If true, player head will follow camera orientation"
+//    )
+    protected boolean headLockedToCamera = true;
+    public boolean isHeadLockedToCamera() {
+        return headLockedToCamera;
+    }
+
     protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
         switch (endTarget){
             default:
