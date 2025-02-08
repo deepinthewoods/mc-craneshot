@@ -28,6 +28,7 @@ public class CameraMovementManager {
 
     // The most-recently computed camera target from the active movement.
     private CameraTarget baseTarget;
+    private boolean isOut;
 
     public CameraMovementManager() {
         int numSlots = 3; // Set to the desired number of slots.
@@ -187,7 +188,9 @@ public class CameraMovementManager {
 
         activeMovementSlot = slotIndex;
         activeMovement = movement;
+        CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         movement.start(client, camera);
+
     }
 
 
@@ -244,14 +247,18 @@ public class CameraMovementManager {
             return null;
         }
         MovementState state = activeMovement.calculateState(client, camera);
-        if (activeMovement.hasCompletedOutPhase()){
-            CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates((AbstractMovementSettings) activeMovement);
-        } else CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+
+        if (!isOut){
+            isOut = activeMovement.hasCompletedOutPhase();
+            if (isOut)
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates((AbstractMovementSettings) activeMovement);
+        }
         if (state.isComplete()) {
             CraneshotClient.CAMERA_CONTROLLER.onComplete();
             activeMovement = null;
             activeMovementSlot = null;  // Add this line to clear the slot
             toggledStates.put(activeMovementSlot, false);  // Reset toggle state
+            CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             return null;
         }
         // Adjust the base target (e.g. using player's position and any raycasting)

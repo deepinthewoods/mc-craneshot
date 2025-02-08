@@ -131,10 +131,12 @@ public class CameraController {
      * Called every frame to update the camera. It retrieves the base target from the movement manager,
      * applies any free control modifications, and then applies the final state to the camera.
      */
-    public void updateCamera(MinecraftClient client, Camera camera) {
+    public void updateCamera(MinecraftClient client, Camera camera, float delta) {
+//        Craneshot.LOGGER.info("delta {}", delta);
         if (CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) return;
         updateControlStick(client);
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
+
         if (baseTarget != null) {
             // Always update the position according to the current movement.
             freeCamPosition = baseTarget.getPosition();
@@ -142,20 +144,29 @@ public class CameraController {
 
             // ROTATION:
             // If we're in ROTATE_CAMERA mode, apply mouse deltas (if any) to adjust freeCamYaw/freeCamPitch.
+            // Inside updateCamera method, where mouse rotation is handled:
+            // Inside updateCamera method, where mouse rotation is handled:
             if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
                 IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
                 double deltaX = mouseMixin.getCapturedDeltaX();
                 double deltaY = -mouseMixin.getCapturedDeltaY();
+
+                // Get base mouse sensitivity from options
                 double mouseSensitivity = client.options.getMouseSensitivity().getValue();
-                double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity + 0.2;
+
+
+                double f = mouseSensitivity * 0.6D + 0.2D;
+                double calculatedSensitivity = f * f * f * 0.04D; // Reduced base m
+
+                // Apply sensitivity curve
+                deltaX *= calculatedSensitivity * 0.15D;
+                deltaY *= calculatedSensitivity * 0.15D;
+
                 // Only update rotation if there is nonzero mouse input
-                Craneshot.LOGGER.info("free rotation apdfsfdplied");
                 if (deltaX != 0 || deltaY != 0) {
-                    freeCamYaw += (float) (deltaX * scaledSensitivity);
-                    freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float) (deltaY * scaledSensitivity)));
-                    Craneshot.LOGGER.info("free rotation applied");
+                    freeCamYaw += deltaX;
+                    freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch + deltaY));
                 }
-                // (If no mouse delta occurs, leave freeCamYaw/freeCamPitch unchanged so that the camera keeps its rotated view.)
             } else {
                 // In non-rotate mode, follow the movement’s computed rotation.
                 freeCamYaw = baseTarget.getYaw();
@@ -163,6 +174,7 @@ public class CameraController {
             }
             ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
         }
+        handleKeyboardMovement(client, camera);
         updatePerspective(client, camera);
         updateMessageTimer();
     }
@@ -203,7 +215,7 @@ public class CameraController {
         if (client == null || client.world == null) return;
 
         // Update the camera based on movement-manager and free control states.
-        updateCamera(client, camera);
+        updateCamera(client, camera, tickDelta);
 
         // Optionally update keyboard input (e.g. disable it when free control is active)
         updateKeyboardInput(client);
