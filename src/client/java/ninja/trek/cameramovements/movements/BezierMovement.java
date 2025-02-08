@@ -71,6 +71,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         linearMode = false;
         distanceChanged = false;
         weight = 1.0f;
+
+        alpha = 1;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {

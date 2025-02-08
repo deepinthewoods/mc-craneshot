@@ -165,7 +165,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean hasCompletedOutPhase() {
-        Craneshot.LOGGER.info("alpha {}", alpha);
+        //Craneshot.LOGGER.info("alpha {}", alpha);
         return !resetting && alpha < .1;
     }
 }

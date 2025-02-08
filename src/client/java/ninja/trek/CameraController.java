@@ -133,7 +133,7 @@ public class CameraController {
      */
     public void updateCamera(MinecraftClient client, Camera camera, float delta) {
 //        Craneshot.LOGGER.info("delta {}", delta);
-        if (CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) return;
+//        if (CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) return;
         updateControlStick(client);
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
 
