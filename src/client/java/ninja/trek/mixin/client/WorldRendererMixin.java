@@ -1,6 +1,7 @@
 package ninja.trek.mixin.client;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.Frustum;
@@ -11,10 +12,7 @@ import net.minecraft.util.math.ChunkSectionPos;
 import ninja.trek.CameraController;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(WorldRenderer.class)
@@ -111,6 +109,9 @@ public abstract class WorldRendererMixin {
             Vec3d freeCamPos = CameraController.freeCamPosition;
             ((CameraAccessor)camera).invokesetPos(freeCamPos);
 
+            // Update the frustum to use the freecam position so that chunks aren't culled incorrectly.
+            frustum.setPosition(freeCamPos.x, freeCamPos.y, freeCamPos.z);
+
             // Check if enough time has passed since last update
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
@@ -122,7 +123,7 @@ public abstract class WorldRendererMixin {
 
                 if (dx > movementThreshold || dy > movementThreshold || dz > movementThreshold) {
                     WorldRenderer worldRenderer = (WorldRenderer)(Object)this;
-                    worldRenderer.reload();
+                    //worldRenderer.reload();
                     lastUpdateTime = currentTime;
                 }
             }
@@ -154,4 +155,81 @@ public abstract class WorldRendererMixin {
         }
         return original;
     }
+
+//    // Redirect the call to ClientPlayerEntity#getX() in setupTerrain
+//    @Redirect(
+//            method = "setupTerrain",
+//            at = @At(
+//                    value = "INVOKE",
+//                    target = "Lnet/minecraft/client/network/ClientPlayerEntity;getX()D"
+//            )
+//    )
+//    private double redirectPlayerX(ClientPlayerEntity player) {
+//        if (CameraController.inFreeControlMode) {
+//            return CameraController.freeCamPosition.x;
+//        }
+//        return player.getX();
+//    }
+//
+//    // Redirect the call to ClientPlayerEntity#getY() in setupTerrain
+//    @Redirect(
+//            method = "setupTerrain",
+//            at = @At(
+//                    value = "INVOKE",
+//                    target = "Lnet/minecraft/client/network/ClientPlayerEntity;getY()D"
+//            )
+//    )
+//    private double redirectPlayerY(ClientPlayerEntity player) {
+//        if (CameraController.inFreeControlMode) {
+//            return CameraController.freeCamPosition.y;
+//        }
+//        return player.getY();
+//    }
+//
+//    // Redirect the call to ClientPlayerEntity#getZ() in setupTerrain
+//    @Redirect(
+//            method = "setupTerrain",
+//            at = @At(
+//                    value = "INVOKE",
+//                    target = "Lnet/minecraft/client/network/ClientPlayerEntity;getZ()D"
+//            )
+//    )
+//    private double redirectPlayerZ(ClientPlayerEntity player) {
+//        if (CameraController.inFreeControlMode) {
+//            return CameraController.freeCamPosition.z;
+//        }
+//        return player.getZ();
+//    }
+//
+//    // Redirect the call to Camera#getPitch() in setupTerrain so that it uses freecam pitch
+//    @Redirect(
+//            method = "setupTerrain",
+//            at = @At(
+//                    value = "INVOKE",
+//                    target = "Lnet/minecraft/client/render/Camera;getPitch()F"
+//            )
+//    )
+//    private float redirectCameraPitch(Camera camera) {
+//        if (CameraController.inFreeControlMode) {
+//            return CameraController.freeCamPitch;
+//        }
+//        return camera.getPitch();
+//    }
+//
+//    // Redirect the call to Camera#getYaw() in setupTerrain so that it uses freecam yaw
+//    @Redirect(
+//            method = "setupTerrain",
+//            at = @At(
+//                    value = "INVOKE",
+//                    target = "Lnet/minecraft/client/render/Camera;getYaw()F"
+//            )
+//    )
+//    private float redirectCameraYaw(Camera camera) {
+//        if (CameraController.inFreeControlMode) {
+//            return CameraController.freeCamYaw;
+//        }
+//        return camera.getYaw();
+//    }
+
+
 }

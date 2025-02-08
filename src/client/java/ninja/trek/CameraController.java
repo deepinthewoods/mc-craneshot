@@ -29,8 +29,8 @@ public class CameraController {
     private boolean moveControlEnabled = false;
     public static boolean inFreeControlMode = false;
     public static Vec3d freeCamPosition;
-    private float freeCamYaw;
-    private float freeCamPitch;
+    public static float freeCamYaw;
+    public static float freeCamPitch;
 
     public CameraController() {
         slots = new ArrayList<>();
@@ -45,13 +45,14 @@ public class CameraController {
 
 
     private void handleFreeControl(MinecraftClient client, Camera camera) {
+        updateKeyboardInput(client);
+
         if (moveControlEnabled) {
             handleKeyboardMovement(client, camera);
         }
         if (mouseControlEnabled && client.mouse instanceof IMouseMixin) {
             Double mouseSensitivity = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity + 0.2;
-
             IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
             double deltaX = mouseMixin.getCapturedDeltaX();
             double deltaY = -mouseMixin.getCapturedDeltaY();
@@ -132,23 +133,26 @@ public class CameraController {
             if (mouseControlEnabled) {
                 MouseInterceptor.setIntercepting(false);
             }
-
+            // Re-enable keyboard input
+            updateKeyboardInput(client);
             // Store final position
             freeCamPosition = camera.getPos();
             freeCamYaw = camera.getYaw();
             freeCamPitch = camera.getPitch();
         }
-
         inFreeControlMode = false;
         mouseControlEnabled = false;
         moveControlEnabled = false;
-
         for (ICameraMovement movement : activeMovementSlots.values()) {
             movement.queueReset(client, camera);
         }
     }
 
-
+    private void updateKeyboardInput(MinecraftClient client) {
+        if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+            ((IKeyboardInputMixin) client.player.input).setDisabled(CameraController.inFreeControlMode && !moveControlEnabled);
+        }
+    }
 
 
 
