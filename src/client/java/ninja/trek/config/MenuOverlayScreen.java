@@ -45,7 +45,7 @@ public class MenuOverlayScreen extends Screen {
         this.guiHeight = this.height - (MARGIN * 2);
         this.centerX = MARGIN;
         this.centerY = MARGIN;
-        int visibleStartY = centerY + CONTENT_START_Y;
+        int visibleStartY = centerY + CONTENT_START_Y+30;
         int visibleEndY = centerY + guiHeight;
 
         createTabButtons();
