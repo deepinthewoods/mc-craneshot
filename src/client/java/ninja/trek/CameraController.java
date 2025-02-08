@@ -16,26 +16,34 @@ public class CameraController {
     private List<List<ICameraMovement>> slots;
     private final ArrayList<Integer> currentTypes;
     private CameraMovementManager movementManager;
-    private final Map<Integer, ICameraMovement> activeMovementSlots;
+    private Integer activeMovementSlot;
+
     public static final double FIRST_PERSON_THRESHOLD_MIN = 2.0;
     public static final double FIRST_PERSON_THRESHOLD_MAX = 5.0;
+
     private String currentMessage = "";
     private long messageTimer = 0;
     private static final long MESSAGE_DURATION = 2000;
+
     private boolean mouseControlEnabled = false;
     private boolean cameraMovementEnabled = false;
     private AbstractMovementSettings.POST_MOVE_KEYS currentMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+
     public static boolean inFreeControlMode = false;
     public static Vec3d freeCamPosition;
     public static float freeCamYaw;
     public static float freeCamPitch;
     public static CameraTarget controlStick = new CameraTarget();
 
+    private Map<Integer, Boolean> toggledStates = new HashMap<>();
+
+
     public CameraController() {
         slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
         movementManager = new CameraMovementManager();
-        activeMovementSlots = new HashMap<>();
+        activeMovementSlot = null;
+
         for (int i = 0; i < 3; i++) {
             currentTypes.add(0);
         }
@@ -194,25 +202,7 @@ public class CameraController {
         }
     }
 
-    public void queueFinish(MinecraftClient client, Camera camera) {
-        if (inFreeControlMode) {
-            if (mouseControlEnabled) {
-                MouseInterceptor.setIntercepting(false);
-            }
-            updateKeyboardInput(client);
-            freeCamPosition = camera.getPos();
-            freeCamYaw = camera.getYaw();
-            freeCamPitch = camera.getPitch();
-        }
-        inFreeControlMode = false;
-        mouseControlEnabled = false;
-        cameraMovementEnabled = false;
-        currentMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
 
-        for (ICameraMovement movement : activeMovementSlots.values()) {
-            movement.queueReset(client, camera);
-        }
-    }
 
     private void updateKeyboardInput(MinecraftClient client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
@@ -223,13 +213,15 @@ public class CameraController {
 
     public void tick(MinecraftClient client, Camera camera) {
         updateControlStick(client);
+
         if (!inFreeControlMode) {
             movementManager.update(client, camera);
 
-            for (ICameraMovement movement : activeMovementSlots.values()) {
+            // Check for movement completion and post-movement behavior
+            if (activeMovementSlot != null) {
+                ICameraMovement movement = getMovementAt(activeMovementSlot);
                 if (movement instanceof AbstractMovementSettings && movement.hasCompletedOutPhase()) {
                     AbstractMovementSettings settings = (AbstractMovementSettings) movement;
-
                     boolean enableMouse = settings.getPostMoveMouse() == AbstractMovementSettings.POST_MOVE_MOUSE.FREE_MOUSE;
                     boolean enableKeys = settings.getPostMoveKeys() != AbstractMovementSettings.POST_MOVE_KEYS.NONE;
 
@@ -255,6 +247,7 @@ public class CameraController {
                 }
             }
         }
+
         updatePerspective(client, camera);
     }
 
@@ -271,7 +264,6 @@ public class CameraController {
         }
         updateKeyboardInput(client);
 
-        clearCompletedMovements(client, camera);
         updateMessageTimer();
     }
 
@@ -282,18 +274,7 @@ public class CameraController {
 
 
 
-    private void clearCompletedMovements(MinecraftClient client, Camera camera) {
-        if (!inFreeControlMode) {
-            Iterator<Map.Entry<Integer, ICameraMovement>> iterator = activeMovementSlots.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Integer, ICameraMovement> entry = iterator.next();
-                if (entry.getValue().isComplete()) {
-                    entry.getValue().queueReset(client, camera);
-                    iterator.remove();
-                }
-            }
-        }
-    }
+
 
 
 
@@ -301,15 +282,45 @@ public class CameraController {
 
 
     public void startTransition(MinecraftClient client, Camera camera, int movementIndex) {
-//        Craneshot.LOGGER.info("startt");
         ICameraMovement movement = getMovementAt(movementIndex);
         if (movement == null) return;
-//        Craneshot.LOGGER.info("startt notnull");
-        clearAllMovements(client, camera);
-        activeMovementSlots.clear();
-        activeMovementSlots.put(movementIndex, movement);
+
+        // If this slot is already active, just stop it
+        if (activeMovementSlot != null && activeMovementSlot == movementIndex) {
+            queueFinish(client, camera);
+            return;
+        }
+
+        // Clear any existing movement and start the new one
+        queueFinish(client, camera);
+        activeMovementSlot = movementIndex;
         movement.start(client, camera);
         movementManager.addMovement(movement, client, camera);
+    }
+
+    public void queueFinish(MinecraftClient client, Camera camera) {
+        if (inFreeControlMode) {
+            if (mouseControlEnabled) {
+                MouseInterceptor.setIntercepting(false);
+            }
+            updateKeyboardInput(client);
+            freeCamPosition = camera.getPos();
+            freeCamYaw = camera.getYaw();
+            freeCamPitch = camera.getPitch();
+        }
+
+        inFreeControlMode = false;
+        mouseControlEnabled = false;
+        cameraMovementEnabled = false;
+        currentMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+
+        if (activeMovementSlot != null) {
+            ICameraMovement movement = getMovementAt(activeMovementSlot);
+            if (movement != null) {
+                movement.queueReset(client, camera);
+            }
+            activeMovementSlot = null;
+        }
     }
 
 
@@ -361,26 +372,53 @@ public class CameraController {
         }
     }
 
-    // Movement management methods
-    public void cycleMovementType(boolean forward) {
-        for (Map.Entry<Integer, ICameraMovement> entry : activeMovementSlots.entrySet()) {
-            int slotIndex = entry.getKey();
-            List<ICameraMovement> slotMovements = slots.get(slotIndex);
-            int currentType = currentTypes.get(slotIndex);
-            boolean wrap = SlotMenuSettings.getWrapState(slotIndex);
-            if (forward) {
-                if (currentType < slotMovements.size() - 1 || wrap) {
-                    currentTypes.set(slotIndex, wrap ?
-                            (currentType + 1) % slotMovements.size() :
-                            Math.min(currentType + 1, slotMovements.size() - 1));
-                }
+    public void cycleMovementType(boolean forward, int slotIndex) {
+        if (slotIndex < 0 || slotIndex >= slots.size()) return;
+
+        List<ICameraMovement> slotMovements = slots.get(slotIndex);
+        if (slotMovements.isEmpty()) return;
+
+        int currentType = currentTypes.get(slotIndex);
+        boolean wrap = SlotMenuSettings.getWrapState(slotIndex);
+
+        // Calculate new index
+        int newType;
+        if (forward) {
+            if (currentType < slotMovements.size() - 1 || wrap) {
+                newType = wrap ?
+                        (currentType + 1) % slotMovements.size() :
+                        Math.min(currentType + 1, slotMovements.size() - 1);
             } else {
-                if (currentType > 0 || wrap) {
-                    currentTypes.set(slotIndex, wrap ?
-                            (currentType - 1 + slotMovements.size()) % slotMovements.size() :
-                            Math.max(currentType - 1, 0));
-                }
+                return;
             }
+        } else {
+            if (currentType > 0 || wrap) {
+                newType = wrap ?
+                        (currentType - 1 + slotMovements.size()) % slotMovements.size() :
+                        Math.max(currentType - 1, 0);
+            } else {
+                return;
+            }
+        }
+
+        // Update the type
+        currentTypes.set(slotIndex, newType);
+
+        // Show message about the new movement type
+        ICameraMovement newMovement = slotMovements.get(newType);
+        if (newMovement != null) {
+            showMessage(String.format(
+                    "Camera %d: %s Movement",
+                    slotIndex + 1,
+                    newMovement.getName()
+            ));
+        }
+    }
+
+    // Overloaded method for cycling the active slot
+    public void cycleMovementType(boolean forward) {
+        if (activeMovementSlot != null) {
+            cycleMovementType(forward, activeMovementSlot);
         }
     }
 
@@ -447,14 +485,40 @@ public class CameraController {
         this.slots = savedSlots;
     }
 
+    public void handleKeyStateChange(int keyIndex, boolean pressed, MinecraftClient client, Camera camera) {
+        boolean isToggleMode = SlotMenuSettings.getToggleState(keyIndex);
 
-    private void clearAllMovements(MinecraftClient client, Camera camera) {
-        for (ICameraMovement movement : activeMovementSlots.values()) {
-            movement.queueReset(client, camera);
+        if (pressed) {
+            // If a different movement is active, stop it first
+            if (activeMovementSlot != null && activeMovementSlot != keyIndex) {
+                // Untoggle the previous movement if it was toggled
+                toggledStates.put(activeMovementSlot, false);
+                queueFinish(client, camera);
+            }
+
+            if (isToggleMode) {
+                // Toggle mode: flip the state
+                boolean currentToggled = toggledStates.getOrDefault(keyIndex, false);
+                boolean newToggled = !currentToggled;
+                toggledStates.put(keyIndex, newToggled);
+
+                if (newToggled) {
+                    startTransition(client, camera, keyIndex);
+                } else {
+                    queueFinish(client, camera);
+                }
+            } else {
+                // Momentary mode: just start the movement
+                startTransition(client, camera, keyIndex);
+            }
+        } else if (!isToggleMode) {
+            // Key released in momentary mode: stop the movement
+            if (activeMovementSlot != null && activeMovementSlot == keyIndex) {
+                queueFinish(client, camera);
+            }
         }
-        movementManager = new CameraMovementManager();
-        activeMovementSlots.clear();
     }
+
 
     public CameraMovementManager getMovementManager() {
         return movementManager;

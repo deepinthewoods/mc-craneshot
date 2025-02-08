@@ -46,47 +46,20 @@ public class CraneShotEventHandler {
             MinecraftClient client = MinecraftClient.getInstance();
             Camera camera = client.gameRenderer.getCamera();
 
-            // Handle camera movement key states
-            boolean anyPressed = false;
+            // Collect current key states
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isPressed();
                 boolean wasPressed = keyStates.getOrDefault(i, false);
-                boolean isToggled = toggledStates.getOrDefault(i, false);
-                boolean isToggleMode = SlotMenuSettings.getToggleState(i);
 
-                if (isToggleMode) {
-                    // Handle toggle mode
-                    if (currentlyPressed && !wasPressed) {
-                        // Key just pressed - toggle the state
-                        isToggled = !isToggled;
-                        toggledStates.put(i, isToggled);
-                        if (isToggled) {
-                            CraneshotClient.CAMERA_CONTROLLER.startTransition(client, camera, i);
-                        }
-                    }
-                    if (isToggled) {
-                        anyPressed = true;
-                    }
-                } else {
-                    // Handle momentary mode (original behavior)
-                    if (currentlyPressed) {
-                        if (!wasPressed) {
-                            // Key just pressed - start movement
-                            CraneshotClient.CAMERA_CONTROLLER.startTransition(client, camera, i);
-                        }
-                        anyPressed = true;
-                    }
+                // Only notify on state changes
+                if (currentlyPressed != wasPressed) {
+                    CraneshotClient.CAMERA_CONTROLLER.handleKeyStateChange(i, currentlyPressed, client, camera);
                 }
+
                 keyStates.put(i, currentlyPressed);
             }
-
-            // If no keys are pressed or toggled, reset the camera
-            if (!anyPressed) {
-                CraneshotClient.CAMERA_CONTROLLER.queueFinish(client, camera);
-                // Clear toggle states when resetting
-                toggledStates.clear();
-            }
         });
+
     }
 
     private static void handleScrollInput(MinecraftClient client) {
