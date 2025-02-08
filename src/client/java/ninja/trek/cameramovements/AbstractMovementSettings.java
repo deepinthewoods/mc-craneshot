@@ -71,6 +71,8 @@ public abstract class AbstractMovementSettings {
         return headLockedToCamera;
     }
 
+
+
     protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
         switch (endTarget){
             default:

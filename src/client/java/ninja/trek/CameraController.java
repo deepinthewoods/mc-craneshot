@@ -29,6 +29,7 @@ public class CameraController {
     public static Vec3d freeCamPosition;
     public static float freeCamYaw;
     public static float freeCamPitch;
+    public static CameraTarget controlStick = new CameraTarget();
 
     public CameraController() {
         slots = new ArrayList<>();
@@ -37,6 +38,20 @@ public class CameraController {
         activeMovementSlots = new HashMap<>();
         for (int i = 0; i < 3; i++) {
             currentTypes.add(0);
+        }
+    }
+
+    private void updateControlStick(MinecraftClient client) {
+        if (client.player == null) return;
+
+
+        Camera camera = client.gameRenderer.getCamera();
+        if (camera != null) {
+            controlStick.set(
+                    client.player.getEyePos(),
+                    client.player.getYaw(),
+                    client.player.getPitch()
+            );
         }
     }
 
@@ -207,7 +222,7 @@ public class CameraController {
     }
 
     public void tick(MinecraftClient client, Camera camera) {
-
+        updateControlStick(client);
         if (!inFreeControlMode) {
             movementManager.update(client, camera);
 

@@ -2,20 +2,12 @@ package ninja.trek.cameramovements.movements;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
+import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
-import ninja.trek.cameramovements.CameraMovementType;
-import ninja.trek.cameramovements.CameraTarget;
-import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.MovementState;
-import ninja.trek.cameramovements.AbstractMovementSettings;
+import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 
-@CameraMovementType(
-        name = "Linear Movement",
-        description = "Moves the camera with linear interpolation and position controls"
-)
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
@@ -38,44 +30,61 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    public CameraTarget start = new CameraTarget(), end = new CameraTarget(), current = new CameraTarget();
+    public CameraTarget start = new CameraTarget();
+    public CameraTarget end = new CameraTarget();
+    public CameraTarget current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
-        PlayerEntity player = client.player;
-        if (player == null) return;
+        // Initialize with camera's current state
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
-        end = getEndTarget(player, targetDistance);
+
+        // Calculate end target based on controlStick
+        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+
         resetting = false;
         weight = 1.0f;
     }
 
+    private Vec3d calculateTargetPosition(CameraTarget stick) {
+        double yaw = Math.toRadians(stick.getYaw());
+        double pitch = Math.toRadians(stick.getPitch());
+
+        // Calculate offset based on target distance
+        double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
+        double yOffset = Math.sin(pitch) * targetDistance;
+        double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
+
+        return stick.getPosition().add(xOffset, yOffset, zOffset);
+    }
+
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
-        PlayerEntity player = client.player;
-        if (player == null) return new MovementState(current, true);
+        if (client.player == null) return new MovementState(current, true);
 
-        start.set(player.getEyePos(),
-                player.getYaw(),
-                player.getPitch());
-        end.set(getEndTarget(player, targetDistance));
+        // Update start target with controlStick's current state
+        start = new CameraTarget(
+                CameraController.controlStick.getPosition(),
+                CameraController.controlStick.getYaw(),
+                CameraController.controlStick.getPitch()
+        );
 
-        CameraTarget a, b;
-        if (!resetting) {
-            a = start;
-            b = end;
-        } else {
-            a = end;
-            b = start;
-        }
+        // Update end target based on controlStick and target distance
+        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+
+        CameraTarget a = resetting ? end : start;
+        CameraTarget b = resetting ? start : end;
 
         // Position interpolation with speed limit
         Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
         Vec3d moveVector = desired.subtract(current.getPosition());
         double moveDistance = moveVector.length();
+
         if (moveDistance > 0.01) {
             double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
             if (moveDistance > maxMove) {
@@ -88,20 +97,19 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
 
-        // Calculate rotation with easing first
         float yawDiff = targetYaw - current.getYaw();
         float pitchDiff = targetPitch - current.getPitch();
 
-// Normalize angles to [-180, 180]
+        // Normalize angles to [-180, 180]
         while (yawDiff > 180) yawDiff -= 360;
         while (yawDiff < -180) yawDiff += 360;
 
-// Apply easing to get desired rotation speed
+        // Apply easing to get desired rotation speed
         float desiredYawSpeed = (float)(yawDiff * rotationEasing);
         float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
 
-// Apply rotation speed limit
-        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0)); // Convert degrees/second to degrees/tick
+        // Apply rotation speed limit
+        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0));
         if (Math.abs(desiredYawSpeed) > maxRotation) {
             desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
         }
@@ -113,13 +121,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
 
-        current = new CameraTarget(
-                desired,
-                newYaw,
-                newPitch
-        );
+        current = new CameraTarget(desired, newYaw, newPitch);
 
-        alpha = current.getPosition().distanceTo(b.getPosition()) / a.getPosition().distanceTo(b.getPosition());
+        // Calculate progress for blending
+        alpha = current.getPosition().distanceTo(b.getPosition()) /
+                a.getPosition().distanceTo(b.getPosition());
+
         boolean complete = resetting && moveDistance < 0.01;
         return new MovementState(current, complete);
     }
@@ -153,6 +160,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public boolean isComplete() {
         return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.01;
     }
+
     @Override
     public boolean hasCompletedOutPhase() {
         return !resetting && current.getPosition().distanceTo(end.getPosition()) < 0.01;
