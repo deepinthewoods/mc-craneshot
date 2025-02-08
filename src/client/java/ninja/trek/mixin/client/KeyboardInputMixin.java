@@ -13,34 +13,47 @@ public abstract class KeyboardInputMixin extends Input implements IKeyboardInput
     private boolean disabled = false;
     private float savedForward, savedSideways;
     private boolean savedJumping, savedSneaking;
+    private boolean savedSprinting;  // Add sprinting state
 
     @Override
     public void setDisabled(boolean disabled) {
         if (this.disabled != disabled) {
-            this.disabled = disabled;
-            if (!disabled) {
-                // Store current state when enabling
+            if (disabled) {
+                // Store current state when disabling
                 this.savedForward = this.movementForward;
                 this.savedSideways = this.movementSideways;
                 this.savedJumping = this.jumping;
                 this.savedSneaking = this.sneaking;
+
+
+                // Immediately clear all movement
+                this.movementForward = 0;
+                this.movementSideways = 0;
+                this.jumping = false;
+                this.sneaking = false;
+
             }
+            this.disabled = disabled;
         }
     }
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void onTick(boolean slowDown, float slowDownFactor, CallbackInfo ci) {
         if (disabled) {
+            // Force all movement values to zero
             this.movementForward = 0;
             this.movementSideways = 0;
             this.jumping = false;
             this.sneaking = false;
+
             ci.cancel();
         } else {
+            // Restore saved state when not disabled
             this.movementForward = savedForward;
             this.movementSideways = savedSideways;
             this.jumping = savedJumping;
             this.sneaking = savedSneaking;
+
         }
     }
 }

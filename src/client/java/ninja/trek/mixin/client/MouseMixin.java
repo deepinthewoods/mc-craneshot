@@ -1,6 +1,6 @@
-// File: client/java/ninja/trek/mixin/client/MouseMixin.java
 package ninja.trek.mixin.client;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import ninja.trek.IMouseMixin;
 import ninja.trek.MouseInterceptor;
@@ -15,19 +15,16 @@ public class MouseMixin implements IMouseMixin {
     @Shadow private double cursorDeltaX;
     @Shadow private double cursorDeltaY;
 
-    // Remove the static field and methods from here.
-
-    // Instance fields for captured values.
     private double capturedDeltaX;
     private double capturedDeltaY;
 
     @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
     private void onUpdateMouse(CallbackInfo ci) {
-        if (MouseInterceptor.isIntercepting()) { // use the helper class instead
-            // Capture the deltas before they're cleared
+        MinecraftClient client = MinecraftClient.getInstance();
+        // Only intercept mouse movement if we're intercepting AND not in a screen
+        if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
             capturedDeltaX = cursorDeltaX;
             capturedDeltaY = cursorDeltaY;
-            // Clear the actual deltas to prevent normal camera movement
             cursorDeltaX = 0;
             cursorDeltaY = 0;
             ci.cancel();
@@ -36,7 +33,9 @@ public class MouseMixin implements IMouseMixin {
 
     @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
     private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
-        if (MouseInterceptor.isIntercepting()) { // use the helper class
+        MinecraftClient client = MinecraftClient.getInstance();
+        // Only intercept mouse clicks if we're intercepting AND not in a screen
+        if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
             ci.cancel();
         }
     }

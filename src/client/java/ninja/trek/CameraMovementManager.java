@@ -39,7 +39,7 @@ public class CameraMovementManager {
                 CameraTarget targetToUse;
                 if (movement instanceof AbstractMovementSettings &&
                         ((ICameraMovement)movement).hasCompletedOutPhase() &&
-                        ((AbstractMovementSettings)movement).getPostMoveAction() != AbstractMovementSettings.POST_MOVE_ACTION.NONE) {
+                        ((AbstractMovementSettings)movement).getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE) {
 
                     // Use stored free movement target if it exists, otherwise create one
                     targetToUse = freeMovementTargets.computeIfAbsent(movement,
@@ -64,7 +64,7 @@ public class CameraMovementManager {
             for (ICameraMovement movement : activeMovements) {
                 if (movement instanceof AbstractMovementSettings &&
                         ((ICameraMovement)movement).hasCompletedOutPhase() &&
-                        ((AbstractMovementSettings)movement).getPostMoveAction() != AbstractMovementSettings.POST_MOVE_ACTION.NONE) {
+                        ((AbstractMovementSettings)movement).getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE) {
                     freeMovementTargets.put(movement, CameraTarget.fromCamera(camera));
                 }
             }
