@@ -20,6 +20,7 @@ public class CraneshotClient implements ClientModInitializer {
 	public static KeyBinding toggleMenuKey;
 	private static boolean isMenuOpen = false;
 	public static MenuOverlayScreen MENU = new MenuOverlayScreen();
+	public static final CameraMovementManager MOVEMENT_MANAGER = new CameraMovementManager();
 
 	@Override
 	public void onInitializeClient() {
@@ -61,7 +62,7 @@ public class CraneshotClient implements ClientModInitializer {
 		GeneralSettingsIO.loadSettings();
 
 		List<List<ICameraMovement>> savedSlots = SlotSettingsIO.loadSlots();
-		CAMERA_CONTROLLER.setAllSlots(savedSlots);
+		MOVEMENT_MANAGER.setAllSlots(savedSlots);
 		CraneShotEventHandler.register();
 	}
 	public static void checkKeybinds() {

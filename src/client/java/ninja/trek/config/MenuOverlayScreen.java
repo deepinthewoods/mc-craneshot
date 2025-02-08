@@ -66,10 +66,10 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void createTabButtons() {
-        int tabCount = CraneshotClient.CAMERA_CONTROLLER.getMovementCount() + 1;
+        int tabCount = CraneshotClient.MOVEMENT_MANAGER.getMovementCount() + 1;
         int tabWidth = Math.min(100, (guiWidth - 20) / tabCount);
 
-        for (int i = 0; i <= CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
+        for (int i = 0; i <= CraneshotClient.MOVEMENT_MANAGER.getMovementCount(); i++) {
             int tabIndex = i;
             String tabName = (i == 0) ? "General" : "Slot " + i;
             Text buttonText = Text.literal(tabName);
@@ -137,14 +137,14 @@ public class MenuOverlayScreen extends Screen {
         }
         controlX += 25;
 
-        if (index < CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
+        if (index < CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
             addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
                             button -> moveMovement(slotIndex, index, index + 1))
                     .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
         }
         controlX += 25;
 
-        if (CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
+        if (CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
             addDrawableChild(ButtonWidget.builder(Text.literal("×"),
                             button -> deleteMovement(slotIndex, index))
                     .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
@@ -241,7 +241,7 @@ public class MenuOverlayScreen extends Screen {
 
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
                                     int BUTTON_HEIGHT, int MOVEMENT_ROW_HEIGHT, int MOVEMENT_SPACING, int SETTING_HEIGHT) {
-        List<ICameraMovement> movements = CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(slotIndex);
+        List<ICameraMovement> movements = CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex);
         int yOffset = CONTENT_START_Y + BUTTON_HEIGHT + 10;
 
         for (int i = 0; i < movements.size(); i++) {
@@ -422,7 +422,7 @@ public class MenuOverlayScreen extends Screen {
                         .getMovementClass()
                         .getDeclaredConstructor()
                         .newInstance();
-                CraneshotClient.CAMERA_CONTROLLER.addMovement(slotIndex, newMovement);
+                CraneshotClient.MOVEMENT_MANAGER.addMovement(slotIndex, newMovement);
                 reinitialize();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -485,12 +485,12 @@ public class MenuOverlayScreen extends Screen {
 
 
     private void deleteMovement(int slotIndex, int movementIndex) {
-        CraneshotClient.CAMERA_CONTROLLER.removeMovement(slotIndex, movementIndex);
+        CraneshotClient.MOVEMENT_MANAGER.removeMovement(slotIndex, movementIndex);
         reinitialize();
     }
 
     private void moveMovement(int slotIndex, int fromIndex, int toIndex) {
-        CraneshotClient.CAMERA_CONTROLLER.swapMovements(slotIndex, fromIndex, toIndex);
+        CraneshotClient.MOVEMENT_MANAGER.swapMovements(slotIndex, fromIndex, toIndex);
         reinitialize();
     }
 
@@ -543,8 +543,8 @@ public class MenuOverlayScreen extends Screen {
     public void close() {
         // Save the current slots configuration before closing
         List<List<ICameraMovement>> slots = new ArrayList<>();
-        for (int i = 0; i < CraneshotClient.CAMERA_CONTROLLER.getMovementCount(); i++) {
-            slots.add(CraneshotClient.CAMERA_CONTROLLER.getAvailableMovementsForSlot(i));
+        for (int i = 0; i < CraneshotClient.MOVEMENT_MANAGER.getMovementCount(); i++) {
+            slots.add(CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(i));
         }
         SlotSettingsIO.saveSlots(slots);
         GeneralSettingsIO.saveSettings();
@@ -563,7 +563,7 @@ public class MenuOverlayScreen extends Screen {
         try {
             ICameraMovement newMovement = SlotSettingsIO.createMovementFromClipboard();
             if (newMovement != null) {
-                CraneshotClient.CAMERA_CONTROLLER.addMovement(slotIndex, newMovement);
+                CraneshotClient.MOVEMENT_MANAGER.addMovement(slotIndex, newMovement);
                 reinitialize();
             }
         } catch (Exception e) {

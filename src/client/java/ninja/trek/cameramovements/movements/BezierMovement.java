@@ -272,9 +272,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             progress = 1.0 - progress;
             canonicalControl = generateControlPoint(canonicalEnd, originalCanonicalStart);
 
-            if (CraneshotClient.CAMERA_CONTROLLER.getMovementManager() != null) {
-                CraneshotClient.CAMERA_CONTROLLER.getMovementManager().resetMovement(this);
-            }
+
         }
     }
 

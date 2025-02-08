@@ -69,7 +69,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
         if (client.player == null) return new MovementState(current, true);
-        Craneshot.LOGGER.info("linear update");
+//        Craneshot.LOGGER.info("linear update");
         // Update start target with controlStick's current state
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
@@ -139,9 +139,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
-        if (CraneshotClient.CAMERA_CONTROLLER.getMovementManager() != null) {
-            CraneshotClient.CAMERA_CONTROLLER.getMovementManager().resetMovement(this);
-        }
+
     }
 
     @Override
