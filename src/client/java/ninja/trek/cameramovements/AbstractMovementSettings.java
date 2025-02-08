@@ -41,9 +41,9 @@ public abstract class AbstractMovementSettings {
 
     public enum POST_MOVE_KEYS {
         NONE,       // Default behavior
-         // Allow free mouse control after movement
-        MOVE_CAMERA_FLAT,
-        MOVE_CAMERA_FREE
+        MOVE_CAMERA_FLAT, // Y-axis locked camera-relative movement
+        MOVE_CAMERA_FREE, // Full camera-relative movement including pitch
+        MOVE8       // 8-directional player movement relative to camera
     }
 
     @MovementSetting(
