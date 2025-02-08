@@ -157,15 +157,16 @@ public class CameraController {
 
                 double f = mouseSensitivity * 0.6D + 0.2D;
                 double calculatedSensitivity = f * f * f * 0.04D; // Reduced base m
-
+                double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                calculatedSensitivity = scaledSensitivity;
                 // Apply sensitivity curve
-                deltaX *= calculatedSensitivity * 0.15D;
-                deltaY *= calculatedSensitivity * 0.15D;
+                deltaX *= calculatedSensitivity * 0.55D;
+                deltaY *= calculatedSensitivity * 0.55D;
 
                 // Only update rotation if there is nonzero mouse input
                 if (deltaX != 0 || deltaY != 0) {
                     freeCamYaw += deltaX;
-                    freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch + deltaY));
+                    freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch - deltaY));
                 }
             } else {
                 // In non-rotate mode, follow the movement’s computed rotation.
