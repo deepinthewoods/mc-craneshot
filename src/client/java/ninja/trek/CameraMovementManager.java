@@ -179,6 +179,7 @@ public class CameraMovementManager {
             finishTransition(client, camera);
             return;
         }
+        isOut = false;
 
         // If another movement is active, finish it first.
         if (activeMovementSlot != null && !activeMovementSlot.equals(slotIndex)) {

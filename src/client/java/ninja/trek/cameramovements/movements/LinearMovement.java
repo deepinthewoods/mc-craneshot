@@ -160,11 +160,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.01;
+        return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.03;
     }
 
     @Override
     public boolean hasCompletedOutPhase() {
-        return !resetting && current.getPosition().distanceTo(end.getPosition()) < 0.01;
+        Craneshot.LOGGER.info("alpha {}", alpha);
+        return !resetting && alpha < .1;
     }
 }
