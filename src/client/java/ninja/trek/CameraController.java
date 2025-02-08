@@ -27,7 +27,7 @@ public class CameraController {
 
     private boolean mouseControlEnabled = false;
     private boolean cameraMovementEnabled = false;
-    private AbstractMovementSettings.POST_MOVE_KEYS currentMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+    private AbstractMovementSettings.POST_MOVE_KEYS currentKeyMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
 
     public static boolean inFreeControlMode = false;
     public static Vec3d freeCamPosition;
@@ -88,7 +88,7 @@ public class CameraController {
         float speed = 0.5f; // Adjust speed as needed
         Vec3d movement = Vec3d.ZERO;
 
-        if (currentMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+        if (currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             // Full camera-relative movement including pitch
             float yaw = freeCamYaw;
             float pitch = freeCamPitch;
@@ -109,7 +109,7 @@ public class CameraController {
             if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
             if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
         }
-        else if (currentMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
+        else if (currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             // Y-axis locked camera-relative movement
             float yaw = freeCamYaw;
             Vec3d forward = new Vec3d(
@@ -129,7 +129,7 @@ public class CameraController {
             if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
             if (client.options.sneakKey.isPressed()) movement = movement.add(0, -1, 0);
         }
-        else if (currentMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE8) {
+        else if (currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE8) {
             // Move the player in 8 directions relative to camera view
             if (client.player != null) {
                 float cameraYaw = freeCamYaw;
@@ -229,7 +229,7 @@ public class CameraController {
                         inFreeControlMode = true;
                         mouseControlEnabled = enableMouse;
                         cameraMovementEnabled = enableKeys;
-                        currentMoveMode = settings.getPostMoveKeys();
+                        currentKeyMoveMode = settings.getPostMoveKeys();
 
                         Vec3d finalPos = movement.calculateState(client, camera).getCameraTarget().getPosition();
                         freeCamPosition = finalPos;
@@ -312,7 +312,7 @@ public class CameraController {
         inFreeControlMode = false;
         mouseControlEnabled = false;
         cameraMovementEnabled = false;
-        currentMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+        currentKeyMoveMode = AbstractMovementSettings.POST_MOVE_KEYS.NONE;
 
         if (activeMovementSlot != null) {
             ICameraMovement movement = getMovementAt(activeMovementSlot);
