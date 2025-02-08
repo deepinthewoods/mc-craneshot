@@ -22,10 +22,10 @@ public abstract class AbstractMovementSettings {
     public double alpha;
 
     public enum START_TARGET {PLAYER};
-    public enum END_TARGET {BACK, FRONT}
+    public enum END_TARGET {HEAD_BACK, HEAD_FRONT}
     public enum POST_MOVE_MOUSE {
         NONE,       // Default behavior
-        FREE_MOUSE // Allow free mouse control after movement
+        ROTATE_CAMERA // Allow free mouse control after movement
            // Allow WASD movement after movement
     }
 
@@ -59,7 +59,7 @@ public abstract class AbstractMovementSettings {
             type = MovementSettingType.ENUM,
             description = "Determines if camera follows in front or behind the player"
     )
-    protected END_TARGET endTarget = END_TARGET.BACK;
+    protected END_TARGET endTarget = END_TARGET.HEAD_BACK;
 
 //    @MovementSetting(
 //            label = "Head Locked To Camera",
@@ -76,8 +76,8 @@ public abstract class AbstractMovementSettings {
     protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
         switch (endTarget){
             default:
-            case BACK: return CameraTarget.fromDistanceBack(player, targetDistance);
-            case FRONT: return CameraTarget.fromDistanceFront(player, targetDistance);
+            case HEAD_BACK: return CameraTarget.fromDistanceBack(player, targetDistance);
+            case HEAD_FRONT: return CameraTarget.fromDistanceFront(player, targetDistance);
         }
 
 

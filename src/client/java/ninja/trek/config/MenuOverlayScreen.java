@@ -2,7 +2,9 @@ package ninja.trek.config;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CheckboxWidget;
 import net.minecraft.text.Text;
@@ -298,28 +300,62 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void createSettingControl(AbstractMovementSettings settings, Field field,
-                                      MovementSetting annotation, int settingX, int settingY, int labelWidth,
-                                      int controlWidth, int BUTTON_HEIGHT) throws IllegalAccessException {
+                                      MovementSetting annotation, int settingX, int settingY,
+                                      int labelWidth, int controlWidth, int BUTTON_HEIGHT)
+            throws IllegalAccessException {
         if (annotation.type() == MovementSettingType.ENUM) {
-            // For enums, create a wider button and skip the label
+            // For enums, create the button
             ButtonWidget enumButton = SettingWidget.createEnumButton(
-                    settingX,  // Use settingX directly instead of adding labelWidth
+                    settingX,
                     settingY,
-                    labelWidth + controlWidth + 10,  // Use full width
+                    labelWidth + controlWidth + 10,
                     BUTTON_HEIGHT,
                     field.getName(),
                     settings,
                     annotation
             );
-            if (enumButton != null) {
-                addDrawableChild(enumButton);
+            addDrawableChild(enumButton);
+
+            // Add warning if needed for postMoveMouse field
+            if (field.getName().equals("postMoveMouse")) {
+                AbstractMovementSettings.POST_MOVE_MOUSE mouseMode =
+                        (AbstractMovementSettings.POST_MOVE_MOUSE) field.get(settings);
+
+                // Get the postMoveKeys field
+                try {
+                    Field keysField = AbstractMovementSettings.class.getDeclaredField("postMoveKeys");
+                    keysField.setAccessible(true);
+                    AbstractMovementSettings.POST_MOVE_KEYS keysMode =
+                            (AbstractMovementSettings.POST_MOVE_KEYS) keysField.get(settings);
+
+                    // Check warning conditions - only show warning for camera movement modes
+                    if (mouseMode == AbstractMovementSettings.POST_MOVE_MOUSE.NONE &&
+                            (keysMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                    keysMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) &&
+                            keysMode != AbstractMovementSettings.POST_MOVE_KEYS.MOVE8 &&
+                            keysMode != AbstractMovementSettings.POST_MOVE_KEYS.NONE) {
+
+                        // Create warning button
+                        ButtonWidget warningButton = ButtonWidget.builder(
+                                        Text.literal("!").formatted(Formatting.GOLD),
+                                        button -> {}
+                                )
+                                .dimensions(settingX + labelWidth + controlWidth + 15, settingY, 20, BUTTON_HEIGHT)
+                                .tooltip(Tooltip.of(Text.literal(
+                                        "Warning: Camera rotation will be locked, Rotate Camera recommended")))
+                                .build();
+
+                        addDrawableChild(warningButton);
+                    }
+                } catch (Exception e) {
+                    Craneshot.LOGGER.error("Error checking warning conditions", e);
+                }
             }
         } else {
             // For non-enum settings, keep the original label + control layout
             addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
                     .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
                     .build());
-
             addDrawableChild(SettingWidget.createSlider(
                     settingX + labelWidth + 10,
                     settingY,
@@ -358,11 +394,23 @@ public class MenuOverlayScreen extends Screen {
 
 
 
+    // In MenuOverlayScreen.java
     private void cycleMovementType() {
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
         if (!movements.isEmpty()) {
             selectedMovementTypeIndex = (selectedMovementTypeIndex + 1) % movements.size();
-            reinitialize();
+
+            // Update the button text immediately
+            for (Element child : this.children()) {
+                if (child instanceof ButtonWidget button) {
+                    String buttonText = button.getMessage().getString();
+                    if (buttonText.startsWith("Type: ")) {
+                        String currentTypeName = movements.get(selectedMovementTypeIndex).getName();
+                        button.setMessage(Text.literal("Type: " + currentTypeName));
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -446,7 +494,7 @@ public class MenuOverlayScreen extends Screen {
         reinitialize();
     }
 
-    private void reinitialize() {
+    void reinitialize() {
         this.clearChildren();
         this.init();
     }

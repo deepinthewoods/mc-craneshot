@@ -97,8 +97,10 @@ public class CameraMovementRegistry {
     }
 
     public static void registerMovement(Class<? extends ICameraMovement> movementClass) {
+        Craneshot.LOGGER.info("found movement type: " + movementClass);
         if (!movementTypes.contains(movementClass)) {
             movementTypes.add(movementClass);
+
         }
     }
 

@@ -10,6 +10,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.ChunkSectionPos;
 import ninja.trek.CameraController;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.*;
@@ -31,7 +32,7 @@ public abstract class WorldRendererMixin {
             ordinal = 0
     )
     private double modifyPlayerX(double d) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             return CameraController.freeCamPosition.x;
         }
         return d;
@@ -43,7 +44,7 @@ public abstract class WorldRendererMixin {
             ordinal = 1
     )
     private double modifyPlayerY(double e) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             return CameraController.freeCamPosition.y;
         }
         return e;
@@ -55,7 +56,7 @@ public abstract class WorldRendererMixin {
             ordinal = 2
     )
     private double modifyPlayerZ(double f) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             return CameraController.freeCamPosition.z;
         }
         return f;
@@ -67,7 +68,7 @@ public abstract class WorldRendererMixin {
             ordinal = 3
     )
     private double modifyCameraX(double g) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             lastCameraX = CameraController.freeCamPosition.x;
             return CameraController.freeCamPosition.x;
         }
@@ -80,7 +81,7 @@ public abstract class WorldRendererMixin {
             ordinal = 4
     )
     private double modifyCameraY(double h) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             lastCameraY = CameraController.freeCamPosition.y;
             return CameraController.freeCamPosition.y;
         }
@@ -93,7 +94,7 @@ public abstract class WorldRendererMixin {
             ordinal = 5
     )
     private double modifyCameraZ(double l) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             lastCameraZ = CameraController.freeCamPosition.z;
             return CameraController.freeCamPosition.z;
         }
@@ -105,7 +106,7 @@ public abstract class WorldRendererMixin {
             at = @At("HEAD")
     )
     private void onSetupTerrainStart(Camera camera, Frustum frustum, boolean hasForcedFrustum, boolean spectator, CallbackInfo ci) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             Vec3d freeCamPos = CameraController.freeCamPosition;
             ((CameraAccessor)camera).invokesetPos(freeCamPos);
 
@@ -135,7 +136,7 @@ public abstract class WorldRendererMixin {
             at = @At("RETURN")
     )
     private void onSetupTerrainEnd(Camera camera, Frustum frustum, boolean hasForcedFrustum, boolean spectator, CallbackInfo ci) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             WorldRenderer worldRenderer = (WorldRenderer)(Object)this;
             worldRenderer.getChunkBuilder().setCameraPosition(CameraController.freeCamPosition);
         }
@@ -150,7 +151,7 @@ public abstract class WorldRendererMixin {
             index = 0
     )
     private Vec3d modifyChunkBuilderCameraPosition(Vec3d original) {
-        if (CameraController.inFreeControlMode) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             return CameraController.freeCamPosition;
         }
         return original;

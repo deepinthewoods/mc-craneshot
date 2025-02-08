@@ -10,8 +10,8 @@ import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 
 @CameraMovementType(
-        name = "Bezier Movement (Canonical Relative)",
-        description = "Moves the camera along a quadratic Bézier curve in canonical space then converts to world space using the control stick's rotation."
+        name = "Bezier",
+        description = "Moves the camera in a curved line"
 )
 public class BezierMovement extends AbstractMovementSettings implements ICameraMovement {
     // --- Settings ---
@@ -166,7 +166,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         // Rotation easing
         float targetYaw, targetPitch;
-        if (!resetting && this.endTarget == END_TARGET.FRONT) {
+        if (!resetting && this.endTarget == END_TARGET.HEAD_FRONT) {
             targetYaw = stickYaw + 180f;
             targetPitch = -stickPitch;
         } else {

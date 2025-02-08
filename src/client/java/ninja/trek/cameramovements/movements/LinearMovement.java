@@ -7,7 +7,10 @@ import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
-
+@CameraMovementType(
+        name = "Linear",
+        description = "Moves the camera along a line"
+)
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
