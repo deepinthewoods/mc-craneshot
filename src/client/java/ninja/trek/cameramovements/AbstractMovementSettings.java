@@ -22,7 +22,7 @@ public abstract class AbstractMovementSettings {
     public double alpha;
 
     public enum START_TARGET {PLAYER};
-    public enum END_TARGET {HEAD_BACK, HEAD_FRONT}
+    public enum END_TARGET {HEAD_BACK, HEAD_FRONT, VELOCITY_FRONT, VELOCITY_BACK}
     public enum POST_MOVE_MOUSE {
         NONE,       // Default behavior
         ROTATE_CAMERA // Allow free mouse control after movement

@@ -16,7 +16,6 @@ public class CraneShotEventHandler {
     private static final double SCROLL_COOLDOWN = 0.1;
     private static double lastScrollTime = 0;
     private static final Map<Integer, Boolean> keyStates = new HashMap<>();
-    private static final Map<Integer, Boolean> toggledStates = new HashMap<>();
 
     public static void register() {
         // Register client tick event for input handling

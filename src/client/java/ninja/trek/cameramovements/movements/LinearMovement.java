@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
+import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -68,7 +69,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
         if (client.player == null) return new MovementState(current, true);
-
+        Craneshot.LOGGER.info("linear update");
         // Update start target with controlStick's current state
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),

@@ -34,31 +34,55 @@ public class CameraMovementManager {
             return;
         }
 
-        CameraTarget targetToUse;
-        if (activeMovement instanceof AbstractMovementSettings &&
-                ((ICameraMovement)activeMovement).hasCompletedOutPhase() &&
-                ((AbstractMovementSettings)activeMovement).getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE) {
+        // Get current post-move states
+        AbstractMovementSettings.POST_MOVE_MOUSE currentMouseMode = CameraController.currentMouseMoveMode;
+        AbstractMovementSettings.POST_MOVE_KEYS currentKeyMode = CameraController.currentKeyMoveMode;
 
-            // Use stored free movement target if it exists, otherwise create one
-            if (freeMovementTarget == null) {
-                freeMovementTarget = CameraTarget.fromCamera(camera);
-            }
-            targetToUse = freeMovementTarget;
+        // Determine if we're in a free movement mode
+        boolean isInFreeMovement = currentKeyMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                currentKeyMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+
+        // Handle position updates
+        CameraTarget targetToUse;
+        if (isInFreeMovement) {
+            // Use the current freeCamPosition from CameraController for position
+            targetToUse = new CameraTarget(
+                    CameraController.freeCamPosition,
+                    camera.getYaw(),
+                    camera.getPitch()
+            );
         } else {
+            // Use the movement's calculated position
             targetToUse = state.getCameraTarget()
                     .withAdjustedPosition(client.player, activeMovement.getRaycastType());
         }
 
-        // Apply the camera target
-        CameraTarget finalTarget = targetToUse
-                .withAdjustedPosition(client.player, RaycastType.NONE);
+        // Handle rotation updates
+        if (currentMouseMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA) {
+            // In free rotation mode, keep the calculated position but use the current camera rotation
+            targetToUse = new CameraTarget(
+                    targetToUse.getPosition(),
+                    CameraController.freeCamYaw,
+                    CameraController.freeCamPitch
+            );
+        }
+
+        // Apply raycast adjustments if needed
+        CameraTarget finalTarget = targetToUse.withAdjustedPosition(client.player,
+                isInFreeMovement ? RaycastType.NONE : activeMovement.getRaycastType());
+
+        // Apply the final camera target
         applyCameraTarget(finalTarget, camera);
 
-        // Update free movement target if needed
+        // Update free movement target if in post-move phase
         if (activeMovement instanceof AbstractMovementSettings &&
                 ((ICameraMovement)activeMovement).hasCompletedOutPhase() &&
-                ((AbstractMovementSettings)activeMovement).getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE) {
-            freeMovementTarget = CameraTarget.fromCamera(camera);
+                currentMouseMode != AbstractMovementSettings.POST_MOVE_MOUSE.NONE) {
+            freeMovementTarget = new CameraTarget(
+                    finalTarget.getPosition(),
+                    camera.getYaw(),
+                    camera.getPitch()
+            );
         }
     }
 

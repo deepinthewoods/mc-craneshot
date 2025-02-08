@@ -63,35 +63,29 @@ public class CameraController {
     }
 
     private void handleFreeControl(MinecraftClient client, Camera camera) {
-        // Handle keyboard movement if enabled
-        if (currentKeyMoveMode != POST_MOVE_KEYS.NONE) {
+        // Handle keyboard movement if in a manual movement mode
+        if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             handleKeyboardMovement(client, camera);
         }
 
-        // Only handle mouse rotation when FREE_MOUSE is explicitly enabled
+        // Handle mouse rotation when in ROTATE_CAMERA mode
         if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
             IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
-            // Get mouse movement deltas
             double deltaX = mouseMixin.getCapturedDeltaX();
             double deltaY = -mouseMixin.getCapturedDeltaY();
 
-            // Apply mouse sensitivity
             Double mouseSensitivity = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity + 0.2;
 
-            // Update freeCam orientation
             freeCamYaw += (float)(deltaX * scaledSensitivity);
             freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float)(deltaY * scaledSensitivity)));
 
             // Apply rotation to camera
             ((CameraAccessor)camera).invokeSetRotation(freeCamYaw, freeCamPitch);
-        } else {
-            // When FREE_MOUSE is not enabled, sync with current camera orientation
-            freeCamYaw = camera.getYaw();
-            freeCamPitch = camera.getPitch();
         }
 
-        // Always update camera position regardless of movement mode
+        // Apply position to camera
         ((CameraAccessor)camera).invokesetPos(freeCamPosition);
     }
 
@@ -105,28 +99,50 @@ public class CameraController {
     public void tick(MinecraftClient client, Camera camera) {
         updateControlStick(client);
 
-        // Check if we're in any kind of post-move control mode
-        boolean inPostMoveMode = currentKeyMoveMode != POST_MOVE_KEYS.NONE ||
-                currentMouseMoveMode != POST_MOVE_MOUSE.NONE;
+        // Always update the movement manager
+        movementManager.update(client, camera);
 
-        if (!inPostMoveMode) {
-            movementManager.update(client, camera);
+        // Check for movement completion and post-movement behavior
+        if (activeMovementSlot != null) {
+            ICameraMovement movement = getMovementAt(activeMovementSlot);
+            MovementState state = movement.calculateState(client, camera);
 
-            // Check for movement completion and post-movement behavior
-            if (activeMovementSlot != null) {
-                ICameraMovement movement = getMovementAt(activeMovementSlot);
-                if (movement instanceof AbstractMovementSettings && movement.hasCompletedOutPhase()) {
-                    AbstractMovementSettings settings = (AbstractMovementSettings) movement;
+            // Update camera position based on active movement
+            // Only override this when in specific keyboard movement modes
+            if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+                // Position is handled by handleKeyboardMovement
+                // Don't update freeCamPosition here
+            } else {
+                // Use movement for position updates
+                freeCamPosition = state.getCameraTarget().getPosition();
+                ((CameraAccessor)camera).invokesetPos(freeCamPosition);
+            }
 
-                    // Set the movement modes based on settings
+            // Update rotation based on mouse mode
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
+                // Rotation is handled by handleFreeControl
+                // Don't update freeCamYaw/freeCamPitch here
+            } else {
+                freeCamYaw = state.getCameraTarget().getYaw();
+                freeCamPitch = state.getCameraTarget().getPitch();
+                ((CameraAccessor)camera).invokeSetRotation(freeCamYaw, freeCamPitch);
+            }
+
+            if (movement instanceof AbstractMovementSettings && movement.hasCompletedOutPhase()) {
+                AbstractMovementSettings settings = (AbstractMovementSettings) movement;
+
+                // Only set post-move modes if we haven't already
+                if (currentMouseMoveMode == POST_MOVE_MOUSE.NONE &&
+                        currentKeyMoveMode == POST_MOVE_KEYS.NONE) {
+
                     currentMouseMoveMode = settings.getPostMoveMouse();
                     currentKeyMoveMode = settings.getPostMoveKeys();
 
                     if (currentMouseMoveMode != POST_MOVE_MOUSE.NONE ||
                             currentKeyMoveMode != POST_MOVE_KEYS.NONE) {
                         // Initialize free camera with current camera state
-                        Vec3d finalPos = movement.calculateState(client, camera).getCameraTarget().getPosition();
-                        freeCamPosition = finalPos;
+                        freeCamPosition = state.getCameraTarget().getPosition();
                         freeCamYaw = camera.getYaw();
                         freeCamPitch = camera.getPitch();
 
@@ -138,7 +154,6 @@ public class CameraController {
                         if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
                             MouseInterceptor.setIntercepting(true);
                         }
-                        return;
                     }
                 }
             }
