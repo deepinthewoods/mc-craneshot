@@ -49,7 +49,13 @@ public class CameraController {
         if (client.player == null) return;
         Camera camera = client.gameRenderer.getCamera();
         if (camera != null) {
-            controlStick.set(
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA)
+                controlStick.set(
+                        client.player.getEyePos(),
+                        controlStick.getYaw(),
+                        controlStick.getPitch()
+                );
+                else controlStick.set(
                     client.player.getEyePos(),
                     client.player.getYaw(),
                     client.player.getPitch()
@@ -111,7 +117,7 @@ public class CameraController {
      */
     private void updatePerspective(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
-        double distance = camera.getPos().distanceTo(client.player.getEyePos());
+        double distance = camera.getPos().distanceTo(controlStick.getPosition());
         if (distance > FIRST_PERSON_THRESHOLD_MIN && client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         } else if (distance < FIRST_PERSON_THRESHOLD_MIN && client.options.getPerspective() != Perspective.FIRST_PERSON) {
@@ -126,6 +132,7 @@ public class CameraController {
      * applies any free control modifications, and then applies the final state to the camera.
      */
     public void updateCamera(MinecraftClient client, Camera camera) {
+        if (CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) return;
         updateControlStick(client);
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
         if (baseTarget != null) {
@@ -142,6 +149,7 @@ public class CameraController {
                 double mouseSensitivity = client.options.getMouseSensitivity().getValue();
                 double scaledSensitivity = 0.6 * mouseSensitivity * mouseSensitivity + 0.2;
                 // Only update rotation if there is nonzero mouse input
+                Craneshot.LOGGER.info("free rotation apdfsfdplied");
                 if (deltaX != 0 || deltaY != 0) {
                     freeCamYaw += (float) (deltaX * scaledSensitivity);
                     freeCamPitch = Math.max(-90, Math.min(90, freeCamPitch - (float) (deltaY * scaledSensitivity)));
@@ -204,20 +212,42 @@ public class CameraController {
     /**
      * Disables the player's default keyboard movement when free-control modes are active.
      */
+    public void setPostMoveStates(AbstractMovementSettings m) {
+        if (m == null) {
+            currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+            currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+            MouseInterceptor.setIntercepting(false);
+            // Make sure keyboard input is re-enabled when no movement is active
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(false);
+            }
+        } else {
+            currentMouseMoveMode = m.getPostMoveMouse();
+            currentKeyMoveMode = m.getPostMoveKeys();
+
+            // Only disable keyboard input during MOVE8 mode
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(currentKeyMoveMode == POST_MOVE_KEYS.MOVE8);
+            }
+
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
+                MouseInterceptor.setIntercepting(true);
+            }
+        }
+    }
+
     private void updateKeyboardInput(MinecraftClient client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-            boolean shouldDisable = currentKeyMoveMode != POST_MOVE_KEYS.NONE;
+            // Only disable keyboard input during MOVE8 mode
+            boolean shouldDisable = currentKeyMoveMode == POST_MOVE_KEYS.MOVE8;
             ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
         }
     }
 
-    public void setPostMoveStates(AbstractMovementSettings m) {
-        if (m == null){
-            currentKeyMoveMode = null;
-            currentMouseMoveMode = null;
-        } else {
-            currentMouseMoveMode = m.getPostMoveMouse();
-            currentKeyMoveMode = m.getPostMoveKeys();
-        }
+    public void onComplete() {
+        currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+        currentKeyMoveMode = POST_MOVE_KEYS.NONE;
     }
 }

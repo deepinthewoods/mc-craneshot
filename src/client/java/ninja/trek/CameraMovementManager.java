@@ -190,16 +190,14 @@ public class CameraMovementManager {
         movement.start(client, camera);
     }
 
-    /**
-     * Finishes the current movement transition.
-     */
+
     public void finishTransition(MinecraftClient client, Camera camera) {
         if (activeMovement != null) {
             activeMovement.queueReset(client, camera);
+            // Do not clear activeMovement here; let update() continue to process the reset phase.
         }
-        activeMovementSlot = null;
-        activeMovement = null;
     }
+
 
     /**
      * Handles key state changes.
@@ -246,12 +244,14 @@ public class CameraMovementManager {
             return null;
         }
         MovementState state = activeMovement.calculateState(client, camera);
-//        if (activeMovement.hasCompletedOutPhase()){
+        if (activeMovement.hasCompletedOutPhase()){
             CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates((AbstractMovementSettings) activeMovement);
-//        } else CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
-
+        } else CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         if (state.isComplete()) {
-            finishTransition(client, camera);
+            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            activeMovement = null;
+            activeMovementSlot = null;  // Add this line to clear the slot
+            toggledStates.put(activeMovementSlot, false);  // Reset toggle state
             return null;
         }
         // Adjust the base target (e.g. using player's position and any raycasting)
