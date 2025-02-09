@@ -140,6 +140,10 @@ public class CameraMovementManager {
         return keyPressStartTimes.containsKey(slotIndex);
     }
 
+    // In CameraMovementManager.java, modify the startTransition method:
+
+    // In CameraMovementManager.java, modify the startTransition method:
+
     public void startTransition(MinecraftClient client, Camera camera, int slotIndex) {
         ICameraMovement movement = getMovementAt(slotIndex);
         if (movement == null) return;
@@ -150,7 +154,6 @@ public class CameraMovementManager {
         }
 
         isOut = false;
-
         if (activeMovementSlot != null && !activeMovementSlot.equals(slotIndex)) {
             toggledStates.put(activeMovementSlot, false);
             finishTransition(client, camera);
@@ -161,6 +164,9 @@ public class CameraMovementManager {
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
+
+        // Show the toast when starting a new movement
+        MovementToastRenderer.showToast(slotIndex);
     }
 
     public void finishTransition(MinecraftClient client, Camera camera) {
@@ -268,15 +274,14 @@ public class CameraMovementManager {
     public List<List<ICameraMovement>> getSlots() {
         return slots;
     }
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-
-
-
-
-
+    // Add this method to CameraMovementManager class
+    public int getCurrentTypeForSlot(int slotIndex) {
+        if (slotIndex >= 0 && slotIndex < currentTypes.size()) {
+            return currentTypes.get(slotIndex);
+        }
+        return 0;
+    }
 
     /**
      * Cycles the current movement type in the given slot.

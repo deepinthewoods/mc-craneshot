@@ -19,7 +19,7 @@ import java.util.*;
 
 public class MenuOverlayScreen extends Screen {
     private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>();
-    private static final int MARGIN = 20;
+    private static final int MARGIN = 0;
     private static final int TAB_HEIGHT = 30;
     private static final int CONTENT_START_Y = TAB_HEIGHT - 10;
     private static final double SCROLL_SPEED = 10;
@@ -45,8 +45,8 @@ public class MenuOverlayScreen extends Screen {
         this.guiHeight = this.height - (MARGIN * 2);
         this.centerX = MARGIN;
         this.centerY = MARGIN;
-        int visibleStartY = centerY + CONTENT_START_Y+30;
-        int visibleEndY = centerY + guiHeight;
+        int visibleStartY = centerY + CONTENT_START_Y+40;
+        int visibleEndY = centerY + guiHeight+20;
 
         createTabButtons();
 
@@ -85,47 +85,45 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void createControlsBar(int slotIndex, int visibleStartY, int BUTTON_HEIGHT) {
-        if (visibleStartY <= centerY + CONTENT_START_Y + BUTTON_HEIGHT) {
-            int addButtonWidth = 60;
-            int typeButtonWidth = 120;
-            int clipboardButtonWidth = 40;
-            int spacing = 10;
+        // Remove the visibility check since these controls should always be visible
+        int addButtonWidth = 60;
+        int typeButtonWidth = 120;
+        int clipboardButtonWidth = 40;
+        int spacing = 10;
 
-            // Add movement button
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addMovement(slotIndex))
-                    .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
-                    .build());
+        // Add movement button
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addMovement(slotIndex))
+                .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
+                .build());
 
-            // Paste button
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste"), button -> pasteMovement(slotIndex))
-                    .dimensions(centerX + addButtonWidth + spacing, centerY + CONTENT_START_Y, clipboardButtonWidth, BUTTON_HEIGHT)
-                    .build());
+        // Paste button
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste"), button -> pasteMovement(slotIndex))
+                .dimensions(centerX + addButtonWidth + spacing, centerY + CONTENT_START_Y, clipboardButtonWidth, BUTTON_HEIGHT)
+                .build());
 
-            // Movement type selector
-            List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
-            String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
-                            button -> cycleMovementType())
-                    .dimensions(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
-                            typeButtonWidth, BUTTON_HEIGHT)
-                    .build());
+        // Movement type selector
+        List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
+        String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
+                        button -> cycleMovementType())
+                .dimensions(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
+                        typeButtonWidth, BUTTON_HEIGHT)
+                .build());
 
-            // Wrap checkbox
-            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
-                    .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3, centerY + CONTENT_START_Y)
-                    .checked(SlotMenuSettings.getWrapState(slotIndex))
-                    .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
-                    .build());
+        // Wrap checkbox
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
+                .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3, centerY + CONTENT_START_Y)
+                .checked(SlotMenuSettings.getWrapState(slotIndex))
+                .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
+                .build());
 
-            // Toggle checkbox - add right after Wrap checkbox
-            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Toggle"), this.textRenderer)
-                    .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3 + 100, centerY + CONTENT_START_Y)
-                    .checked(SlotMenuSettings.getToggleState(slotIndex))
-                    .callback((checkbox, checked) -> SlotMenuSettings.setToggleState(slotIndex, checked))
-                    .build());
-        }
+        // Toggle checkbox - add right after Wrap checkbox
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Toggle"), this.textRenderer)
+                .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3 + 100, centerY + CONTENT_START_Y)
+                .checked(SlotMenuSettings.getToggleState(slotIndex))
+                .callback((checkbox, checked) -> SlotMenuSettings.setToggleState(slotIndex, checked))
+                .build());
     }
-
     private void createMovementControls(int slotIndex, int index, ICameraMovement movement, int rowY, int BUTTON_HEIGHT) {
         int controlX = centerX + 10;
 
@@ -187,7 +185,7 @@ public class MenuOverlayScreen extends Screen {
     private void addGeneralSettings() {
         int yOffset = CONTENT_START_Y + 20;
         int buttonWidth = 200;
-        int buttonX = centerX + (guiWidth - buttonWidth) / 2;
+        int buttonX = centerX +20;
         int spacing = 25;
 
         // Define the necessary dimensions

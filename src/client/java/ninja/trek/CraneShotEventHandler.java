@@ -23,20 +23,8 @@ public class CraneShotEventHandler {
             CraneshotClient.checkKeybinds();
         });
 
-        HudRenderCallback.EVENT.register((context, tickDelta) -> {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player != null && CraneshotClient.CAMERA_CONTROLLER.hasActiveMessage()) {
-                String message = CraneshotClient.CAMERA_CONTROLLER.getCurrentMessage();
-                int width = client.getWindow().getScaledWidth();
-                context.drawTextWithShadow(
-                        client.textRenderer,
-                        Text.literal(message),
-                        width / 2 - client.textRenderer.getWidth(message) / 2,
-                        60,
-                        0xFFFFFF
-                );
-            }
-        });
+        MovementToastRenderer.register();
+
 
         WorldRenderEvents.START.register(context -> {
             MinecraftClient client = MinecraftClient.getInstance();
