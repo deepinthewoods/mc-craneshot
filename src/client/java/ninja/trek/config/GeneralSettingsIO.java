@@ -31,11 +31,15 @@ public class GeneralSettingsIO {
 
                 // Save FreeCamSettings
                 JsonObject freeCamObj = new JsonObject();
-                freeCamObj.addProperty("moveSpeed", FreeCamSettings.getMoveSpeed());
-                freeCamObj.addProperty("acceleration", FreeCamSettings.getAcceleration());
-                freeCamObj.addProperty("deceleration", FreeCamSettings.getDeceleration());
-                freeCamObj.addProperty("movementMode", FreeCamSettings.getMovementMode().name());
+                FreeCamSettings freeCam = GeneralMenuSettings.getFreeCamSettings();
+                freeCamObj.addProperty("moveSpeed", freeCam.getMoveSpeed());
+                freeCamObj.addProperty("acceleration", freeCam.getAcceleration());
+                freeCamObj.addProperty("deceleration", freeCam.getDeceleration());
+                freeCamObj.addProperty("movementMode", freeCam.getMovementMode().name());
                 settingsObj.add("freeCam", freeCamObj);
+
+                // Save autoAdvance
+                settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
 
                 GSON.toJson(settingsObj, writer);
                 Craneshot.LOGGER.info("Saved general settings configuration");
@@ -80,20 +84,29 @@ public class GeneralSettingsIO {
             // Load FreeCamSettings
             if (settingsObj.has("freeCam")) {
                 JsonObject freeCamObj = settingsObj.getAsJsonObject("freeCam");
+                FreeCamSettings freeCam = GeneralMenuSettings.getFreeCamSettings();
+
                 if (freeCamObj.has("moveSpeed")) {
-                    FreeCamSettings.setMoveSpeed(freeCamObj.get("moveSpeed").getAsFloat());
+                    freeCam.setMoveSpeed(freeCamObj.get("moveSpeed").getAsFloat());
                 }
                 if (freeCamObj.has("acceleration")) {
-                    FreeCamSettings.setAcceleration(freeCamObj.get("acceleration").getAsFloat());
+                    freeCam.setAcceleration(freeCamObj.get("acceleration").getAsFloat());
                 }
                 if (freeCamObj.has("deceleration")) {
-                    FreeCamSettings.setDeceleration(freeCamObj.get("deceleration").getAsFloat());
+                    freeCam.setDeceleration(freeCamObj.get("deceleration").getAsFloat());
                 }
                 if (freeCamObj.has("movementMode")) {
-                    FreeCamSettings.setMovementMode(
-                            FreeCamSettings.MovementMode.valueOf(freeCamObj.get("movementMode").getAsString())
+                    freeCam.setMovementMode(
+                            FreeCamSettings.MovementMode.valueOf(
+                                    freeCamObj.get("movementMode").getAsString()
+                            )
                     );
                 }
+            }
+
+            // Load autoAdvance
+            if (settingsObj.has("autoAdvance")) {
+                GeneralMenuSettings.setAutoAdvance(settingsObj.get("autoAdvance").getAsBoolean());
             }
 
             Craneshot.LOGGER.info("Loaded general settings configuration");

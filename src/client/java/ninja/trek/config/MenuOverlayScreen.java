@@ -184,7 +184,6 @@ public class MenuOverlayScreen extends Screen {
                 .build());
     }
 
-    // Update the addGeneralSettings() method in MenuOverlayScreen.java
     private void addGeneralSettings() {
         int yOffset = CONTENT_START_Y + 20;
         int buttonWidth = 200;
@@ -197,8 +196,17 @@ public class MenuOverlayScreen extends Screen {
         int labelWidth = Math.min(200, totalWidth / 3);
         int controlWidth = Math.min(200, totalWidth / 2);
 
+        // Auto Advance Checkbox
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Auto Advance"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isAutoAdvance())
+                .callback((checkbox, checked) -> GeneralMenuSettings.setAutoAdvance(checked))
+                .build());
+
+        yOffset += spacing;
+
         // Move Speed Slider
-        float currentSpeed = FreeCamSettings.getMoveSpeed();
+        float currentSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
                 .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
@@ -216,15 +224,16 @@ public class MenuOverlayScreen extends Screen {
                     @Override
                     public void updateSetting(String key, Object value) {
                         if (key.equals("moveSpeed") && value instanceof Number) {
-                            FreeCamSettings.setMoveSpeed(((Number)value).floatValue());
+                            GeneralMenuSettings.getFreeCamSettings().setMoveSpeed(((Number)value).floatValue());
                         }
                     }
                 }
         ));
+
         yOffset += spacing;
 
         // Acceleration Slider
-        float currentAcceleration = FreeCamSettings.getAcceleration();
+        float currentAcceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
                 .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
@@ -242,15 +251,16 @@ public class MenuOverlayScreen extends Screen {
                     @Override
                     public void updateSetting(String key, Object value) {
                         if (key.equals("acceleration") && value instanceof Number) {
-                            FreeCamSettings.setAcceleration(((Number)value).floatValue());
+                            GeneralMenuSettings.getFreeCamSettings().setAcceleration(((Number)value).floatValue());
                         }
                     }
                 }
         ));
+
         yOffset += spacing;
 
         // Deceleration Slider
-        float currentDeceleration = FreeCamSettings.getDeceleration();
+        float currentDeceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
                 .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
@@ -268,21 +278,23 @@ public class MenuOverlayScreen extends Screen {
                     @Override
                     public void updateSetting(String key, Object value) {
                         if (key.equals("deceleration") && value instanceof Number) {
-                            FreeCamSettings.setDeceleration(((Number)value).floatValue());
+                            GeneralMenuSettings.getFreeCamSettings().setDeceleration(((Number)value).floatValue());
                         }
                     }
                 }
         ));
+
         yOffset += spacing;
 
         // Movement Mode Button
-        FreeCamSettings.MovementMode currentMode = FreeCamSettings.getMovementMode();
+        FreeCamSettings.MovementMode currentMode = GeneralMenuSettings.getFreeCamSettings().getMovementMode();
         this.addDrawableChild(ButtonWidget.builder(
                         Text.literal("Movement Mode: " + currentMode.name()),
                         button -> {
-                            FreeCamSettings.MovementMode[] modes = FreeCamSettings.MovementMode.values();
+                            FreeCamSettings.MovementMode[] modes =
+                                    FreeCamSettings.MovementMode.values();
                             int nextOrdinal = (currentMode.ordinal() + 1) % modes.length;
-                            FreeCamSettings.setMovementMode(modes[nextOrdinal]);
+                            GeneralMenuSettings.getFreeCamSettings().setMovementMode(modes[nextOrdinal]);
                             button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
                         })
                 .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)

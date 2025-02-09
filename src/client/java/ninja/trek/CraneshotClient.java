@@ -24,6 +24,7 @@ public class CraneshotClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+
 		toggleMenuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.craneshot.toggle_menu",
 				InputUtil.Type.KEYSYM,
