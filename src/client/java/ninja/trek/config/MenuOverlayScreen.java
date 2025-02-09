@@ -221,7 +221,58 @@ public class MenuOverlayScreen extends Screen {
                     }
                 }
         ));
+        yOffset += spacing;
 
+        // Acceleration Slider
+        float currentAcceleration = FreeCamSettings.getAcceleration();
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
+                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                centerY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Acceleration"),
+                0.01f,
+                0.5f,
+                currentAcceleration,
+                "acceleration",
+                new AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("acceleration") && value instanceof Number) {
+                            FreeCamSettings.setAcceleration(((Number)value).floatValue());
+                        }
+                    }
+                }
+        ));
+        yOffset += spacing;
+
+        // Deceleration Slider
+        float currentDeceleration = FreeCamSettings.getDeceleration();
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
+                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                centerY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Deceleration"),
+                0.01f,
+                0.5f,
+                currentDeceleration,
+                "deceleration",
+                new AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("deceleration") && value instanceof Number) {
+                            FreeCamSettings.setDeceleration(((Number)value).floatValue());
+                        }
+                    }
+                }
+        ));
         yOffset += spacing;
 
         // Movement Mode Button
@@ -238,7 +289,6 @@ public class MenuOverlayScreen extends Screen {
                 .build()
         );
     }
-
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
                                     int BUTTON_HEIGHT, int MOVEMENT_ROW_HEIGHT, int MOVEMENT_SPACING, int SETTING_HEIGHT) {
         List<ICameraMovement> movements = CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex);

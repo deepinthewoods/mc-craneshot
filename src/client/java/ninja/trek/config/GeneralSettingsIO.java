@@ -5,15 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
-import ninja.trek.config.FreeCamSettings;
-import ninja.trek.config.SlotMenuSettings;
+import java.io.*;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-
-// Update GeneralSettingsIO.java
 public class GeneralSettingsIO {
     private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_general.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -39,6 +32,8 @@ public class GeneralSettingsIO {
                 // Save FreeCamSettings
                 JsonObject freeCamObj = new JsonObject();
                 freeCamObj.addProperty("moveSpeed", FreeCamSettings.getMoveSpeed());
+                freeCamObj.addProperty("acceleration", FreeCamSettings.getAcceleration());
+                freeCamObj.addProperty("deceleration", FreeCamSettings.getDeceleration());
                 freeCamObj.addProperty("movementMode", FreeCamSettings.getMovementMode().name());
                 settingsObj.add("freeCam", freeCamObj);
 
@@ -87,6 +82,12 @@ public class GeneralSettingsIO {
                 JsonObject freeCamObj = settingsObj.getAsJsonObject("freeCam");
                 if (freeCamObj.has("moveSpeed")) {
                     FreeCamSettings.setMoveSpeed(freeCamObj.get("moveSpeed").getAsFloat());
+                }
+                if (freeCamObj.has("acceleration")) {
+                    FreeCamSettings.setAcceleration(freeCamObj.get("acceleration").getAsFloat());
+                }
+                if (freeCamObj.has("deceleration")) {
+                    FreeCamSettings.setDeceleration(freeCamObj.get("deceleration").getAsFloat());
                 }
                 if (freeCamObj.has("movementMode")) {
                     FreeCamSettings.setMovementMode(

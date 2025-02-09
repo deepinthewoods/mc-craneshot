@@ -10,6 +10,7 @@ import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_KEYS;
 import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_MOUSE;
 import ninja.trek.cameramovements.CameraTarget;
+import ninja.trek.config.FreeCamSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 
 public class CameraController {
@@ -49,18 +50,19 @@ public class CameraController {
         }
     }
 
+    private Vec3d currentVelocity = Vec3d.ZERO;
+
     private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
 
         // Base movement speed in blocks per tick
-        float baseSpeed = 0.5f;
-
+        float baseSpeed = FreeCamSettings.getMoveSpeed();
         // Sprint multiplier
         if (client.options.sprintKey.isPressed()) {
             baseSpeed *= 3.0f;
         }
 
-        Vec3d movement = Vec3d.ZERO;
+        Vec3d targetVelocity = Vec3d.ZERO;
 
         if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             // Free movement - Allow full 3D movement based on camera rotation
@@ -83,12 +85,12 @@ public class CameraController {
             Vec3d up = right.crossProduct(forward).normalize();
 
             // Accumulate movement based on pressed keys
-            if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
-            if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
-            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
-            if (client.options.rightKey.isPressed()) movement = movement.add(right);
-            if (client.options.jumpKey.isPressed()) movement = movement.add(up);
-            if (client.options.sneakKey.isPressed()) movement = movement.subtract(up);
+            if (client.options.forwardKey.isPressed()) targetVelocity = targetVelocity.add(forward);
+            if (client.options.backKey.isPressed()) targetVelocity = targetVelocity.subtract(forward);
+            if (client.options.leftKey.isPressed()) targetVelocity = targetVelocity.subtract(right);
+            if (client.options.rightKey.isPressed()) targetVelocity = targetVelocity.add(right);
+            if (client.options.jumpKey.isPressed()) targetVelocity = targetVelocity.add(up);
+            if (client.options.sneakKey.isPressed()) targetVelocity = targetVelocity.subtract(up);
 
         } else if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             // Flat movement - Only allow movement in horizontal plane
@@ -108,32 +110,48 @@ public class CameraController {
             ).normalize();
 
             // Accumulate movement based on pressed keys
-            if (client.options.forwardKey.isPressed()) movement = movement.add(forward);
-            if (client.options.backKey.isPressed()) movement = movement.subtract(forward);
-            if (client.options.leftKey.isPressed()) movement = movement.subtract(right);
-            if (client.options.rightKey.isPressed()) movement = movement.add(right);
+            if (client.options.forwardKey.isPressed()) targetVelocity = targetVelocity.add(forward);
+            if (client.options.backKey.isPressed()) targetVelocity = targetVelocity.subtract(forward);
+            if (client.options.leftKey.isPressed()) targetVelocity = targetVelocity.subtract(right);
+            if (client.options.rightKey.isPressed()) targetVelocity = targetVelocity.add(right);
 
             // Vertical movement is world-aligned in flat mode
-            if (client.options.jumpKey.isPressed()) movement = movement.add(0, 1, 0);
-            if (client.options.sneakKey.isPressed()) movement = movement.subtract(0, 1, 0);
+            if (client.options.jumpKey.isPressed()) targetVelocity = targetVelocity.add(0, 1, 0);
+            if (client.options.sneakKey.isPressed()) targetVelocity = targetVelocity.subtract(0, 1, 0);
         }
 
-        // Apply movement if any keys were pressed
-        //if (movement.lengthSquared() > 0.0001) {
-            // Normalize and apply speed
-            movement = movement.normalize().multiply(baseSpeed);
+        // Normalize and apply speed to target velocity if there's any movement
+        if (targetVelocity.lengthSquared() > 0.0001) {
+            targetVelocity = targetVelocity.normalize().multiply(baseSpeed);
+        }
 
-            // Update position and camera
-            freeCamPosition = freeCamPosition.add(movement);
-            ((CameraAccessor) camera).invokesetPos(freeCamPosition);
+        // Apply acceleration or deceleration
+        float acceleration = FreeCamSettings.getAcceleration();
+        float deceleration = FreeCamSettings.getDeceleration();
 
-            // Ensure player input is disabled
-            if (client.player.input instanceof IKeyboardInputMixin) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+        if (targetVelocity.lengthSquared() > 0.0001) {
+            // Accelerating
+            currentVelocity = currentVelocity.add(
+                    targetVelocity.subtract(currentVelocity).multiply(acceleration)
+            );
+        } else {
+            // Decelerating
+            currentVelocity = currentVelocity.multiply(1.0 - deceleration);
+            // Zero out very small velocities to prevent perpetual drift
+            if (currentVelocity.lengthSquared() < 0.0001) {
+                currentVelocity = Vec3d.ZERO;
             }
-        //}
-    }
+        }
 
+        // Apply movement
+        freeCamPosition = freeCamPosition.add(currentVelocity);
+        ((CameraAccessor) camera).invokesetPos(freeCamPosition);
+
+//        // Ensure player input is disabled
+//        if (client.player.input instanceof IKeyboardInputMixin) {
+//            ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+//        }
+    }
     public void updateCamera(MinecraftClient client, Camera camera, float delta) {
         updateControlStick(client);
 
