@@ -67,7 +67,7 @@ public abstract class AbstractMovementSettings {
     )
     protected END_TARGET endTarget = END_TARGET.HEAD_BACK;
 
-    public enum SCROLL_WHEEL {NONE, DISTANCE, ZOOM};
+    public enum SCROLL_WHEEL {NONE, DISTANCE, FOV};
 
     @MovementSetting(
             label = "Scroll",
@@ -75,6 +75,8 @@ public abstract class AbstractMovementSettings {
             description = "What the scroll wheel does while movement is active"
     )
     public SCROLL_WHEEL mouseWheel = SCROLL_WHEEL.NONE;
+
+
 
     protected boolean headLockedToCamera = true;
     public boolean isHeadLockedToCamera() {

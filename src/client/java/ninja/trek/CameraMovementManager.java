@@ -308,7 +308,16 @@ public class CameraMovementManager {
         currentTypes.set(slotIndex, newType);
     }
 
+    public boolean hasActiveMovement() {
+        return activeMovement != null;
+    }
 
+    public AbstractMovementSettings.SCROLL_WHEEL getActiveMouseWheelMode() {
+        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
+            return ((AbstractMovementSettings) activeMovement).mouseWheel;
+        }
+        return AbstractMovementSettings.SCROLL_WHEEL.NONE;
+    }
 
 
 

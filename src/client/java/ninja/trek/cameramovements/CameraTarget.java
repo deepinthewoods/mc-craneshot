@@ -23,6 +23,7 @@ public class CameraTarget {
     }
 
     public static CameraTarget fromCamera(Camera camera) {
+
         return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch());
     }
 

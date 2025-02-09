@@ -8,7 +8,8 @@
 		"CameraMixin",
 		"MouseAccessor",
 		"KeyboardInputMixin",
-		"WorldRendererMixin"
+		"WorldRendererMixin",
+		"GameRendererMixin"
 
 	],
 	"injectors": {

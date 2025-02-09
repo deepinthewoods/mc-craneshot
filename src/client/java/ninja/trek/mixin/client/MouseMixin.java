@@ -17,7 +17,6 @@ public class MouseMixin implements IMouseMixin {
     @Shadow private double cursorDeltaX;
     @Shadow private double cursorDeltaY;
     @Shadow private double eventDeltaVerticalWheel;
-
     private double capturedDeltaX;
     private double capturedDeltaY;
 
@@ -25,22 +24,25 @@ public class MouseMixin implements IMouseMixin {
     private void onMouseScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
 
-        // Check if any camera slot key is pressed or select movement key is pressed
-        boolean shouldIntercept = false;
-        for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
-            if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
-                shouldIntercept = true;
-                break;
+        // Always intercept if there's an active movement
+        boolean shouldIntercept = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+
+        // Also intercept if any camera slot key or select movement key is pressed
+        if (!shouldIntercept) {
+            for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
+                if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
+                    shouldIntercept = true;
+                    break;
+                }
             }
-        }
-        if (CraneshotClient.selectMovementType.isPressed()) {
-            shouldIntercept = true;
+            if (CraneshotClient.selectMovementType.isPressed()) {
+                shouldIntercept = true;
+            }
         }
 
         // If we should intercept this scroll, store the value BEFORE cancelling
         if (shouldIntercept) {
             this.eventDeltaVerticalWheel = vertical * 15.0; // Match Minecraft's scroll multiplier
-//            Craneshot.LOGGER.info("Intercepted scroll: {}", vertical);
             ci.cancel();
         }
     }

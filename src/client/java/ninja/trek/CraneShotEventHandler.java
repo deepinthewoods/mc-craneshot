@@ -4,6 +4,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import ninja.trek.cameramovements.AbstractMovementSettings;
+import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.MouseAccessor;
 
@@ -58,10 +60,23 @@ public class CraneShotEventHandler {
 
         boolean scrollUp = scrollDelta < 0;
 
-        // Handle scroll with slot key pressed
+        // First check if we have an active movement with DISTANCE scroll mode
+        AbstractMovementSettings.SCROLL_WHEEL activeScrollMode =
+                CraneshotClient.MOVEMENT_MANAGER.getActiveMouseWheelMode();
+
+        if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
+            ICameraMovement activeMovement = CraneshotClient.MOVEMENT_MANAGER.getActiveMovement();
+            if (activeMovement != null) {
+                activeMovement.adjustDistance(!scrollUp); // Invert scroll direction for intuitive feel
+                lastScrollTime = currentTime;
+                mouseAccessor.setEventDeltaVerticalWheel(0);
+                return;
+            }
+        }
+
+        // If no active distance control, handle normal slot scrolling
         for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
             if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
-//                Craneshot.LOGGER.info("scroll");
                 CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(i, scrollUp);
                 lastScrollTime = currentTime;
                 mouseAccessor.setEventDeltaVerticalWheel(0);
@@ -71,7 +86,6 @@ public class CraneShotEventHandler {
 
         // Handle scroll with select movement key pressed
         if (CraneshotClient.selectMovementType.isPressed() && lastActiveSlot != null) {
-//            Craneshot.LOGGER.info("scroll");
             CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(lastActiveSlot, scrollUp);
             lastScrollTime = currentTime;
             mouseAccessor.setEventDeltaVerticalWheel(0);
