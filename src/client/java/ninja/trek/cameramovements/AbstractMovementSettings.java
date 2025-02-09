@@ -67,11 +67,15 @@ public abstract class AbstractMovementSettings {
     )
     protected END_TARGET endTarget = END_TARGET.HEAD_BACK;
 
-//    @MovementSetting(
-//            label = "Head Locked To Camera",
-//            type = MovementSettingType.BOOLEAN,
-//            description = "If true, player head will follow camera orientation"
-//    )
+    public enum SCROLL_WHEEL {NONE, DISTANCE, ZOOM};
+
+    @MovementSetting(
+            label = "Scroll",
+            type = MovementSettingType.ENUM,
+            description = "What the scroll wheel does while movement is active"
+    )
+    public SCROLL_WHEEL mouseWheel = SCROLL_WHEEL.NONE;
+
     protected boolean headLockedToCamera = true;
     public boolean isHeadLockedToCamera() {
         return headLockedToCamera;

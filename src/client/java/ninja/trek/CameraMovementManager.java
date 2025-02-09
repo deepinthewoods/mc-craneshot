@@ -105,15 +105,18 @@ public class CameraMovementManager {
     }
 
     public void handleMouseScroll(int slotIndex, boolean scrollUp) {
-        if (!isSlotKeyPressed(slotIndex)) return;
+
+        if (slotIndex < 0 || slotIndex >= slots.size()) return;
+        Craneshot.LOGGER.info("scroll up:{}", scrollUp);
 
         List<ICameraMovement> slotMovements = slots.get(slotIndex);
         if (slotMovements.isEmpty()) return;
 
         boolean wrap = SlotMenuSettings.getWrapState(slotIndex);
-        int currentType = scrollSelectedTypes.get(slotIndex);
-        int newType;
+        int currentType = currentTypes.get(slotIndex);
 
+        // Calculate new movement type index
+        int newType;
         if (scrollUp) {
             newType = wrap ?
                     (currentType + 1) % slotMovements.size() :
@@ -124,15 +127,17 @@ public class CameraMovementManager {
                     Math.max(currentType - 1, 0);
         }
 
+        // Update current type immediately
+        currentTypes.set(slotIndex, newType);
         scrollSelectedTypes.put(slotIndex, newType);
         hasScrolledDuringPress.put(slotIndex, true);
-
-        // Update the movement name display
+        // Show movement name and toast
         ICameraMovement selectedMovement = slotMovements.get(newType);
         if (selectedMovement != null) {
             CraneshotClient.CAMERA_CONTROLLER.showMessage(
                     "Camera " + (slotIndex + 1) + ": " + selectedMovement.getName()
             );
+            MovementToastRenderer.showToast(slotIndex);
         }
     }
 
@@ -303,24 +308,7 @@ public class CameraMovementManager {
         currentTypes.set(slotIndex, newType);
     }
 
-    /**
-     * Convenience method: cycles the movement type of the currently active slot.
-     */
-    public void cycleMovementType(boolean forward) {
-        if (activeMovementSlot != null) {
-            cycleMovementType(forward, activeMovementSlot, false);
-        }
-    }
 
-    /**
-     * Adjusts the distance (or another parameter) of the movement in the given slot.
-     */
-    public void adjustDistance(int slotIndex, boolean increase) {
-        ICameraMovement movement = getMovementAt(slotIndex);
-        if (movement != null) {
-            movement.adjustDistance(increase);
-        }
-    }
 
 
 
