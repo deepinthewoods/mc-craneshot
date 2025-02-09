@@ -22,7 +22,7 @@ public abstract class AbstractMovementSettings {
     public double alpha;
 
     public enum START_TARGET {PLAYER};
-    public enum END_TARGET {HEAD_BACK, HEAD_FRONT, VELOCITY_FRONT, VELOCITY_BACK}
+    public enum END_TARGET {HEAD_BACK, HEAD_FRONT, VELOCITY_BACK, VELOCITY_FRONT, FIXED_BACK, FIXED_FRONT}
     public enum POST_MOVE_MOUSE {
         NONE,       // Default behavior
         ROTATE_CAMERA // Allow free mouse control after movement
@@ -71,17 +71,6 @@ public abstract class AbstractMovementSettings {
         return headLockedToCamera;
     }
 
-
-
-    protected CameraTarget getEndTarget(PlayerEntity player, double targetDistance) {
-        switch (endTarget){
-            default:
-            case HEAD_BACK: return CameraTarget.fromDistanceBack(player, targetDistance);
-            case HEAD_FRONT: return CameraTarget.fromDistanceFront(player, targetDistance);
-        }
-
-
-    }
 
     public RaycastType getRaycastType() {
         return raycastType != null ? raycastType : RaycastType.NONE;
