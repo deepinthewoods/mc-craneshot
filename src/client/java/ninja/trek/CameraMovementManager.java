@@ -191,7 +191,7 @@ public class CameraMovementManager {
         activeMovement = movement;
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         movement.start(client, camera);
-
+        CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
     }
 
 

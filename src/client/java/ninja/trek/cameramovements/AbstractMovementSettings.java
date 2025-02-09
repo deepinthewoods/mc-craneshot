@@ -21,6 +21,10 @@ public abstract class AbstractMovementSettings {
     private RaycastType raycastType = RaycastType.NEAR;
     public double alpha;
 
+    public END_TARGET getEndTarget() {
+        return endTarget;
+    }
+
     public enum START_TARGET {PLAYER};
     public enum END_TARGET {HEAD_BACK, HEAD_FRONT, VELOCITY_BACK, VELOCITY_FRONT, FIXED_BACK, FIXED_FRONT}
     public enum POST_MOVE_MOUSE {

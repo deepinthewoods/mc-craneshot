@@ -27,30 +27,152 @@ public class CameraController {
     public static final double FIRST_PERSON_THRESHOLD_MIN = 2.0;
     public static final double FIRST_PERSON_THRESHOLD_MAX = 5.0;
 
+    public static AbstractMovementSettings.END_TARGET currentEndTarget = AbstractMovementSettings.END_TARGET.HEAD_BACK;
+    private Vec3d lastPlayerPos = Vec3d.ZERO;
+    private Vec3d cumulativeMovement = Vec3d.ZERO;
+    private float targetYaw = 0f;
+    private static final double FULL_ROTATE_DISTANCE = 2.0; // Blocks to move for full rotation
+
+    private Vec3d currentVelocity = Vec3d.ZERO;
+
     private void updateControlStick(MinecraftClient client) {
-        // Only update controlStick if we're not in a camera movement mode
         if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
                 currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
 
             if (client.player == null) return;
             Camera camera = client.gameRenderer.getCamera();
             if (camera != null) {
+                Vec3d eyePos = client.player.getEyePos();
+                float yaw = client.player.getYaw();
+                float pitch = client.player.getPitch();
+
+                // Update movement tracking for VELOCITY targets
+                if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
+                        currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_FRONT) {
+                    updateMovementTracking(client.player.getPos());
+                }
+
+                // Calculate final angles based on target type
+                float finalYaw = calculateTargetYaw(yaw);
+                float finalPitch = calculateTargetPitch(pitch);
+
                 if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA)
-                    controlStick.set(
-                            client.player.getEyePos(),
-                            controlStick.getYaw(),
-                            controlStick.getPitch()
-                    );
-                else controlStick.set(
-                        client.player.getEyePos(),
-                        client.player.getYaw(),
-                        client.player.getPitch()
-                );
+                    controlStick.set(eyePos, controlStick.getYaw(), controlStick.getPitch());
+                else
+                    controlStick.set(eyePos, finalYaw, finalPitch);
             }
         }
     }
 
-    private Vec3d currentVelocity = Vec3d.ZERO;
+    private float calculateTargetYaw(float playerYaw) {
+        switch (currentEndTarget) {
+            case HEAD_BACK:
+                return playerYaw;
+            case HEAD_FRONT:
+                return (playerYaw + 180);
+            case VELOCITY_BACK:
+                return 360-targetYaw;
+            case VELOCITY_FRONT:
+                return (360-targetYaw + 180)%360;
+            case FIXED_BACK:
+                return playerYaw;
+            case FIXED_FRONT:
+                return (playerYaw + 180);
+            default:
+                return playerYaw;
+        }
+    }
+
+    private float calculateTargetPitch(float playerPitch) {
+        switch (currentEndTarget) {
+            case HEAD_FRONT:
+                return -playerPitch;
+            case HEAD_BACK:
+                return playerPitch;
+            case VELOCITY_FRONT:
+            case FIXED_FRONT:
+                return 45f;  // Looking down at player
+            case VELOCITY_BACK:
+            case FIXED_BACK:
+                return 45f; // Looking up from behind
+            default:
+                return playerPitch;
+        }
+    }
+
+    private void updateMovementTracking(Vec3d currentPos) {
+        if (lastPlayerPos.equals(Vec3d.ZERO)) {
+            lastPlayerPos = currentPos;
+            return;
+        }
+
+        // Calculate movement in XZ plane
+        Vec3d movement = new Vec3d(
+                currentPos.x - lastPlayerPos.x,
+                0,
+                currentPos.z - lastPlayerPos.z
+        );
+
+        if (movement.lengthSquared() > 0.001) { // Only update if there's significant movement
+            cumulativeMovement = cumulativeMovement.add(movement);
+
+            // Calculate movement direction (Minecraft coordinates)
+            double movementYaw = Math.toDegrees(Math.atan2(movement.x, movement.z));
+            while (movementYaw < 0) movementYaw += 360;
+
+            // Linear interpolation based on cumulative movement distance
+            double moveDistance = cumulativeMovement.length();
+            double progress = Math.min(moveDistance / FULL_ROTATE_DISTANCE, 1.0);
+
+            // Update target yaw
+            targetYaw = (float)movementYaw;
+
+            // Reset cumulative movement if we've reached full rotation
+            if (moveDistance >= FULL_ROTATE_DISTANCE) {
+                cumulativeMovement = Vec3d.ZERO;
+            }
+        }
+
+        lastPlayerPos = currentPos;
+    }
+
+    public void setPreMoveStates(AbstractMovementSettings m){
+        currentEndTarget = m.getEndTarget();
+//        currentEndTarget = AbstractMovementSettings.END_TARGET.HEAD_BACK;
+//        Craneshot.LOGGER.info("end target {}", currentEndTarget);
+    }
+
+    public void setPostMoveStates(AbstractMovementSettings m) {
+        if (m == null) {
+            currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+            currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+            MouseInterceptor.setIntercepting(false);
+            // Reset tracking variables
+            lastPlayerPos = Vec3d.ZERO;
+            cumulativeMovement = Vec3d.ZERO;
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(false);
+            }
+        } else {
+            currentMouseMoveMode = m.getPostMoveMouse();
+            currentKeyMoveMode = m.getPostMoveKeys();
+
+
+
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                boolean shouldDisable = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                        currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+                ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
+            }
+
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
+                MouseInterceptor.setIntercepting(true);
+            }
+        }
+    }
+
 
     private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
@@ -262,37 +384,7 @@ public class CameraController {
         updateKeyboardInput(client);
     }
 
-    /**
-     * Disables the player's default keyboard movement when free-control modes are active.
-     */
-    public void setPostMoveStates(AbstractMovementSettings m) {
-        if (m == null) {
-            currentKeyMoveMode = POST_MOVE_KEYS.NONE;
-            currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
-            MouseInterceptor.setIntercepting(false);
-            // Re-enable keyboard input
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(false);
-            }
-        } else {
-            currentMouseMoveMode = m.getPostMoveMouse();
-            currentKeyMoveMode = m.getPostMoveKeys();
 
-            // Disable keyboard input for camera movement modes
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-                boolean shouldDisable = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                        currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
-                ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
-            }
-
-            // Enable mouse interception for camera rotation
-            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
-                MouseInterceptor.setIntercepting(true);
-            }
-        }
-    }
 
     private void updateKeyboardInput(MinecraftClient client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
