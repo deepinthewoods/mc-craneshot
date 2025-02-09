@@ -48,7 +48,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Calculate end target based on controlStick
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch()+pitchOffset);
 
         resetting = false;
         weight = 1.0f;
@@ -56,7 +56,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
-        double pitch = Math.toRadians(stick.getPitch());
+        double pitch = Math.toRadians(stick.getPitch() + pitchOffset);
 
         // Calculate offset based on target distance
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
@@ -74,12 +74,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch()
+                CameraController.controlStick.getPitch() + pitchOffset
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch() + pitchOffset);
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;

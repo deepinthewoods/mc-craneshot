@@ -56,9 +56,9 @@ public class CameraController {
                 float finalYaw = calculateTargetYaw(yaw);
                 float finalPitch = calculateTargetPitch(pitch);
 
-                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA)
-                    controlStick.set(eyePos, controlStick.getYaw(), controlStick.getPitch());
-                else
+//                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA)
+//                    controlStick.set(eyePos, controlStick.getYaw(), controlStick.getPitch());
+//                else
                     controlStick.set(eyePos, finalYaw, finalPitch);
             }
         }

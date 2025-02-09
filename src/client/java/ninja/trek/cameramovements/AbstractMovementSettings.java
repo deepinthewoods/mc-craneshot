@@ -12,6 +12,8 @@ import java.util.stream.Stream;
 
 public abstract class AbstractMovementSettings {
     private String customName = null;
+    @MovementSetting(label = "Pitch offset", min = -180, max = 180)
+    protected float pitchOffset = 0.0f;
 
     @MovementSetting(
             label = "Raycast Type",
