@@ -165,22 +165,30 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void adjustDistance(boolean increase) {
+    public void adjustDistance(boolean increase, MinecraftClient client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
             double multiplier = increase ? 1.1 : 0.9;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
         } else if (mouseWheel == SCROLL_WHEEL.FOV) {
-            adjustFov(increase);
+            adjustFov(increase, client);
         }
     }
     @Override
-    public void adjustFov(boolean increase) {
+    public void adjustFov(boolean increase, MinecraftClient client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
         // Change multiplier by 10% each scroll
         float change = increase ? 0.2f : -0.2f;
         float newMultiplier = fovMultiplier + change;
-        // Clamp between 0.1 and 3.0
-        fovMultiplier = Math.max(0.1f, Math.min(3.0f, newMultiplier));
+        float basefov = client.options.getFov().getValue();
+
+        // Calculate the new FOV
+        float newFov = basefov * newMultiplier;
+
+        // Clamp the FOV between 1 and 180
+        newFov = Math.max(1, Math.min(newFov, 140));
+
+        // Adjust the fovMultiplier to ensure the FOV stays within the desired range
+        fovMultiplier = newFov / basefov;
 
         // Update current target's FOV immediately
         current.setFovMultiplier(fovMultiplier);

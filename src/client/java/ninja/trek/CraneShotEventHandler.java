@@ -67,13 +67,13 @@ public class CraneShotEventHandler {
 
         if (activeMovement != null) {
             if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
-                activeMovement.adjustDistance(!scrollUp);
+                activeMovement.adjustDistance(!scrollUp, client);
                 lastScrollTime = currentTime;
                 mouseAccessor.setEventDeltaVerticalWheel(0);
                 return;
             } else if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
                 if (activeMovement instanceof AbstractMovementSettings) {
-                    ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp);
+                    ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp, client);
                     lastScrollTime = currentTime;
                     mouseAccessor.setEventDeltaVerticalWheel(0);
                     return;

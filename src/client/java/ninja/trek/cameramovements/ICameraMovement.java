@@ -7,7 +7,7 @@ public interface ICameraMovement {
     void start(MinecraftClient client, Camera camera);
     MovementState calculateState(MinecraftClient client, Camera camera);
     void queueReset(MinecraftClient client, Camera camera);
-    void adjustDistance(boolean increase);
+    void adjustDistance(boolean increase, MinecraftClient client);
     String getName();
     float getWeight(); // For blending calculations
     boolean isComplete(); // To determine if movement should be removed

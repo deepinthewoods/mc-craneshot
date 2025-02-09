@@ -24,7 +24,12 @@ public class MouseMixin implements IMouseMixin {
     private void onMouseScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
 
-        // Always intercept if there's an active movement
+        // Always allow scrolling if any screen is open (game menu, mod menu, etc)
+        if (client.currentScreen != null) {
+            return;
+        }
+
+        // Otherwise, check if we should intercept
         boolean shouldIntercept = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
 
         // Also intercept if any camera slot key or select movement key is pressed

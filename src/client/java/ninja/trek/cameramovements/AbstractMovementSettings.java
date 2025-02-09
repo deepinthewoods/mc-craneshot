@@ -92,18 +92,10 @@ public abstract class AbstractMovementSettings {
     @MovementSetting(label = "FOV Multiplier", min = 0.1, max = 3.0)
     protected float fovMultiplier = 1.0f;
 
-    public void adjustFov(boolean increase) {
-        if (mouseWheel != SCROLL_WHEEL.FOV) return;
+    public void adjustFov(boolean increase, MinecraftClient client){};
 
-        // Change multiplier by 10% each scroll
-        float change = increase ? 0.1f : -0.1f;
-        float newMultiplier = fovMultiplier + change;
 
-        // Clamp between 0.1 and 3.0
-        fovMultiplier = Math.max(0.1f, Math.min(3.0f, newMultiplier));
-        //Craneshot.LOGGER.info("fov {}", fovMultiplier);
 
-    }
 
 
 

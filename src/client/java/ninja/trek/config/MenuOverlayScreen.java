@@ -570,8 +570,18 @@ public class MenuOverlayScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == CraneshotClient.toggleMenuKey.getDefaultKey().getCode()) toggleMenu();
-        return true;
+        if (keyCode == CraneshotClient.toggleMenuKey.getDefaultKey().getCode()) {
+            toggleMenu();
+            return true;
+        }
+
+        // Close on ESC (256) or inventory key
+        if (keyCode == 256 || (this.client != null && keyCode == this.client.options.inventoryKey.getDefaultKey().getCode())) {
+            close();
+            return true;
+        }
+
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     private void scroll(int amount) {
