@@ -1,4 +1,5 @@
 package ninja.trek.cameramovements;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
 import ninja.trek.Craneshot;
 import ninja.trek.config.MovementSetting;
@@ -75,6 +76,34 @@ public abstract class AbstractMovementSettings {
             description = "What the scroll wheel does while movement is active"
     )
     public SCROLL_WHEEL mouseWheel = SCROLL_WHEEL.NONE;
+
+    @MovementSetting(label = "FOV Easing", min = 0.01, max = 1.0)
+    protected double fovEasing = 0.1;
+
+    @MovementSetting(label = "FOV Speed Limit", min = 0.1, max = 100.0)
+    protected double fovSpeedLimit = 10.0;
+
+
+    protected double minFov = 1.0;
+
+
+    protected double maxFov = 180.0;
+
+    @MovementSetting(label = "FOV Multiplier", min = 0.1, max = 3.0)
+    protected float fovMultiplier = 1.0f;
+
+    public void adjustFov(boolean increase) {
+        if (mouseWheel != SCROLL_WHEEL.FOV) return;
+
+        // Change multiplier by 10% each scroll
+        float change = increase ? 0.1f : -0.1f;
+        float newMultiplier = fovMultiplier + change;
+
+        // Clamp between 0.1 and 3.0
+        fovMultiplier = Math.max(0.1f, Math.min(3.0f, newMultiplier));
+        //Craneshot.LOGGER.info("fov {}", fovMultiplier);
+
+    }
 
 
 

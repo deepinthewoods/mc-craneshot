@@ -13,6 +13,7 @@ import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
+import ninja.trek.mixin.client.FovAccessor;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -139,8 +140,11 @@ public class CameraController {
 
     public void setPreMoveStates(AbstractMovementSettings m){
         currentEndTarget = m.getEndTarget();
-//        currentEndTarget = AbstractMovementSettings.END_TARGET.HEAD_BACK;
-//        Craneshot.LOGGER.info("end target {}", currentEndTarget);
+        // Reset any FOV modifications when starting a new movement
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.gameRenderer instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
+        }
     }
 
     public void setPostMoveStates(AbstractMovementSettings m) {
@@ -228,6 +232,12 @@ public class CameraController {
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
 
         if (baseTarget != null) {
+            // Update FOV in game renderer
+            if (client.gameRenderer instanceof FovAccessor) {
+                float fovMultiplier = baseTarget.getFovMultiplier();
+                ((FovAccessor) client.gameRenderer).setFovModifier(fovMultiplier);
+                Craneshot.LOGGER.info("set fov {}", fovMultiplier);
+            }
             // Only update freeCamPosition from movement if we're not in free movement mode
             if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
                     currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {

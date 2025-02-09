@@ -9,7 +9,8 @@
 		"MouseAccessor",
 		"KeyboardInputMixin",
 		"WorldRendererMixin",
-		"GameRendererMixin"
+		"GameRendererMixin",
+		"FovAccessor"
 
 	],
 	"injectors": {

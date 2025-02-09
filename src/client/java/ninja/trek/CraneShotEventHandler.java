@@ -60,21 +60,28 @@ public class CraneShotEventHandler {
 
         boolean scrollUp = scrollDelta < 0;
 
-        // First check if we have an active movement with DISTANCE scroll mode
+        // Check for active movement with scroll modes
         AbstractMovementSettings.SCROLL_WHEEL activeScrollMode =
                 CraneshotClient.MOVEMENT_MANAGER.getActiveMouseWheelMode();
+        ICameraMovement activeMovement = CraneshotClient.MOVEMENT_MANAGER.getActiveMovement();
 
-        if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
-            ICameraMovement activeMovement = CraneshotClient.MOVEMENT_MANAGER.getActiveMovement();
-            if (activeMovement != null) {
-                activeMovement.adjustDistance(!scrollUp); // Invert scroll direction for intuitive feel
+        if (activeMovement != null) {
+            if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
+                activeMovement.adjustDistance(!scrollUp);
                 lastScrollTime = currentTime;
                 mouseAccessor.setEventDeltaVerticalWheel(0);
                 return;
+            } else if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
+                if (activeMovement instanceof AbstractMovementSettings) {
+                    ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp);
+                    lastScrollTime = currentTime;
+                    mouseAccessor.setEventDeltaVerticalWheel(0);
+                    return;
+                }
             }
         }
 
-        // If no active distance control, handle normal slot scrolling
+        // Handle normal slot scrolling if no active scroll modes
         for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
             if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
                 CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(i, scrollUp);

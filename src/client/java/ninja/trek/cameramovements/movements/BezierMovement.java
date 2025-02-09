@@ -6,6 +6,7 @@ import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
+import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
         name = "Bezier",
@@ -46,39 +47,37 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private CameraTarget end = new CameraTarget();
     private CameraTarget current = new CameraTarget();
     private Vec3d controlPoint;
-
     private double progress;
     private boolean resetting = false;
     private boolean linearMode = false;
     private boolean distanceChanged = false;
     private float weight = 1.0f;
+    private float baseFov;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
-        // Initialize with camera's current state
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
 
-        // Calculate end target based on controlStick
+        // Store base FOV
+        baseFov = client.options.getFov().getValue().floatValue();
+
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
+                CameraController.controlStick.getPitch());
 
-        // Generate control point for the bezier curve
         controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
-
         progress = 0.0;
         resetting = false;
         linearMode = false;
         distanceChanged = false;
         weight = 1.0f;
-
         alpha = 1;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
         double pitch = Math.toRadians(stick.getPitch());
-        // Calculate offset based on target distance
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
         double yOffset = Math.sin(pitch) * targetDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
@@ -93,14 +92,15 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch()
+                CameraController.controlStick.getPitch(),
+                start.getFovMultiplier()
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(), CameraController.controlStick.getPitch());
+        end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
+                CameraController.controlStick.getPitch(), end.getFovMultiplier());
 
-        // Regenerate control point if distance changed
         if (distanceChanged) {
             controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
             distanceChanged = false;
@@ -108,8 +108,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
-
         Vec3d desiredPos;
+
         if (!linearMode) {
             // Bezier movement mode
             double potentialDelta = (1.0 - progress) * positionEasing;
@@ -118,7 +118,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
             double progressDelta = Math.min(potentialDelta, allowedDelta);
             progress = Math.min(1.0, progress + progressDelta);
-
             desiredPos = quadraticBezier(
                     a.getPosition(),
                     controlPoint,
@@ -142,20 +141,26 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             desiredPos = current.getPosition().add(move);
         }
 
-        // Calculate target rotation
+        // Calculate target rotation and FOV
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
+        float targetFovDelta = b.getFovMultiplier();
 
         // Apply rotation easing
         float yawError = targetYaw - current.getYaw();
         float pitchError = targetPitch - current.getPitch();
+        float fovError = targetFovDelta - current.getFovMultiplier();
 
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
 
         float desiredYawSpeed = (float)(yawError * rotationEasing);
         float desiredPitchSpeed = (float)(pitchError * rotationEasing);
+        float desiredFovSpeed = (float)(fovError * fovEasing);
+
+        // Apply speed limits
         float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
+        float maxFovChange = (float)(fovSpeedLimit * (1.0 / 20.0));
 
         if (Math.abs(desiredYawSpeed) > maxRotation) {
             desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
@@ -163,12 +168,21 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (Math.abs(desiredPitchSpeed) > maxRotation) {
             desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
         }
+        if (Math.abs(desiredFovSpeed) > maxFovChange) {
+            desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
+        }
 
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
+        float newFovDelta = current.getFovMultiplier() + desiredFovSpeed;
 
         // Update current target
-        current = new CameraTarget(desiredPos, newYaw, newPitch);
+        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
+
+        // Update FOV in game renderer
+        if (client.gameRenderer instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+        }
 
         // Update alpha for external systems
         double remaining = current.getPosition().distanceTo(b.getPosition());
@@ -195,30 +209,23 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         Vec3d mid = start.add(end).multiply(0.5);
         Vec3d diff = end.subtract(start);
 
-        // If points are too close, force upward control point
         if (diff.lengthSquared() < 1e-6) {
             return mid.add(new Vec3d(0, controlPointDisplacement, 0));
         }
 
-        // Calculate normalized direction vector
         Vec3d direction = diff.normalize();
         Vec3d worldUp = new Vec3d(0, 1, 0);
-
-        // Calculate up vector that's perpendicular to movement direction
         Vec3d right = direction.crossProduct(worldUp).normalize();
         Vec3d perpUp = direction.crossProduct(right).normalize();
 
-        // Ensure upward direction
         if (perpUp.y < 0) {
             perpUp = perpUp.multiply(-1);
         }
 
-        // Apply displacement
         if (Math.abs(displacementAngle) > 0 || displacementAngleVariance > 0) {
             double angleOffset = displacementAngle +
                     (displacementAngleVariance > 0 ? (Math.random() * 2 - 1) * displacementAngleVariance : 0);
             double angleRadians = Math.toRadians(angleOffset);
-
             perpUp = perpUp.multiply(Math.cos(angleRadians))
                     .add(direction.crossProduct(perpUp).multiply(Math.sin(angleRadians)));
         }
@@ -233,14 +240,36 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             linearMode = false;
             progress = 0.0;
             controlPoint = generateControlPoint(end.getPosition(), start.getPosition());
+            // Reset FOV delta when movement ends
+            end.setFovMultiplier(0.0f);
         }
     }
 
     @Override
     public void adjustDistance(boolean increase) {
-        double multiplier = increase ? 1.1 : 0.9;
-        targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
-        distanceChanged = true;
+        if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
+            double multiplier = increase ? 1.1 : 0.9;
+            targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
+            distanceChanged = true;
+        } else if (mouseWheel == SCROLL_WHEEL.FOV) {
+            adjustFov(increase);
+        }
+    }
+
+    @Override
+    public void adjustFov(boolean increase) {
+        if (mouseWheel != SCROLL_WHEEL.FOV) return;
+        // Change multiplier by 10% each scroll
+        float change = increase ? 0.2f : -0.2f;
+        float newMultiplier = fovMultiplier + change;
+        // Clamp between 0.1 and 3.0
+        fovMultiplier = Math.max(0.1f, Math.min(3.0f, newMultiplier));
+
+        // Update current target's FOV immediately
+        current.setFovMultiplier(fovMultiplier);
+
+        // Update end target's FOV for smooth transitions
+        end.setFovMultiplier(fovMultiplier);
     }
 
     @Override
