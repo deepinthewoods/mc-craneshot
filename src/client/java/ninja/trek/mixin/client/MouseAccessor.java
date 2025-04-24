@@ -17,12 +17,4 @@ public interface MouseAccessor {
 
     @Accessor("cursorDeltaY")
     void setCursorDeltaY(double value);
-
-    @Accessor("eventDeltaVerticalWheel")
-    double getEventDeltaVerticalWheel();
-
-    @Accessor("eventDeltaVerticalWheel")
-    void setEventDeltaVerticalWheel(double value);
-
-
 }

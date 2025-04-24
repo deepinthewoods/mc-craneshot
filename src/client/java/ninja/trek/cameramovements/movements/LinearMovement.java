@@ -41,14 +41,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public CameraTarget current = new CameraTarget();
     private boolean resetting = false;
     private float weight = 1.0f;
-    private float baseFov;
+    private double baseFov;
 
     public void start(MinecraftClient client, Camera camera) {
         // Initialize with camera's current state
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
         // Store base FOV and set initial FOV delta to 0
-        baseFov = client.options.getFov().getValue().floatValue();
+        baseFov = client.options.getFov().getValue().doubleValue();
         start.setFovMultiplier(1.0f);  // Start at normal FOV
         current.setFovMultiplier(1.0f); // Start at normal FOV
         // Calculate end target based on controlStick
@@ -128,8 +128,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // FOV interpolation with speed limit
         float targetFovDelta = b.getFovMultiplier();
         float fovDiff = targetFovDelta - current.getFovMultiplier();
-        float desiredFovSpeed = (float)(fovDiff * fovEasing);
-        float maxFovChange = (float)(fovSpeedLimit * (1.0/20.0));
+        float desiredFovSpeed = (float) (fovDiff * fovEasing);
+        float maxFovChange = (float) (fovSpeedLimit * (1.0f/20.0f));
 
         if (Math.abs(desiredFovSpeed) > maxFovChange) {
             desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;

@@ -10,7 +10,7 @@ public class CameraTarget {
     private Vec3d position;
     private float yaw;
     private float pitch;
-    private float fovMultiplier;  // 1.0f = normal FOV, >1 = wider, <1 = narrower
+    private float fovMultiplier;  // 1.0 = normal FOV, >1 = wider, <1 = narrower
 
     public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier) {
         this.position = position;
@@ -71,7 +71,6 @@ public class CameraTarget {
     public float getPitch() {
         return pitch;
     }
-
 
     public float getFovMultiplier() {
         return fovMultiplier;

@@ -234,9 +234,12 @@ public class CameraController {
         if (baseTarget != null) {
             // Update FOV in game renderer
             if (client.gameRenderer instanceof FovAccessor) {
-                float fovMultiplier = baseTarget.getFovMultiplier();
+                float fovMultiplier = (float) baseTarget.getFovMultiplier();
                 ((FovAccessor) client.gameRenderer).setFovModifier(fovMultiplier);
-                Craneshot.LOGGER.info("set fov {}", fovMultiplier);
+                // Only log significant FOV changes to reduce console spam
+                if (Math.abs(fovMultiplier - 1.0) > 0.001) {
+                    Craneshot.LOGGER.debug("set fov {}", fovMultiplier);
+                }
             }
             // Only update freeCamPosition from movement if we're not in free movement mode
             if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&

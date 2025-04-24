@@ -144,12 +144,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Calculate target rotation and FOV
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
-        float targetFovDelta = b.getFovMultiplier();
+        float targetFovDelta = (float) b.getFovMultiplier();
 
         // Apply rotation easing
         float yawError = targetYaw - current.getYaw();
         float pitchError = targetPitch - current.getPitch();
-        float fovError = targetFovDelta - current.getFovMultiplier();
+        float fovError = (float) (targetFovDelta - current.getFovMultiplier());
 
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
@@ -174,14 +174,14 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
-        float newFovDelta = current.getFovMultiplier() + desiredFovSpeed;
+        float newFovDelta = (float) (current.getFovMultiplier() + desiredFovSpeed);
 
         // Update current target
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
         }
 
         // Update alpha for external systems
@@ -261,7 +261,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
         // Change multiplier by 10% each scroll
         float change = increase ? 0.2f : -0.2f;
-        float newMultiplier = fovMultiplier + change;
+        float newMultiplier = (float) (fovMultiplier + change);
         float basefov = client.options.getFov().getValue();
 
         // Calculate the new FOV

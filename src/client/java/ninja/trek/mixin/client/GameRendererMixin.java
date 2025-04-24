@@ -15,15 +15,19 @@ public class GameRendererMixin {
     private double customFov = 0.0;
 
     @Inject(method = "getFov", at = @At("RETURN"), cancellable = true)
-    private void onGetFov(Camera camera, float tickDelta, boolean changingFov, CallbackInfoReturnable<Double> cir) {
+    private void onGetFov(Camera camera, float tickDelta, boolean changingFov, CallbackInfoReturnable<Float> cir) {
         if (CraneshotClient.MOVEMENT_MANAGER != null &&
                 CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement()) {
+            // Get original FOV and add our custom adjustment
             double originalFov = cir.getReturnValue();
-            cir.setReturnValue(originalFov + this.customFov);
+            double newFov = originalFov + this.customFov;
+            cir.setReturnValue((float)newFov);
         }
     }
 
+    @Unique
     public void setCustomFov(double fov) {
-        this.customFov = fov - 70.0; // Adjust relative to default FOV
+        // Store the FOV adjustment directly as a double
+        this.customFov = fov - 70.0;
     }
 }

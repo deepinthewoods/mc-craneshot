@@ -16,9 +16,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MouseMixin implements IMouseMixin {
     @Shadow private double cursorDeltaX;
     @Shadow private double cursorDeltaY;
-    @Shadow private double eventDeltaVerticalWheel;
+    
     private double capturedDeltaX;
     private double capturedDeltaY;
+    private double lastScrollValue;
 
     @Inject(method = "onMouseScroll", at = @At("HEAD"), cancellable = true)
     private void onMouseScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
@@ -47,7 +48,7 @@ public class MouseMixin implements IMouseMixin {
 
         // If we should intercept this scroll, store the value BEFORE cancelling
         if (shouldIntercept) {
-            this.eventDeltaVerticalWheel = vertical * 15.0; // Match Minecraft's scroll multiplier
+            this.lastScrollValue = vertical * 15.0; // Match Minecraft's scroll multiplier
             ci.cancel();
         }
     }
@@ -80,5 +81,15 @@ public class MouseMixin implements IMouseMixin {
     @Override
     public double getCapturedDeltaY() {
         return capturedDeltaY;
+    }
+    
+    @Override
+    public double getLastScrollValue() {
+        return lastScrollValue;
+    }
+    
+    @Override
+    public void setLastScrollValue(double value) {
+        this.lastScrollValue = value;
     }
 }

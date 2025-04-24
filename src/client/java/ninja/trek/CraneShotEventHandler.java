@@ -7,7 +7,7 @@ import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.config.SlotMenuSettings;
-import ninja.trek.mixin.client.MouseAccessor;
+import ninja.trek.mixin.client.MouseMixin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,8 +52,8 @@ public class CraneShotEventHandler {
             return;
         }
 
-        MouseAccessor mouseAccessor = (MouseAccessor) client.mouse;
-        double scrollDelta = mouseAccessor.getEventDeltaVerticalWheel();
+        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+        double scrollDelta = mouseMixin.getLastScrollValue();
         if (scrollDelta == 0) {
             return;
         }
@@ -69,13 +69,13 @@ public class CraneShotEventHandler {
             if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
                 activeMovement.adjustDistance(!scrollUp, client);
                 lastScrollTime = currentTime;
-                mouseAccessor.setEventDeltaVerticalWheel(0);
+                mouseMixin.setLastScrollValue(0);
                 return;
             } else if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
                 if (activeMovement instanceof AbstractMovementSettings) {
                     ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp, client);
                     lastScrollTime = currentTime;
-                    mouseAccessor.setEventDeltaVerticalWheel(0);
+                    mouseMixin.setLastScrollValue(0);
                     return;
                 }
             }
@@ -86,7 +86,7 @@ public class CraneShotEventHandler {
             if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
                 CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(i, scrollUp);
                 lastScrollTime = currentTime;
-                mouseAccessor.setEventDeltaVerticalWheel(0);
+                mouseMixin.setLastScrollValue(0);
                 return;
             }
         }
@@ -95,7 +95,7 @@ public class CraneShotEventHandler {
         if (CraneshotClient.selectMovementType.isPressed() && lastActiveSlot != null) {
             CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(lastActiveSlot, scrollUp);
             lastScrollTime = currentTime;
-            mouseAccessor.setEventDeltaVerticalWheel(0);
+            mouseMixin.setLastScrollValue(0);
         }
     }
 }
