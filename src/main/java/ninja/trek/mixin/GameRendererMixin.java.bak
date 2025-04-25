@@ -1,0 +1,53 @@
+package ninja.trek.mixin;
+
+import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.util.math.MatrixStack;
+import ninja.trek.OrthographicCamera;
+import org.joml.Matrix4f;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+/**
+ * Mixin to modify GameRenderer to support orthographic projection
+ */
+@Mixin(GameRenderer.class)
+public class GameRendererMixin {
+    /**
+     * Modifies the projection matrix creation to support orthographic projection
+     * @param fovDegrees Field of view in degrees
+     * @param cir Callback info returnable
+     */
+    @Inject(method = "getBasicProjectionMatrix", at = @At("HEAD"), cancellable = true)
+    private void getOrthographicProjectionMatrix(float fovDegrees, CallbackInfoReturnable<Matrix4f> cir) {
+        // Only modify if orthographic mode is enabled
+        if (OrthographicCamera.isOrthographicMode()) {
+            // Create an orthographic projection matrix
+            Matrix4f matrix = new Matrix4f();
+            
+            // Calculate the aspect ratio (width/height)
+            float aspectRatio = (float) 
+                ((GameRenderer)(Object)this).getClient().getWindow().getFramebufferWidth() / 
+                ((GameRenderer)(Object)this).getClient().getWindow().getFramebufferHeight();
+            
+            // Scale values - adjust as needed for the desired zoom level
+            float scale = 0.01f; // This affects how "zoomed in" the orthographic view is
+            
+            // Create orthographic projection
+            // Parameters: left, right, bottom, top, zNear, zFar
+            matrix.setOrtho(
+                -aspectRatio * scale, // left
+                aspectRatio * scale,  // right
+                -1.0f * scale,        // bottom
+                1.0f * scale,         // top
+                0.05f,                // near plane (same as Minecraft's default)
+                1000.0f               // far plane (adjusted for visibility)
+            );
+            
+            // Return our orthographic matrix instead of the default perspective one
+            cir.setReturnValue(matrix);
+        }
+        // If not in orthographic mode, continue with the original perspective matrix
+    }
+}

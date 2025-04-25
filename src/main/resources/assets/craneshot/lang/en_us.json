@@ -1,0 +1,12 @@
+{
+  "category.craneshot.camera": "CraneShot Camera",
+  "category.craneshot.ui": "CraneShot UI",
+  "key.craneshot.toggle_menu": "Toggle Menu",
+  "key.craneshot.select_movement": "Select Movement Type",
+  "key.craneshot.camera1": "Camera Slot 1",
+  "key.craneshot.camera2": "Camera Slot 2",
+  "key.craneshot.camera3": "Camera Slot 3",
+  "key.craneshot.toggle_orthographic": "Toggle Orthographic View",
+  "message.craneshot.orthographic.enabled": "Orthographic camera enabled (Hold Shift + Scroll to zoom)",
+  "message.craneshot.orthographic.disabled": "Orthographic camera disabled"
+}

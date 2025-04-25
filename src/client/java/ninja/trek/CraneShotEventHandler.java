@@ -7,7 +7,6 @@ import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.config.SlotMenuSettings;
-import ninja.trek.mixin.client.MouseMixin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,14 +45,43 @@ public class CraneShotEventHandler {
         });
     }
 
+    /**
+     * Safely get the scroll value from the mouse mixin
+     * @param client The Minecraft client instance
+     * @return The scroll value, or 0 if it couldn't be accessed
+     */
+    private static double getScrollValue(MinecraftClient client) {
+        try {
+            if (client.mouse instanceof IMouseMixin mouseMixin) {
+                return mouseMixin.getLastScrollValue();
+            }
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Error accessing mouse mixin: " + e.getMessage());
+        }
+        return 0;
+    }
+    
+    /**
+     * Safely reset the scroll value in the mouse mixin
+     * @param client The Minecraft client instance
+     */
+    private static void resetScrollValue(MinecraftClient client) {
+        try {
+            if (client.mouse instanceof IMouseMixin mouseMixin) {
+                mouseMixin.setLastScrollValue(0);
+            }
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Error resetting scroll value: " + e.getMessage());
+        }
+    }
+
     private static void handleScrollInput(MinecraftClient client) {
         double currentTime = System.currentTimeMillis() / 1000.0;
         if (currentTime - lastScrollTime < SCROLL_COOLDOWN) {
             return;
         }
 
-        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
-        double scrollDelta = mouseMixin.getLastScrollValue();
+        double scrollDelta = getScrollValue(client);
         if (scrollDelta == 0) {
             return;
         }
@@ -69,24 +97,40 @@ public class CraneShotEventHandler {
             if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
                 activeMovement.adjustDistance(!scrollUp, client);
                 lastScrollTime = currentTime;
-                mouseMixin.setLastScrollValue(0);
+                resetScrollValue(client);
                 return;
             } else if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
                 if (activeMovement instanceof AbstractMovementSettings) {
                     ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp, client);
                     lastScrollTime = currentTime;
-                    mouseMixin.setLastScrollValue(0);
+                    resetScrollValue(client);
                     return;
                 }
             }
         }
 
+        // Handle orthographic camera zoom if in orthographic mode
+        if (OrthographicCameraManager.isOrthographicMode()) {
+            // Use shift key as a modifier for orthographic zoom
+            boolean shiftPressed = client.options.sneakKey.isPressed();
+            if (shiftPressed) {
+                if (scrollUp) {
+                    OrthographicCameraManager.zoomIn();
+                } else {
+                    OrthographicCameraManager.zoomOut();
+                }
+                lastScrollTime = currentTime;
+                resetScrollValue(client);
+                return;
+            }
+        }
+        
         // Handle normal slot scrolling if no active scroll modes
         for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
             if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
                 CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(i, scrollUp);
                 lastScrollTime = currentTime;
-                mouseMixin.setLastScrollValue(0);
+                resetScrollValue(client);
                 return;
             }
         }
@@ -95,7 +139,7 @@ public class CraneShotEventHandler {
         if (CraneshotClient.selectMovementType.isPressed() && lastActiveSlot != null) {
             CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(lastActiveSlot, scrollUp);
             lastScrollTime = currentTime;
-            mouseMixin.setLastScrollValue(0);
+            resetScrollValue(client);
         }
     }
 }
