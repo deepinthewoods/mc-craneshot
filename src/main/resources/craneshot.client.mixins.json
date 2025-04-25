@@ -12,7 +12,9 @@
 		"client.CameraMixin",
 		"client.KeyboardInputMixin",
 		"client.MouseAccessor",
-		"client.WorldRendererMixin"
+		"client.WorldRendererMixin",
+		"client.WorldRendererChunkMixin",
+		"client.MinecraftClientMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

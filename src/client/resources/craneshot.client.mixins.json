@@ -3,14 +3,21 @@
 	"package": "ninja.trek.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"MouseMixin",
 		"CameraAccessor",
 		"CameraMixin",
-		"MouseAccessor",
-		"KeyboardInputMixin",
-		"WorldRendererMixin",
+		"CameraSubmersionMixin",
+		"FovAccessor",
+		"FrustumMixin",
+		"GameRendererAccessor",
 		"GameRendererMixin",
-		"FovAccessor"
+		"InputAccessor",
+		"KeyboardInputMixin",
+		"MinecraftClientMixin",
+		"MouseAccessor",
+		"MouseMixin",
+		"OrthographicGameRendererMixin",
+		"WorldRendererChunkMixin",
+		"WorldRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

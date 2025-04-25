@@ -6,6 +6,7 @@ import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
+import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_KEYS;
 import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_MOUSE;
@@ -58,10 +59,7 @@ public class CameraController {
                 float finalYaw = calculateTargetYaw(yaw);
                 float finalPitch = calculateTargetPitch(pitch);
 
-//                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA)
-//                    controlStick.set(eyePos, controlStick.getYaw(), controlStick.getPitch());
-//                else
-                    controlStick.set(eyePos, finalYaw, finalPitch);
+                controlStick.set(eyePos, finalYaw, finalPitch);
             }
         }
     }
@@ -149,39 +147,76 @@ public class CameraController {
 
     public void setPostMoveStates(AbstractMovementSettings m) {
         if (m == null) {
+            // Reset state when movement ends
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
             currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
             MouseInterceptor.setIntercepting(false);
+            
             // Reset tracking variables
             lastPlayerPos = Vec3d.ZERO;
             cumulativeMovement = Vec3d.ZERO;
+            
+            // Reset keyboard input handling
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 ((IKeyboardInputMixin) client.player.input).setDisabled(false);
             }
+            
+            // Disable camera system
+            CameraSystem.getInstance().deactivateCamera();
         } else {
+            // Set new movement modes
             currentMouseMoveMode = m.getPostMoveMouse();
             currentKeyMoveMode = m.getPostMoveKeys();
 
-
-
             MinecraftClient client = MinecraftClient.getInstance();
+            
+            // Handle input disabling
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 boolean shouldDisable = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                         currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
                 ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
             }
 
+            // Enable mouse interception for camera rotation
             if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
                 MouseInterceptor.setIntercepting(true);
+            }
+            
+            // Determine if we should activate custom camera mode
+            boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+            
+            boolean isOutPosition = (currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK);
+            
+            // Activate the appropriate camera mode
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (isFreeCamMode) {
+                cameraSystem.activateCamera(CameraSystem.CameraMode.FREE_CAMERA);
+            } else if (isOutPosition) {
+                cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
             }
         }
     }
 
-
     private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
 
+        // Let the camera system handle movement
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (cameraSystem.isCameraActive()) {
+            FreeCamSettings settings = GeneralMenuSettings.getFreeCamSettings();
+            cameraSystem.handleMovementInput(
+                settings.getMoveSpeed(),
+                settings.getAcceleration(),
+                settings.getDeceleration()
+            );
+            return;
+        }
+
+        // Legacy movement code
         // Base movement speed in blocks per tick
         float baseSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
 
@@ -191,10 +226,94 @@ public class CameraController {
         }
 
         Vec3d targetVelocity = Vec3d.ZERO;
+        
+        // Calculate movement direction
         if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-            // Free movement logic...
+            // Free camera movement in all directions
+            double x = 0, y = 0, z = 0;
+            
+            if (client.options.forwardKey.isPressed()) {
+                z += 1.0;
+            }
+            if (client.options.backKey.isPressed()) {
+                z -= 1.0;
+            }
+            if (client.options.leftKey.isPressed()) {
+                x += 1.0;
+            }
+            if (client.options.rightKey.isPressed()) {
+                x -= 1.0;
+            }
+            if (client.options.jumpKey.isPressed()) {
+                y += 1.0;
+            }
+            if (client.options.sneakKey.isPressed()) {
+                y -= 1.0;
+            }
+            
+            // Normalize if moving in multiple directions simultaneously
+            if ((x != 0 && z != 0) || (x != 0 && y != 0) || (z != 0 && y != 0)) {
+                double length = Math.sqrt(x * x + y * y + z * z);
+                x /= length;
+                y /= length;
+                z /= length;
+            }
+            
+            // Convert to camera-relative movement
+            float yaw = freeCamYaw;
+            float pitch = freeCamPitch;
+            double xFactor = Math.sin(yaw * Math.PI / 180.0);
+            double zFactor = Math.cos(yaw * Math.PI / 180.0);
+            
+            targetVelocity = new Vec3d(
+                (x * zFactor - z * xFactor), 
+                y, 
+                (z * zFactor + x * xFactor)
+            );
+            
         } else if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
-            // Flat movement logic...
+            // Y-axis locked camera movement
+            double x = 0, z = 0;
+            
+            if (client.options.forwardKey.isPressed()) {
+                z += 1.0;
+            }
+            if (client.options.backKey.isPressed()) {
+                z -= 1.0;
+            }
+            if (client.options.leftKey.isPressed()) {
+                x += 1.0;
+            }
+            if (client.options.rightKey.isPressed()) {
+                x -= 1.0;
+            }
+            
+            // Y movement from jump/sneak
+            double y = 0;
+            if (client.options.jumpKey.isPressed()) {
+                y += 1.0;
+            }
+            if (client.options.sneakKey.isPressed()) {
+                y -= 1.0;
+            }
+            
+            // Normalize XZ movement
+            if (x != 0 && z != 0) {
+                double length = Math.sqrt(x * x + z * z);
+                x /= length;
+                z /= length;
+            }
+            
+            // Convert to camera-relative XZ movement with free Y
+            float yaw = freeCamYaw;
+            double xFactor = Math.sin(yaw * Math.PI / 180.0);
+            double zFactor = Math.cos(yaw * Math.PI / 180.0);
+            
+            targetVelocity = new Vec3d(
+                (x * zFactor - z * xFactor), 
+                y, 
+                (z * zFactor + x * xFactor)
+            );
         }
 
         // Normalize and apply speed to target velocity if there's any movement
@@ -241,31 +360,69 @@ public class CameraController {
                     Craneshot.LOGGER.debug("set fov {}", fovMultiplier);
                 }
             }
-            // Only update freeCamPosition from movement if we're not in free movement mode
-            if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
-                    currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-                freeCamPosition = baseTarget.getPosition();
-                ((CameraAccessor) camera).invokesetPos(freeCamPosition);
-            }
-
-            // Handle rotation based on movement mode
-            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
-                IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
-                double deltaX = mouseMixin.getCapturedDeltaX();
-                double deltaY = -mouseMixin.getCapturedDeltaY();
-                double mouseSensitivity = client.options.getMouseSensitivity().getValue();
-                double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
-                deltaX *= calculatedSensitivity * 0.55D;
-                deltaY *= calculatedSensitivity * 0.55D;
-                if (deltaX != 0 || deltaY != 0) {
-                    freeCamYaw += deltaX;
-                    freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch - deltaY));
+            
+            // Check if camera system is active
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            
+            if (cameraSystem.isCameraActive()) {
+                // Let the camera system update its state
+                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
+                    IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                    double deltaX = mouseMixin.getCapturedDeltaX();
+                    double deltaY = -mouseMixin.getCapturedDeltaY();
+                    
+                    if (deltaX != 0 || deltaY != 0) {
+                        double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                        double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                        cameraSystem.updateRotation(
+                            deltaX * calculatedSensitivity * 0.55D,
+                            deltaY * calculatedSensitivity * 0.55D,
+                            1.0
+                        );
+                    }
+                } else {
+                    // Use the movement manager's position/rotation if not freely rotating
+                    cameraSystem.setCameraPosition(baseTarget.getPosition());
+                    cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
                 }
+                
+                // Update our tracking variables for legacy code support
+                freeCamPosition = cameraSystem.getCameraPosition();
+                freeCamYaw = cameraSystem.getCameraYaw();
+                freeCamPitch = cameraSystem.getCameraPitch();
+                
+                // Let the camera system update the camera
+                cameraSystem.updateCamera(camera);
             } else {
-                freeCamYaw = baseTarget.getYaw();
-                freeCamPitch = baseTarget.getPitch();
+                // Legacy camera handling
+                // Only update freeCamPosition from movement if we're not in free movement mode
+                if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
+                        currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+                    freeCamPosition = baseTarget.getPosition();
+                }
+
+                // Handle rotation based on movement mode
+                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
+                    IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                    double deltaX = mouseMixin.getCapturedDeltaX();
+                    double deltaY = -mouseMixin.getCapturedDeltaY();
+                    double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                    double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                    deltaX *= calculatedSensitivity * 0.55D;
+                    deltaY *= calculatedSensitivity * 0.55D;
+                    if (deltaX != 0 || deltaY != 0) {
+                        freeCamYaw += deltaX;
+                        freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch - deltaY));
+                    }
+                } else {
+                    freeCamYaw = baseTarget.getYaw();
+                    freeCamPitch = baseTarget.getPitch();
+                }
+                
+                // Apply the camera position and rotation
+                ((CameraAccessor) camera).invokesetPos(freeCamPosition);
+                ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
-            ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
         }
 
         // Handle keyboard movement for camera modes
@@ -278,14 +435,34 @@ public class CameraController {
         updateMessageTimer();
     }
 
-    //=== Input & Free Control Handling ===========================================
-
-
     /**
      * Updates the camera perspective based on the distance between the camera and the player.
      */
     private void updatePerspective(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
+        
+        // In orthographic mode, we always want to be in third person
+        if (OrthographicCameraManager.isOrthographicMode() && 
+            client.options.getPerspective() == Perspective.FIRST_PERSON) {
+            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+            return;
+        }
+        
+        // Check if camera system is controlling rendering
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (cameraSystem.isCameraActive()) {
+            // Let camera system handle perspective
+            if (cameraSystem.shouldRenderPlayerModel() && 
+                client.options.getPerspective() == Perspective.FIRST_PERSON) {
+                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+            } else if (!cameraSystem.shouldRenderPlayerModel() && 
+                       client.options.getPerspective() != Perspective.FIRST_PERSON) {
+                client.options.setPerspective(Perspective.FIRST_PERSON);
+            }
+            return;
+        }
+        
+        // Legacy perspective handling based on distance
         double distance = camera.getPos().distanceTo(controlStick.getPosition());
         if (distance > FIRST_PERSON_THRESHOLD_MIN && client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
@@ -293,15 +470,6 @@ public class CameraController {
             client.options.setPerspective(Perspective.FIRST_PERSON);
         }
     }
-
-    //=== Camera Update – Combining Movement and Free Controls ===================
-
-    /**
-     * Called every frame to update the camera. It retrieves the base target from the movement manager,
-     * applies any free control modifications, and then applies the final state to the camera.
-     */
-
-
 
     //=== Message Handling ========================================================
 
@@ -344,14 +512,19 @@ public class CameraController {
         updateKeyboardInput(client);
     }
 
-
-
     private void updateKeyboardInput(MinecraftClient client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-            // Only disable keyboard input during MOVE8 mode
+            // Check if camera system is active and should disable player movement
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (cameraSystem.isCameraActive()) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+                return;
+            }
+            
+            // Legacy keyboard input control
             boolean shouldDisable = currentKeyMoveMode == POST_MOVE_KEYS.MOVE8 ||
-                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+                                   currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                   currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
             ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
         }
     }
@@ -359,5 +532,8 @@ public class CameraController {
     public void onComplete() {
         currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
         currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        
+        // Make sure to deactivate camera system
+        CameraSystem.getInstance().deactivateCamera();
     }
 }

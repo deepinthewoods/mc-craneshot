@@ -2,6 +2,7 @@ package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
+import ninja.trek.camera.CameraSystem;
 
 /**
  * Manages the orthographic camera mode state.
@@ -20,6 +21,21 @@ public class OrthographicCameraManager {
      */
     public static boolean toggleOrthographicMode() {
         orthographicMode = !orthographicMode;
+        
+        // Activate camera system with appropriate mode when entering orthographic mode
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (orthographicMode) {
+            cameraSystem.activateCamera(CameraSystem.CameraMode.ORTHOGRAPHIC);
+            
+            // Force third-person view for better visualization
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client != null && client.options != null) {
+                client.options.setPerspective(net.minecraft.client.option.Perspective.THIRD_PERSON_BACK);
+            }
+        } else if (cameraSystem.isCameraActive()) {
+            // Deactivate camera when leaving orthographic mode
+            cameraSystem.deactivateCamera();
+        }
         
         // Display a message to the player
         if (MinecraftClient.getInstance().player != null) {
