@@ -1,11 +1,11 @@
 package ninja.trek.config;
 
-import ninja.trek.config.FreeCamSettings;
+import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
 
 public class GeneralMenuSettings {
     private static boolean autoAdvance = false;
     private static final FreeCamSettings freeCamSettings = new FreeCamSettings();
-
+    private static final FreeCamReturnMovement freeCamReturnMovement = new FreeCamReturnMovement();
 
 
     public static boolean isAutoAdvance() {
@@ -18,5 +18,9 @@ public class GeneralMenuSettings {
 
     public static FreeCamSettings getFreeCamSettings() {
         return freeCamSettings;
+    }
+    
+    public static FreeCamReturnMovement getFreeCamReturnMovement() {
+        return freeCamReturnMovement;
     }
 }

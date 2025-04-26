@@ -7,6 +7,7 @@ import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.MovementState;
+import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
@@ -21,6 +22,9 @@ public class CameraMovementManager {
     private ICameraMovement activeMovement;
     private CameraTarget baseTarget;
     private boolean isOut;
+    
+    // For handling free camera return
+    private boolean inFreeCamReturnPhase = false;
 
     // New fields for managing scroll selection
     private Map<Integer, Integer> scrollSelectedTypes;
@@ -147,10 +151,6 @@ public class CameraMovementManager {
         return keyPressStartTimes.containsKey(slotIndex);
     }
 
-    // In CameraMovementManager.java, modify the startTransition method:
-
-    // In CameraMovementManager.java, modify the startTransition method:
-
     public void startTransition(MinecraftClient client, Camera camera, int slotIndex) {
         ICameraMovement movement = getMovementAt(slotIndex);
         if (movement == null) return;
@@ -185,51 +185,28 @@ public class CameraMovementManager {
                 CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA;
 
             if (inFreeCameraMode) {
-                ninja.trek.Craneshot.LOGGER.info("Returning from free camera mode");
+                ninja.trek.Craneshot.LOGGER.info("Starting FreeCamReturnMovement to handle return from free camera");
                 
-                // Get current camera values before clearing post-move state
-                Vec3d currentPos = camera.getPos();
-                float currentYaw = camera.getYaw();
-                float currentPitch = camera.getPitch();
+                // Store the original active movement to return to after FreeCamReturnMovement completes
+                ICameraMovement originalMovement = activeMovement;
+                Integer originalSlot = activeMovementSlot;
                 
-                // Make the active movement use our current position as the starting point
-                if (activeMovement instanceof ninja.trek.cameramovements.movements.LinearMovement) {
-                    ninja.trek.cameramovements.movements.LinearMovement linearMovement = 
-                        (ninja.trek.cameramovements.movements.LinearMovement) activeMovement;
-                    
-                    // Set the starting position to our current free camera position
-                    linearMovement.start.set(currentPos, currentYaw, currentPitch);
-                    linearMovement.current.set(currentPos, currentYaw, currentPitch);
-                    
-                    // Log for debugging
-                    ninja.trek.Craneshot.LOGGER.info("Set linear movement start to free camera pos: {} {} {}", 
-                        currentPos.getX(), currentPos.getY(), currentPos.getZ());
-                } else if (activeMovement instanceof ninja.trek.cameramovements.movements.BezierMovement) {
-                    ninja.trek.cameramovements.movements.BezierMovement bezierMovement = 
-                        (ninja.trek.cameramovements.movements.BezierMovement) activeMovement;
-                    
-                    // Set the starting position to our current free camera position
-                    bezierMovement.start.set(currentPos, currentYaw, currentPitch);
-                    bezierMovement.current.set(currentPos, currentYaw, currentPitch);
-                    
-                    // Reset the bezier parameters (can't directly access progress)
-                    // Instead, we'll just reset start and current position, which will effectively reset the movement
-                    
-                    // Log for debugging
-                    ninja.trek.Craneshot.LOGGER.info("Set bezier movement start to free camera pos: {} {} {}", 
-                        currentPos.getX(), currentPos.getY(), currentPos.getZ());
-                }
-                
-                // Clear post-move state to disable free camera mode
+                // Clear post-move settings to disable free camera mode
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                 
-                // Update controller state to match
-                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentPos;
-                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentYaw;
-                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentPitch;
+                // Start the FreeCamReturnMovement to handle the transition back to normal camera
+                FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
+                freeCamReturnMovement.start(client, camera);
+                
+                // Set the FreeCamReturnMovement as the active movement
+                activeMovement = freeCamReturnMovement;
+                inFreeCamReturnPhase = true;
+                
+                // We'll keep track of the original movement to queue its reset after FreeCamReturnMovement completes
+                return;
             }
             
-            // Queue reset and allow return movement to bring us back to player view
+            // Normal case - queue reset directly
             activeMovement.queueReset(client, camera);
         }
     }
@@ -294,6 +271,38 @@ public class CameraMovementManager {
         if (activeMovement == null || client.player == null) {
             return null;
         }
+        
+        // Check if we're in FreeCamReturn phase
+        if (inFreeCamReturnPhase) {
+            FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
+            if (activeMovement == freeCamReturnMovement) {
+                MovementState state = freeCamReturnMovement.calculateState(client, camera);
+                baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                
+                // Check if FreeCamReturnMovement has completed
+                if (state.isComplete() || freeCamReturnMovement.isComplete()) {
+                    ninja.trek.Craneshot.LOGGER.info("FreeCamReturnMovement completed, returning to normal camera");
+                    
+                    // Reset the FreeCamReturnMovement phase
+                    inFreeCamReturnPhase = false;
+                    
+                    // Switch back to normal camera movement - normal state
+                    activeMovementSlot = null;
+                    activeMovement = null;
+                    isOut = false;
+                    
+                    // Reset state in the controller
+                    CraneshotClient.CAMERA_CONTROLLER.onComplete();
+                    CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                    
+                    return null;
+                }
+                
+                return state;
+            }
+        }
+        
+        // Normal movement state calculation
         MovementState state = activeMovement.calculateState(client, camera);
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
@@ -428,9 +437,4 @@ public class CameraMovementManager {
         }
         return AbstractMovementSettings.SCROLL_WHEEL.NONE;
     }
-
-
-
-
-
 }

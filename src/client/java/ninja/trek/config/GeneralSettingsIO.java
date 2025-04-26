@@ -2,6 +2,7 @@ package ninja.trek.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
@@ -37,9 +38,34 @@ public class GeneralSettingsIO {
                 freeCamObj.addProperty("deceleration", freeCam.getDeceleration());
                 freeCamObj.addProperty("movementMode", freeCam.getMovementMode().name());
                 settingsObj.add("freeCam", freeCamObj);
+                
+                // Save FreeCamReturnMovement settings
+                JsonObject freeCamReturnObj = new JsonObject();
+                ninja.trek.cameramovements.movements.FreeCamReturnMovement freeCamReturn = GeneralMenuSettings.getFreeCamReturnMovement();
+                // Save settings using reflection to access private fields
+                java.util.Map<String, Object> returnSettings = ((ninja.trek.cameramovements.AbstractMovementSettings)freeCamReturn).getSettings();
+                returnSettings.forEach((key, value) -> {
+                    if (value instanceof Float || value instanceof Double) {
+                        freeCamReturnObj.addProperty(key, ((Number)value).doubleValue());
+                    } else if (value instanceof String) {
+                        freeCamReturnObj.addProperty(key, (String)value);
+                    } else if (value instanceof Boolean) {
+                        freeCamReturnObj.addProperty(key, (Boolean)value);
+                    } else if (value instanceof Enum) {
+                        freeCamReturnObj.addProperty(key, ((Enum<?>)value).name());
+                    }
+                });
+                settingsObj.add("freeCamReturn", freeCamReturnObj);
 
                 // Save autoAdvance
                 settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
+                
+                // Save expanded settings state
+                JsonArray expandedSettingsArray = new JsonArray();
+                for (String key : MenuOverlayScreen.getExpandedSettings()) {
+                    expandedSettingsArray.add(key);
+                }
+                settingsObj.add("expandedSettings", expandedSettingsArray);
 
                 GSON.toJson(settingsObj, writer);
                 Craneshot.LOGGER.info("Saved general settings configuration");
@@ -103,10 +129,47 @@ public class GeneralSettingsIO {
                     );
                 }
             }
+            
+            // Load FreeCamReturnMovement settings
+            if (settingsObj.has("freeCamReturn")) {
+                JsonObject returnObj = settingsObj.getAsJsonObject("freeCamReturn");
+                ninja.trek.cameramovements.movements.FreeCamReturnMovement freeCamReturn = GeneralMenuSettings.getFreeCamReturnMovement();
+                
+                // Use the movement's updateSetting method to load each setting
+                for (String key : returnObj.keySet()) {
+                    try {
+                        if (returnObj.get(key).isJsonPrimitive()) {
+                            if (returnObj.get(key).getAsJsonPrimitive().isString()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)freeCamReturn).updateSetting(
+                                    key, returnObj.get(key).getAsString());
+                            } else if (returnObj.get(key).getAsJsonPrimitive().isNumber()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)freeCamReturn).updateSetting(
+                                    key, returnObj.get(key).getAsDouble());
+                            } else if (returnObj.get(key).getAsJsonPrimitive().isBoolean()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)freeCamReturn).updateSetting(
+                                    key, returnObj.get(key).getAsBoolean());
+                            }
+                        }
+                    } catch (Exception e) {
+                        Craneshot.LOGGER.error("Error loading FreeCamReturn setting: " + key, e);
+                    }
+                }
+            }
 
             // Load autoAdvance
             if (settingsObj.has("autoAdvance")) {
                 GeneralMenuSettings.setAutoAdvance(settingsObj.get("autoAdvance").getAsBoolean());
+            }
+            
+            // Load expanded settings
+            if (settingsObj.has("expandedSettings") && settingsObj.get("expandedSettings").isJsonArray()) {
+                JsonArray expandedSettingsArray = settingsObj.getAsJsonArray("expandedSettings");
+                MenuOverlayScreen.clearExpandedSettings();
+                for (int i = 0; i < expandedSettingsArray.size(); i++) {
+                    if (expandedSettingsArray.get(i).isJsonPrimitive()) {
+                        MenuOverlayScreen.addExpandedSetting(expandedSettingsArray.get(i).getAsString());
+                    }
+                }
             }
 
             Craneshot.LOGGER.info("Loaded general settings configuration");

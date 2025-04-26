@@ -19,6 +19,7 @@ import java.util.*;
 
 public class MenuOverlayScreen extends Screen {
     private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>();
+    private static final Set<String> expandedSettings = new HashSet<>();
     private static final int MARGIN = 0;
     private static final int TAB_HEIGHT = 30;
     private static final int CONTENT_START_Y = TAB_HEIGHT - 10;
@@ -202,102 +203,254 @@ public class MenuOverlayScreen extends Screen {
                 .build());
 
         yOffset += spacing;
-
-        // Move Speed Slider
-        float currentSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
-                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
-                .build());
-        this.addDrawableChild(SettingWidget.createSlider(
-                buttonX + labelWidth + 10,
-                centerY + yOffset,
-                controlWidth,
-                BUTTON_HEIGHT,
-                Text.literal("Free Camera Speed"),
-                0.1f,
-                2.0f,
-                currentSpeed,
-                "moveSpeed",
-                new AbstractMovementSettings() {
-                    @Override
-                    public void updateSetting(String key, Object value) {
-                        if (key.equals("moveSpeed") && value instanceof Number) {
-                            GeneralMenuSettings.getFreeCamSettings().setMoveSpeed(((Number)value).floatValue());
-                        }
-                    }
-                }
-        ));
-
-        yOffset += spacing;
-
-        // Acceleration Slider
-        float currentAcceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
-                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
-                .build());
-        this.addDrawableChild(SettingWidget.createSlider(
-                buttonX + labelWidth + 10,
-                centerY + yOffset,
-                controlWidth,
-                BUTTON_HEIGHT,
-                Text.literal("Acceleration"),
-                0.01f,
-                0.5f,
-                currentAcceleration,
-                "acceleration",
-                new AbstractMovementSettings() {
-                    @Override
-                    public void updateSetting(String key, Object value) {
-                        if (key.equals("acceleration") && value instanceof Number) {
-                            GeneralMenuSettings.getFreeCamSettings().setAcceleration(((Number)value).floatValue());
-                        }
-                    }
-                }
-        ));
-
-        yOffset += spacing;
-
-        // Deceleration Slider
-        float currentDeceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
-                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
-                .build());
-        this.addDrawableChild(SettingWidget.createSlider(
-                buttonX + labelWidth + 10,
-                centerY + yOffset,
-                controlWidth,
-                BUTTON_HEIGHT,
-                Text.literal("Deceleration"),
-                0.01f,
-                0.5f,
-                currentDeceleration,
-                "deceleration",
-                new AbstractMovementSettings() {
-                    @Override
-                    public void updateSetting(String key, Object value) {
-                        if (key.equals("deceleration") && value instanceof Number) {
-                            GeneralMenuSettings.getFreeCamSettings().setDeceleration(((Number)value).floatValue());
-                        }
-                    }
-                }
-        ));
-
-        yOffset += spacing;
-
-        // Movement Mode Button
-        FreeCamSettings.MovementMode currentMode = GeneralMenuSettings.getFreeCamSettings().getMovementMode();
+        
+        // Add collapsible Free Camera section header
+        String freeCamKey = "freeCamSection";
+        boolean freeCamExpanded = isSettingsExpanded(freeCamKey);
         this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Movement Mode: " + currentMode.name()),
-                        button -> {
-                            FreeCamSettings.MovementMode[] modes =
-                                    FreeCamSettings.MovementMode.values();
-                            int nextOrdinal = (currentMode.ordinal() + 1) % modes.length;
-                            GeneralMenuSettings.getFreeCamSettings().setMovementMode(modes[nextOrdinal]);
-                            button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
-                        })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
-                .build()
-        );
+                Text.literal((freeCamExpanded ? "▼ " : "▶ ") + "Free Camera Settings").formatted(Formatting.YELLOW),
+                button -> {
+                    toggleSettingsExpanded(freeCamKey);
+                    reinitialize();
+                })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+        yOffset += spacing;
+        
+        if (freeCamExpanded) {
+            // Move Speed Slider
+            float currentSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Free Camera Speed"),
+                    0.1f,
+                    2.0f,
+                    currentSpeed,
+                    "moveSpeed",
+                    new AbstractMovementSettings() {
+                        @Override
+                        public void updateSetting(String key, Object value) {
+                            if (key.equals("moveSpeed") && value instanceof Number) {
+                                GeneralMenuSettings.getFreeCamSettings().setMoveSpeed(((Number)value).floatValue());
+                            }
+                        }
+                    }
+            ));
+
+            yOffset += spacing;
+
+            // Acceleration Slider
+            float currentAcceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Acceleration"),
+                    0.01f,
+                    0.5f,
+                    currentAcceleration,
+                    "acceleration",
+                    new AbstractMovementSettings() {
+                        @Override
+                        public void updateSetting(String key, Object value) {
+                            if (key.equals("acceleration") && value instanceof Number) {
+                                GeneralMenuSettings.getFreeCamSettings().setAcceleration(((Number)value).floatValue());
+                            }
+                        }
+                    }
+            ));
+
+            yOffset += spacing;
+
+            // Deceleration Slider
+            float currentDeceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Deceleration"),
+                    0.01f,
+                    0.5f,
+                    currentDeceleration,
+                    "deceleration",
+                    new AbstractMovementSettings() {
+                        @Override
+                        public void updateSetting(String key, Object value) {
+                            if (key.equals("deceleration") && value instanceof Number) {
+                                GeneralMenuSettings.getFreeCamSettings().setDeceleration(((Number)value).floatValue());
+                            }
+                        }
+                    }
+            ));
+
+            yOffset += spacing;
+
+            // Movement Mode Button
+            FreeCamSettings.MovementMode currentMode = GeneralMenuSettings.getFreeCamSettings().getMovementMode();
+            this.addDrawableChild(ButtonWidget.builder(
+                            Text.literal("Movement Mode: " + currentMode.name()),
+                            button -> {
+                                FreeCamSettings.MovementMode[] modes =
+                                        FreeCamSettings.MovementMode.values();
+                                int nextOrdinal = (currentMode.ordinal() + 1) % modes.length;
+                                GeneralMenuSettings.getFreeCamSettings().setMovementMode(modes[nextOrdinal]);
+                                button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
+                            })
+                    .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
+                    .build()
+            );
+        }
+        
+        // Add collapsible Free Camera Return section header
+        yOffset += spacing;
+        String freeCamReturnKey = "freeCamReturnSection";
+        boolean freeCamReturnExpanded = isSettingsExpanded(freeCamReturnKey);
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal((freeCamReturnExpanded ? "▼ " : "▶ ") + "Free Camera Return Settings").formatted(Formatting.YELLOW),
+                button -> {
+                    toggleSettingsExpanded(freeCamReturnKey);
+                    reinitialize();
+                })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+                
+        if (freeCamReturnExpanded) {
+            // Add settings for FreeCamReturnMovement
+            yOffset += spacing;
+            ninja.trek.cameramovements.movements.FreeCamReturnMovement freeCamReturn = GeneralMenuSettings.getFreeCamReturnMovement();
+            
+            // Position Easing slider
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Easing"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+                    
+            // Use reflection to get the current value
+            double positionEasing = 0.2; // Default value
+            try {
+                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionEasing");
+                field.setAccessible(true);
+                positionEasing = (double)field.get(freeCamReturn);
+            } catch (Exception e) {
+                Craneshot.LOGGER.error("Failed to get positionEasing", e);
+            }
+            
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Position Easing"),
+                    0.01f,
+                    1.0f,
+                    positionEasing,
+                    "positionEasing",
+                    (AbstractMovementSettings)freeCamReturn
+            ));
+            
+            // Position Speed Limit slider
+            yOffset += spacing;
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Speed Limit"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+                    
+            // Use reflection to get the current value
+            double positionSpeedLimit = 5.0; // Default value
+            try {
+                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionSpeedLimit");
+                field.setAccessible(true);
+                positionSpeedLimit = (double)field.get(freeCamReturn);
+            } catch (Exception e) {
+                Craneshot.LOGGER.error("Failed to get positionSpeedLimit", e);
+            }
+            
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Position Speed Limit"),
+                    0.1f,
+                    20.0f,
+                    positionSpeedLimit,
+                    "positionSpeedLimit",
+                    (AbstractMovementSettings)freeCamReturn
+            ));
+            
+            // Rotation Easing slider
+            yOffset += spacing;
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+                    
+            // Use reflection to get the current value
+            double rotationEasing = 0.2; // Default value
+            try {
+                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationEasing");
+                field.setAccessible(true);
+                rotationEasing = (double)field.get(freeCamReturn);
+            } catch (Exception e) {
+                Craneshot.LOGGER.error("Failed to get rotationEasing", e);
+            }
+            
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Rotation Easing"),
+                    0.01f,
+                    1.0f,
+                    rotationEasing,
+                    "rotationEasing",
+                    (AbstractMovementSettings)freeCamReturn
+            ));
+            
+            // Rotation Speed Limit slider
+            yOffset += spacing;
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Speed Limit"), button -> {})
+                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+                    
+            // Use reflection to get the current value
+            double rotationSpeedLimit = 90.0; // Default value
+            try {
+                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationSpeedLimit");
+                field.setAccessible(true);
+                rotationSpeedLimit = (double)field.get(freeCamReturn);
+            } catch (Exception e) {
+                Craneshot.LOGGER.error("Failed to get rotationSpeedLimit", e);
+            }
+            
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Rotation Speed Limit"),
+                    0.1f,
+                    360.0f,
+                    rotationSpeedLimit,
+                    "rotationSpeedLimit",
+                    (AbstractMovementSettings)freeCamReturn
+            ));
+        }
+        
+        // Update max scroll to handle the expanded/collapsed sections
+        updateScrollBounds(yOffset + spacing);
     }
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
                                     int BUTTON_HEIGHT, int MOVEMENT_ROW_HEIGHT, int MOVEMENT_SPACING, int SETTING_HEIGHT) {
@@ -447,8 +600,8 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void updateScrollBounds(int yOffset) {
-        int contentHeight = yOffset - (CONTENT_START_Y + 20 + 10);
-        int visibleHeight = guiHeight - CONTENT_START_Y - 10;
+        int contentHeight = yOffset - (CONTENT_START_Y + 20);
+        int visibleHeight = guiHeight - CONTENT_START_Y - 30; // Additional padding
         maxScroll = Math.max(0, contentHeight - visibleHeight);
     }
 
@@ -539,6 +692,17 @@ public class MenuOverlayScreen extends Screen {
         Set<Integer> expanded = expandedMovements.computeIfAbsent(slotIndex, k -> new HashSet<>());
         if (!expanded.remove(movementIndex)) {
             expanded.add(movementIndex);
+        }
+    }
+    
+    // New methods for managing collapsible settings
+    private boolean isSettingsExpanded(String settingsKey) {
+        return expandedSettings.contains(settingsKey);
+    }
+
+    private void toggleSettingsExpanded(String settingsKey) {
+        if (!expandedSettings.remove(settingsKey)) {
+            expandedSettings.add(settingsKey);
         }
     }
 
@@ -644,5 +808,18 @@ public class MenuOverlayScreen extends Screen {
     @Override
     public boolean shouldPause() {
         return false;
+    }
+    
+    // Static methods for managing expanded settings
+    public static Set<String> getExpandedSettings() {
+        return expandedSettings;
+    }
+    
+    public static void clearExpandedSettings() {
+        expandedSettings.clear();
+    }
+    
+    public static void addExpandedSetting(String key) {
+        expandedSettings.add(key);
     }
 }
