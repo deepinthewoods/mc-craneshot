@@ -160,8 +160,17 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
+        
+        // Only update start/current to camera position if they've been explicitly set in CameraMovementManager.finishTransition
+        // For free camera mode, we want to return from the current camera position, not the original target
+        if (start.getPosition().distanceTo(camera.getPos()) > 0.1) {
+            // If the positions don't match, we're not coming back from free camera mode
+            // So we should keep the original target in 'start' and just mark resetting = true
+            // This way, the player will return to the original target position
+        }
+        
         // Reset FOV delta when movement ends
-        end.setFovMultiplier(0.0f);
+        end.setFovMultiplier(1.0f);
     }
 
     @Override

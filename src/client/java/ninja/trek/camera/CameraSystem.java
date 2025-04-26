@@ -18,6 +18,9 @@ import org.jetbrains.annotations.Nullable;
 public class CameraSystem {
     private static CameraSystem instance;
     
+    // Rendering threshold constant - if camera is closer than this, render arms; otherwise render body model
+    public static final float PLAYER_RENDER_THRESHOLD = 1.0f;
+    
     // Camera state
     private boolean cameraActive = false;
     private Vec3d cameraPosition = Vec3d.ZERO;
@@ -55,6 +58,21 @@ public class CameraSystem {
         
         ninja.trek.Craneshot.LOGGER.info("Activating camera in mode: {}", mode);
         
+        // Get the current camera if available
+        Camera currentCamera = mc.gameRenderer.getCamera();
+        Vec3d currentCameraPos = null;
+        float currentYaw = 0;
+        float currentPitch = 0;
+        
+        // Capture current camera position if possible
+        if (currentCamera != null) {
+            currentCameraPos = currentCamera.getPos();
+            currentYaw = currentCamera.getYaw();
+            currentPitch = currentCamera.getPitch();
+            ninja.trek.Craneshot.LOGGER.info("Current camera position: {} {} {}",
+                currentCameraPos.getX(), currentCameraPos.getY(), currentCameraPos.getZ());
+        }
+        
         // Only activate if not already active
         if (!cameraActive) {
             // Store original state
@@ -63,16 +81,23 @@ public class CameraSystem {
             
             ninja.trek.Craneshot.LOGGER.info("Original camera entity: {}", originalCameraEntity);
             
-            // Initialize camera position and rotation
-            if (originalCameraEntity != null) {
+            // Initialize camera position and rotation from either current camera (if available)
+            // or from the player position
+            if (currentCameraPos != null) {
+                // Use actual current camera position if available
+                cameraPosition = currentCameraPos;
+                cameraYaw = currentYaw;
+                cameraPitch = currentPitch;
+            } else if (originalCameraEntity != null) {
+                // Fallback to entity position
                 cameraPosition = originalCameraEntity.getEyePos();
                 cameraYaw = originalCameraEntity.getYaw();
                 cameraPitch = originalCameraEntity.getPitch();
-                
-                ninja.trek.Craneshot.LOGGER.info("Initial camera position: {} {} {}", 
-                    cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
-                ninja.trek.Craneshot.LOGGER.info("Initial camera rotation: {} {}", cameraYaw, cameraPitch);
             }
+            
+            ninja.trek.Craneshot.LOGGER.info("Initial camera position: {} {} {}", 
+                cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
+            ninja.trek.Craneshot.LOGGER.info("Initial camera rotation: {} {}", cameraYaw, cameraPitch);
             
             // Set camera flags based on mode
             shouldRenderHands = !mode.hideHands;
@@ -89,11 +114,10 @@ public class CameraSystem {
             cameraActive = true;
             
             // Explicitly apply position and rotation to ensure immediate update
-            Camera camera = mc.gameRenderer.getCamera();
-            if (camera != null) {
+            if (currentCamera != null) {
                 ninja.trek.Craneshot.LOGGER.info("Initial camera update");
-                ((CameraAccessor) camera).invokesetPos(cameraPosition);
-                ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+                ((CameraAccessor) currentCamera).invokesetPos(cameraPosition);
+                ((CameraAccessor) currentCamera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         } else {
             // Update settings if camera is already active
@@ -166,6 +190,16 @@ public class CameraSystem {
             ninja.trek.Craneshot.LOGGER.debug("Resetting camera entity to null");
             mc.setCameraEntity(null);
         }
+        
+        // Get the current camera position for logging
+        Vec3d currentPos = ((CameraAccessor) camera).getPos();
+        float currentYaw = camera.getYaw();
+        float currentPitch = camera.getPitch();
+        
+        // Log current and target positions
+        ninja.trek.Craneshot.LOGGER.debug("Current camera pos: {} {} {}, target: {} {} {}",
+            currentPos.getX(), currentPos.getY(), currentPos.getZ(),
+            cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
         
         // Apply position and rotation to the camera
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
@@ -320,7 +354,16 @@ public class CameraSystem {
      * Sets the camera position directly
      */
     public void setCameraPosition(Vec3d position) {
+        if (position == null) {
+            ninja.trek.Craneshot.LOGGER.warn("Attempted to set camera position to null!");
+            return;
+        }
+        
         this.cameraPosition = position;
+        
+        // Log position for debugging
+        ninja.trek.Craneshot.LOGGER.debug("CameraSystem.setCameraPosition: {} {} {}", 
+            position.getX(), position.getY(), position.getZ());
         
         // Apply changes immediately if camera is active
         if (cameraActive) {
@@ -340,6 +383,9 @@ public class CameraSystem {
     public void setCameraRotation(float yaw, float pitch) {
         this.cameraYaw = yaw;
         this.cameraPitch = pitch;
+        
+        // Log rotation for debugging
+        ninja.trek.Craneshot.LOGGER.debug("CameraSystem.setCameraRotation: {} {}", yaw, pitch);
         
         // Apply changes immediately if camera is active
         if (cameraActive) {
@@ -383,15 +429,37 @@ public class CameraSystem {
     
     /**
      * Check if hands should be rendered
+     * Takes into account both the camera mode setting and distance threshold
      */
     public boolean shouldRenderHands() {
+        if (!shouldRenderHands) return false;
+        
+        // Check camera distance to player
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && cameraActive) {
+            double distanceToPlayer = cameraPosition.distanceTo(mc.player.getEyePos());
+            // Render hands only when closer than the threshold
+            return distanceToPlayer < PLAYER_RENDER_THRESHOLD;
+        }
+        
         return shouldRenderHands;
     }
     
     /**
      * Check if player model should be rendered
+     * Takes into account both the camera mode setting and distance threshold
      */
     public boolean shouldRenderPlayerModel() {
+        if (!shouldRenderPlayerModel) return false;
+        
+        // Check camera distance to player
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && cameraActive) {
+            double distanceToPlayer = cameraPosition.distanceTo(mc.player.getEyePos());
+            // Render player model only when farther than the threshold
+            return distanceToPlayer >= PLAYER_RENDER_THRESHOLD;
+        }
+        
         return shouldRenderPlayerModel;
     }
     

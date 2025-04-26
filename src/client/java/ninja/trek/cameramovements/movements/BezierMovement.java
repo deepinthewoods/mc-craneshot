@@ -43,9 +43,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Displacement Angle Variance", min = 0.0, max = 180.0)
     private double displacementAngleVariance = 0.0;
 
-    private CameraTarget start = new CameraTarget();
+    public CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
-    private CameraTarget current = new CameraTarget();
+    public CameraTarget current = new CameraTarget();
     private Vec3d controlPoint;
     private double progress;
     private boolean resetting = false;
@@ -239,9 +239,23 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             resetting = true;
             linearMode = false;
             progress = 0.0;
-            controlPoint = generateControlPoint(end.getPosition(), start.getPosition());
+            
+            // Check if we're coming from free camera mode - positions should already match
+            // from CameraMovementManager.finishTransition
+            if (start.getPosition().distanceTo(camera.getPos()) > 0.1) {
+                // If the positions don't match, we're not coming back from free camera mode
+                // Generate a new control point for the return path
+                controlPoint = generateControlPoint(end.getPosition(), start.getPosition());
+            } else {
+                // Coming from free camera mode, generate control point for return path
+                controlPoint = generateControlPoint(camera.getPos(), CameraController.controlStick.getPosition());
+                // Log for debugging
+                ninja.trek.Craneshot.LOGGER.info("Returning from free camera with control point: {} {} {}", 
+                    controlPoint.getX(), controlPoint.getY(), controlPoint.getZ());
+            }
+            
             // Reset FOV delta when movement ends
-            end.setFovMultiplier(0.0f);
+            end.setFovMultiplier(1.0f);
         }
     }
 

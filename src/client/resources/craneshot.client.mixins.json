@@ -10,7 +10,6 @@
 		"FrustumMixin",
 		"GameRendererAccessor",
 		"GameRendererMixin",
-
 		"KeyboardInputMixin",
 		"MinecraftClientMixin",
 		"MouseAccessor",

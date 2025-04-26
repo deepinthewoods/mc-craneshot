@@ -170,6 +170,11 @@ public class CameraController {
             currentKeyMoveMode = m.getPostMoveKeys();
 
             MinecraftClient client = MinecraftClient.getInstance();
+            Camera camera = client.gameRenderer.getCamera();
+            
+            // This is where the position must be preserved
+            // freeCamPosition, freeCamYaw, and freeCamPitch should already be set by CameraMovementManager
+            // before this method is called, so we don't need to capture them again here
             
             // Handle input disabling
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
@@ -185,16 +190,34 @@ public class CameraController {
             
             // Determine if we should activate custom camera mode
             boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                                    currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA);
             
             boolean isOutPosition = (currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
                                     currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK ||
                                     currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK);
             
+            // Capture existing camera position before activating any new camera mode
+            Vec3d existingCameraPos = camera.getPos();
+            float existingYaw = camera.getYaw();
+            float existingPitch = camera.getPitch();
+            
             // Activate the appropriate camera mode
             CameraSystem cameraSystem = CameraSystem.getInstance();
             if (isFreeCamMode) {
+                // Set the position first, so it's available during activation
+                cameraSystem.setCameraPosition(freeCamPosition);
+                cameraSystem.setCameraRotation(freeCamYaw, freeCamPitch);
+                
+                // Then activate the camera
                 cameraSystem.activateCamera(CameraSystem.CameraMode.FREE_CAMERA);
+                
+                // Update the camera immediately to apply our position
+                cameraSystem.updateCamera(camera);
+                
+                // Add debug logging
+                ninja.trek.Craneshot.LOGGER.info("Activating free camera at position: {} {} {}", 
+                    freeCamPosition.getX(), freeCamPosition.getY(), freeCamPosition.getZ());
             } else if (isOutPosition) {
                 cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
             }
@@ -436,39 +459,21 @@ public class CameraController {
     }
 
     /**
-     * Updates the camera perspective based on the distance between the camera and the player.
+     * Previously updated the camera perspective based on the distance.
+     * Now this method is no longer needed as CameraSystem handles rendering decisions.
+     * Kept as a stub for backwards compatibility.
      */
     private void updatePerspective(MinecraftClient client, Camera camera) {
+        // In orthographic mode, we still need to ensure third person mode
         if (client.player == null) return;
         
         // In orthographic mode, we always want to be in third person
         if (OrthographicCameraManager.isOrthographicMode() && 
             client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-            return;
         }
         
-        // Check if camera system is controlling rendering
-        CameraSystem cameraSystem = CameraSystem.getInstance();
-        if (cameraSystem.isCameraActive()) {
-            // Let camera system handle perspective
-            if (cameraSystem.shouldRenderPlayerModel() && 
-                client.options.getPerspective() == Perspective.FIRST_PERSON) {
-                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-            } else if (!cameraSystem.shouldRenderPlayerModel() && 
-                       client.options.getPerspective() != Perspective.FIRST_PERSON) {
-                client.options.setPerspective(Perspective.FIRST_PERSON);
-            }
-            return;
-        }
-        
-        // Legacy perspective handling based on distance
-        double distance = camera.getPos().distanceTo(controlStick.getPosition());
-        if (distance > FIRST_PERSON_THRESHOLD_MIN && client.options.getPerspective() == Perspective.FIRST_PERSON) {
-            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-        } else if (distance < FIRST_PERSON_THRESHOLD_MIN && client.options.getPerspective() != Perspective.FIRST_PERSON) {
-            client.options.setPerspective(Perspective.FIRST_PERSON);
-        }
+        // No other perspective changes needed - CameraSystem now handles arm/body rendering
     }
 
     //=== Message Handling ========================================================
@@ -530,10 +535,26 @@ public class CameraController {
     }
 
     public void onComplete() {
-        currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
-        currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        // Only reset mouse/key modes if they're not actively being used in post-move mode
+        // This preserves post-movement settings when a camera movement completes
+        if (currentMouseMoveMode != POST_MOVE_MOUSE.ROTATE_CAMERA) {
+            currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+        }
         
-        // Make sure to deactivate camera system
-        CameraSystem.getInstance().deactivateCamera();
+        if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT && 
+            currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE && 
+            currentKeyMoveMode != POST_MOVE_KEYS.MOVE8) {
+            currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        }
+        
+        // Keep camera system active if we're using post-movement controls
+        boolean hasPostMoveControls = 
+            currentMouseMoveMode != POST_MOVE_MOUSE.NONE || 
+            currentKeyMoveMode != POST_MOVE_KEYS.NONE;
+            
+        if (!hasPostMoveControls) {
+            // Deactivate camera system only if not using post-movement controls
+            CameraSystem.getInstance().deactivateCamera();
+        }
     }
 }

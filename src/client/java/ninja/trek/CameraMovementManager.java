@@ -2,12 +2,14 @@ package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.util.math.Vec3d;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.MovementState;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
+import ninja.trek.mixin.client.CameraAccessor;
 
 import java.util.*;
 
@@ -176,6 +178,58 @@ public class CameraMovementManager {
 
     public void finishTransition(MinecraftClient client, Camera camera) {
         if (activeMovement != null) {
+            // Check if we're in free camera mode before initiating return
+            boolean inFreeCameraMode = 
+                CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA;
+
+            if (inFreeCameraMode) {
+                ninja.trek.Craneshot.LOGGER.info("Returning from free camera mode");
+                
+                // Get current camera values before clearing post-move state
+                Vec3d currentPos = camera.getPos();
+                float currentYaw = camera.getYaw();
+                float currentPitch = camera.getPitch();
+                
+                // Make the active movement use our current position as the starting point
+                if (activeMovement instanceof ninja.trek.cameramovements.movements.LinearMovement) {
+                    ninja.trek.cameramovements.movements.LinearMovement linearMovement = 
+                        (ninja.trek.cameramovements.movements.LinearMovement) activeMovement;
+                    
+                    // Set the starting position to our current free camera position
+                    linearMovement.start.set(currentPos, currentYaw, currentPitch);
+                    linearMovement.current.set(currentPos, currentYaw, currentPitch);
+                    
+                    // Log for debugging
+                    ninja.trek.Craneshot.LOGGER.info("Set linear movement start to free camera pos: {} {} {}", 
+                        currentPos.getX(), currentPos.getY(), currentPos.getZ());
+                } else if (activeMovement instanceof ninja.trek.cameramovements.movements.BezierMovement) {
+                    ninja.trek.cameramovements.movements.BezierMovement bezierMovement = 
+                        (ninja.trek.cameramovements.movements.BezierMovement) activeMovement;
+                    
+                    // Set the starting position to our current free camera position
+                    bezierMovement.start.set(currentPos, currentYaw, currentPitch);
+                    bezierMovement.current.set(currentPos, currentYaw, currentPitch);
+                    
+                    // Reset the bezier parameters (can't directly access progress)
+                    // Instead, we'll just reset start and current position, which will effectively reset the movement
+                    
+                    // Log for debugging
+                    ninja.trek.Craneshot.LOGGER.info("Set bezier movement start to free camera pos: {} {} {}", 
+                        currentPos.getX(), currentPos.getY(), currentPos.getZ());
+                }
+                
+                // Clear post-move state to disable free camera mode
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                
+                // Update controller state to match
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentPos;
+                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentYaw;
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentPitch;
+            }
+            
+            // Queue reset and allow return movement to bring us back to player view
             activeMovement.queueReset(client, camera);
         }
     }
@@ -243,16 +297,72 @@ public class CameraMovementManager {
         MovementState state = activeMovement.calculateState(client, camera);
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
-            if (isOut)
-                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates((AbstractMovementSettings) activeMovement);
+            if (isOut) {
+                // CRITICAL FIX: Get the exact current target position from the movement
+                CameraTarget currentTarget = state.getCameraTarget();
+                
+                // Apply raycast adjustment for collision
+                currentTarget = currentTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                
+                // Set the base target for reference
+                baseTarget = currentTarget;
+                
+                // Store the exact position in static controller variables
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentTarget.getPosition();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentTarget.getYaw();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentTarget.getPitch();
+                
+                // Set the camera directly to this position before applying post-move settings
+                if (camera != null) {
+                    ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
+                    ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
+                    
+                    // Log position for debugging
+                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}", 
+                        currentTarget.getPosition().getX(), 
+                        currentTarget.getPosition().getY(), 
+                        currentTarget.getPosition().getZ());
+                }
+                
+                // Apply post-move settings AFTER we've captured and set the position
+                AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
+            }
         }
         if (state.isComplete()) {
-            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            // Store final camera position before ending movement
+            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+            baseTarget = finalTarget;
+            
+            // Clean up movement state
+            Integer previousSlot = activeMovementSlot;
+            ICameraMovement previousMovement = activeMovement;
+            
+            // Reset movement tracking variables
             activeMovement = null;
             activeMovementSlot = null;
-            toggledStates.put(activeMovementSlot, false);
-            CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
-            return null;
+            if (previousSlot != null) {
+                toggledStates.put(previousSlot, false);
+            }
+            
+            // Only clear post-move states if we don't have an active post-movement setting
+            if (previousMovement instanceof AbstractMovementSettings) {
+                AbstractMovementSettings settings = (AbstractMovementSettings) previousMovement;
+                boolean hasPostSettings = settings.getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE || 
+                                          settings.getPostMoveKeys() != AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+                                          
+                if (!hasPostSettings) {
+                    CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                }
+            } else {
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+            }
+            
+            // Notify controller of completion, but maintain final camera position
+            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            
+            // Return the final state to ensure one last smooth frame
+            return new MovementState(finalTarget, true);
         }
 
         baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
