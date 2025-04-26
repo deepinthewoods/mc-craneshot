@@ -108,6 +108,22 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
+        
+        // When returning, continuously update the target to follow the player's head position and rotation
+        if (resetting && client.player != null) {
+            Vec3d playerPos = client.player.getEyePos();
+            float playerYaw = client.player.getYaw();
+            float playerPitch = client.player.getPitch();
+            
+            // Update return target to always be the player's current head position and rotation
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
+            
+            // If needed, update the control point to ensure smooth path to player
+            if (progress < 0.5) {
+                controlPoint = generateControlPoint(current.getPosition(), playerPos);
+            }
+        }
+        
         Vec3d desiredPos;
 
         if (!linearMode) {
@@ -240,17 +256,29 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             linearMode = false;
             progress = 0.0;
             
-            // Check if we're coming from free camera mode - positions should already match
-            // from CameraMovementManager.finishTransition
-            if (start.getPosition().distanceTo(camera.getPos()) > 0.1) {
-                // If the positions don't match, we're not coming back from free camera mode
-                // Generate a new control point for the return path
-                controlPoint = generateControlPoint(end.getPosition(), start.getPosition());
-            } else {
-                // Coming from free camera mode, generate control point for return path
-                controlPoint = generateControlPoint(camera.getPos(), CameraController.controlStick.getPosition());
-                // Log for debugging
-                ninja.trek.Craneshot.LOGGER.info("Returning from free camera with control point: {} {} {}", 
+            // Always target the player head position/rotation during return phase
+            if (client.player != null) {
+                // Always return to player's head rotation regardless of END_TARGET
+                float playerYaw = client.player.getYaw();
+                float playerPitch = client.player.getPitch();
+                Vec3d playerPos = client.player.getEyePos();
+                
+                // Set the target position to player head with proper rotation for return
+                end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+                
+                ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
+                    playerPos, playerYaw, playerPitch);
+            }
+            
+            // Update current camera position
+            current = CameraTarget.fromCamera(camera);
+            
+            // Generate a control point for the return path
+            // We're always returning to player position now
+            if (client.player != null) {
+                controlPoint = generateControlPoint(current.getPosition(), client.player.getEyePos());
+                
+                ninja.trek.Craneshot.LOGGER.info("Returning with control point: {} {} {}", 
                     controlPoint.getX(), controlPoint.getY(), controlPoint.getZ());
             }
             

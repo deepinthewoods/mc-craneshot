@@ -89,6 +89,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
+        
+        // When returning, continuously update the target to follow the player's head position and rotation
+        if (resetting && client.player != null) {
+            Vec3d playerPos = client.player.getEyePos();
+            float playerYaw = client.player.getYaw();
+            float playerPitch = client.player.getPitch();
+            
+            // Update return target to always be the player's current head position and rotation
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
+        }
 
         // Position interpolation with speed limit
         Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
@@ -161,12 +171,23 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (client.player == null) return;
         resetting = true;
         
-        // Only update start/current to camera position if they've been explicitly set in CameraMovementManager.finishTransition
-        // For free camera mode, we want to return from the current camera position, not the original target
-        if (start.getPosition().distanceTo(camera.getPos()) > 0.1) {
-            // If the positions don't match, we're not coming back from free camera mode
-            // So we should keep the original target in 'start' and just mark resetting = true
-            // This way, the player will return to the original target position
+        // Always target the player head position/rotation during return phase
+        if (client.player != null) {
+            // Always return to player's head rotation regardless of END_TARGET
+            float playerYaw = client.player.getYaw();
+            float playerPitch = client.player.getPitch();
+            
+            // Set the target position to player head and proper rotation for return
+            Vec3d playerPos = client.player.getEyePos();
+            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+            
+            ninja.trek.Craneshot.LOGGER.info("LinearMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
+                playerPos, playerYaw, playerPitch);
+        }
+        
+        // For free camera, also update the current target's position to ensure smooth transition
+        if (current.getPosition().distanceTo(camera.getPos()) > 0.1) {
+            current = CameraTarget.fromCamera(camera);
         }
         
         // Reset FOV delta when movement ends

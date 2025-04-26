@@ -66,7 +66,7 @@ public abstract class AbstractMovementSettings {
             type = MovementSettingType.ENUM,
             description = "Determines if camera follows in front or behind the player"
     )
-    protected END_TARGET endTarget = END_TARGET.HEAD_BACK;
+    public END_TARGET endTarget = END_TARGET.HEAD_BACK;
 
     public enum SCROLL_WHEEL {NONE, DISTANCE, FOV};
 

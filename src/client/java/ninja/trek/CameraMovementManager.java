@@ -196,6 +196,13 @@ public class CameraMovementManager {
                 
                 // Start the FreeCamReturnMovement to handle the transition back to normal camera
                 FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
+                
+                // Set the FreeCamReturnMovement's endTarget to match the original movement
+                if (originalMovement instanceof AbstractMovementSettings) {
+                    AbstractMovementSettings originalSettings = (AbstractMovementSettings) originalMovement;
+                    freeCamReturnMovement.endTarget = originalSettings.getEndTarget();
+                }
+                
                 freeCamReturnMovement.start(client, camera);
                 
                 // Set the FreeCamReturnMovement as the active movement
@@ -207,6 +214,7 @@ public class CameraMovementManager {
             }
             
             // Normal case - queue reset directly
+            // This will trigger return to the player's head position and rotation
             activeMovement.queueReset(client, camera);
         }
     }

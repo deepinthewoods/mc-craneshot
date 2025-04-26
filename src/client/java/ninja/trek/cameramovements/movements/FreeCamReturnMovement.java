@@ -32,6 +32,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private boolean isComplete = false;
     private boolean isStarted = false;
     private double completionThreshold = 0.05; // Distance in blocks to consider movement complete
+    private END_TARGET originalEndTarget = END_TARGET.HEAD_BACK; // Store the original movement's target type
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -39,24 +40,45 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
         
+        // Store the original end target for proper rotation calculation
+        originalEndTarget = CameraController.currentEndTarget;
+        
         // Calculate the destination (out position)
         Vec3d targetPos = CameraController.controlStick.getPosition();
         float targetYaw = CameraController.controlStick.getYaw();
         float targetPitch = CameraController.controlStick.getPitch();
+        
+        // Ensure target rotation is correct for the original movement's end target type
+        if (originalEndTarget == END_TARGET.HEAD_FRONT) {
+            // For HEAD_FRONT we need to ensure we return to the player's head rotation inverted
+            if (client.player != null) {
+                targetYaw = (client.player.getYaw() + 180) % 360;
+                targetPitch = -client.player.getPitch();
+            }
+        }
         
         end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         
         isComplete = false;
         isStarted = true;
         
-        Craneshot.LOGGER.info("FreeCamReturnMovement started: {} -> {}", 
-            start.getPosition(), end.getPosition());
+        Craneshot.LOGGER.info("FreeCamReturnMovement started: {} -> {}, Original Target: {}", 
+            start.getPosition(), end.getPosition(), originalEndTarget);
     }
 
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera) {
         if (!isStarted || client.player == null) {
             return new MovementState(current, true);
+        }
+        
+        // For HEAD_FRONT target type, we need to continuously update the target rotation
+        // since the player might be moving and changing their orientation
+        if (originalEndTarget == END_TARGET.HEAD_FRONT) {
+            // Update the end target rotation based on player's current orientation
+            float targetYaw = (client.player.getYaw() + 180) % 360;
+            float targetPitch = -client.player.getPitch();
+            end = new CameraTarget(end.getPosition(), targetYaw, targetPitch, end.getFovMultiplier());
         }
         
         // Position interpolation with speed limit
