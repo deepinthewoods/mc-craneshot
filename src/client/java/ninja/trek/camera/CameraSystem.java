@@ -53,17 +53,25 @@ public class CameraSystem {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null) return;
         
+        ninja.trek.Craneshot.LOGGER.info("Activating camera in mode: {}", mode);
+        
         // Only activate if not already active
         if (!cameraActive) {
             // Store original state
             originalCameraEntity = mc.getCameraEntity();
             originalChunkCulling = mc.chunkCullingEnabled;
             
+            ninja.trek.Craneshot.LOGGER.info("Original camera entity: {}", originalCameraEntity);
+            
             // Initialize camera position and rotation
             if (originalCameraEntity != null) {
                 cameraPosition = originalCameraEntity.getEyePos();
                 cameraYaw = originalCameraEntity.getYaw();
                 cameraPitch = originalCameraEntity.getPitch();
+                
+                ninja.trek.Craneshot.LOGGER.info("Initial camera position: {} {} {}", 
+                    cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
+                ninja.trek.Craneshot.LOGGER.info("Initial camera rotation: {} {}", cameraYaw, cameraPitch);
             }
             
             // Set camera flags based on mode
@@ -74,9 +82,22 @@ public class CameraSystem {
             // Apply chunk culling setting
             mc.chunkCullingEnabled = !disableChunkCulling;
             
+            // Set the camera entity to null to detach from player
+            ninja.trek.Craneshot.LOGGER.info("Setting camera entity to null");
+            mc.setCameraEntity(null);
+            
             cameraActive = true;
+            
+            // Explicitly apply position and rotation to ensure immediate update
+            Camera camera = mc.gameRenderer.getCamera();
+            if (camera != null) {
+                ninja.trek.Craneshot.LOGGER.info("Initial camera update");
+                ((CameraAccessor) camera).invokesetPos(cameraPosition);
+                ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+            }
         } else {
             // Update settings if camera is already active
+            ninja.trek.Craneshot.LOGGER.info("Camera already active, updating settings");
             shouldRenderHands = !mode.hideHands;
             shouldRenderPlayerModel = mode.showPlayerModel;
             
@@ -95,8 +116,11 @@ public class CameraSystem {
         
         MinecraftClient mc = MinecraftClient.getInstance();
         
+        ninja.trek.Craneshot.LOGGER.info("Deactivating camera system");
+        
         // Restore original settings
         if (originalCameraEntity != null && mc != null) {
+            ninja.trek.Craneshot.LOGGER.info("Restoring original camera entity");
             mc.setCameraEntity(originalCameraEntity);
         }
         
@@ -107,6 +131,10 @@ public class CameraSystem {
         // Reset camera state
         cameraActive = false;
         cameraVelocity = Vec3d.ZERO;
+        
+        ninja.trek.Craneshot.LOGGER.info("Final camera position: {} {} {}", 
+            cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
+        ninja.trek.Craneshot.LOGGER.info("Final camera rotation: {} {}", cameraYaw, cameraPitch);
         
         // Mark chunks for rebuild to fix any rendering issues
         if (mc != null && mc.worldRenderer != null) {
@@ -131,9 +159,24 @@ public class CameraSystem {
     public void updateCamera(Camera camera) {
         if (!cameraActive || camera == null) return;
         
+        MinecraftClient mc = MinecraftClient.getInstance();
+        
+        // Ensure we're not using player as camera entity
+        if (mc.getCameraEntity() != null) {
+            ninja.trek.Craneshot.LOGGER.debug("Resetting camera entity to null");
+            mc.setCameraEntity(null);
+        }
+        
         // Apply position and rotation to the camera
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+        
+        // Verify that our changes actually took effect
+        Vec3d actualPos = ((CameraAccessor) camera).getPos();
+        if (!actualPos.equals(cameraPosition)) {
+            ninja.trek.Craneshot.LOGGER.warn("Camera position not updated correctly! Expected: {} but got: {}", 
+                cameraPosition, actualPos);
+        }
     }
     
     /**
@@ -164,6 +207,12 @@ public class CameraSystem {
         
         // Apply velocity to position
         cameraPosition = cameraPosition.add(cameraVelocity);
+        
+        // Immediately update camera if available
+        Camera camera = mc.gameRenderer.getCamera();
+        if (camera != null) {
+            updateCamera(camera);
+        }
     }
     
     /**
@@ -251,7 +300,20 @@ public class CameraSystem {
         
         // Apply mouse movement to rotation
         cameraYaw += deltaX * sensitivity;
+        // Normalize yaw to prevent floating-point issues after extended rotation
+        while (cameraYaw > 360.0f) cameraYaw -= 360.0f;
+        while (cameraYaw < 0.0f) cameraYaw += 360.0f;
+        
         cameraPitch = (float) MathHelper.clamp(cameraPitch - deltaY * sensitivity, -90.0f, 90.0f);
+        
+        // Immediately update camera if available
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc != null) {
+            Camera camera = mc.gameRenderer.getCamera();
+            if (camera != null) {
+                updateCamera(camera);
+            }
+        }
     }
     
     /**
@@ -259,6 +321,17 @@ public class CameraSystem {
      */
     public void setCameraPosition(Vec3d position) {
         this.cameraPosition = position;
+        
+        // Apply changes immediately if camera is active
+        if (cameraActive) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc != null) {
+                Camera camera = mc.gameRenderer.getCamera();
+                if (camera != null) {
+                    ((CameraAccessor) camera).invokesetPos(cameraPosition);
+                }
+            }
+        }
     }
     
     /**
@@ -267,6 +340,17 @@ public class CameraSystem {
     public void setCameraRotation(float yaw, float pitch) {
         this.cameraYaw = yaw;
         this.cameraPitch = pitch;
+        
+        // Apply changes immediately if camera is active
+        if (cameraActive) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc != null) {
+                Camera camera = mc.gameRenderer.getCamera();
+                if (camera != null) {
+                    ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+                }
+            }
+        }
     }
     
     /**
