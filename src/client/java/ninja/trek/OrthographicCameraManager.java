@@ -19,6 +19,7 @@ public class OrthographicCameraManager {
      * Sets the orthographic mode to a specific state without toggling.
      * This is used internally when we need to ensure consistency between
      * camera movements and the global orthographic state.
+     * Uses a smooth transition rather than an immediate switch.
      * 
      * @param enabled Whether orthographic mode should be enabled or disabled
      * @param showMessage Whether to show a feedback message to the player

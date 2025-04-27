@@ -111,6 +111,10 @@ public abstract class WorldRendererMixin {
                 if (isOrthographic) {
                     // Use the appropriate method instead of the field
                     worldRenderer.scheduleTerrainUpdate();
+                    
+                    // Ensure chunk culling is disabled in orthographic mode
+                    // This prevents problems with missing chunks
+                    MinecraftClient.getInstance().chunkCullingEnabled = false;
                 }
             }
         }

@@ -1,7 +1,9 @@
 package ninja.trek.mixin.client;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
+import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
 import ninja.trek.OrthographicCameraManager;
 import ninja.trek.cameramovements.CameraTarget;
@@ -11,6 +13,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(GameRenderer.class)
@@ -18,7 +21,46 @@ public class OrthographicGameRendererMixin {
 
     @Shadow @Final
     private MinecraftClient client;
+    
+    // Transition state
+    private float transitionProgress = 0.0f;
+    private boolean transitionActive = false;
+    private boolean transitionTargetOrtho = false;
+    private static final float TRANSITION_SPEED = 0.08f; // Adjust for faster/slower transitions
 
+    /**
+     * Updates the transition progress on each tick.
+     * This creates a smooth transition effect between perspective and orthographic modes.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void onTick(CallbackInfo ci) {
+        boolean shouldBeOrtho = OrthographicCameraManager.isOrthographicMode();
+        
+        // Start transition if needed
+        if (shouldBeOrtho != transitionTargetOrtho) {
+            transitionActive = true;
+            transitionTargetOrtho = shouldBeOrtho;
+            Craneshot.LOGGER.info("Starting projection transition to: {}", transitionTargetOrtho ? "orthographic" : "perspective");
+        }
+        
+        // Update transition progress
+        if (transitionActive) {
+            if (transitionTargetOrtho) {
+                // Transitioning to orthographic
+                transitionProgress = Math.min(1.0f, transitionProgress + TRANSITION_SPEED);
+                if (transitionProgress >= 1.0f) {
+                    transitionActive = false;
+                }
+            } else {
+                // Transitioning to perspective
+                transitionProgress = Math.max(0.0f, transitionProgress - TRANSITION_SPEED);
+                if (transitionProgress <= 0.0f) {
+                    transitionActive = false;
+                }
+            }
+        }
+    }
+    
     /**
      * Modifies the projection matrix to use orthographic projection when enabled.
      * Uses an extremely wide view to prevent culling at the edges.
@@ -26,56 +68,88 @@ public class OrthographicGameRendererMixin {
      */
     @Inject(method = "getBasicProjectionMatrix", at = @At("RETURN"), cancellable = true)
     private void onGetBasicProjectionMatrix(float fovDegrees, CallbackInfoReturnable<Matrix4f> cir) {
-        // Get current camera target to check ortho factor
-        CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
-        float orthoFactor = 0.0f;
-        
-        // Additional check to ensure we don't use stale targets when no movement is active
-        boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
-        
-        // Only get ortho factor from the target if we have an active movement
-        if (currentTarget != null && hasActiveMovement) {
-            orthoFactor = currentTarget.getOrthoFactor();
-            ninja.trek.Craneshot.LOGGER.info("Current ortho factor: {}", orthoFactor);
-        } else if (currentTarget != null && !hasActiveMovement) {
-            // If we have a target but no active movement, something is wrong - force reset
-            ninja.trek.Craneshot.LOGGER.warn("Found target but no active movement - ignoring stale ortho factor");
-            orthoFactor = 0.0f;
+        // If we're in perspective mode with no transition active, return early
+        if (!OrthographicCameraManager.isOrthographicMode() && 
+            !transitionActive && 
+            transitionProgress <= 0.001f &&
+            !hasActiveMovementWithOrtho()) {
+            return;
+        }
+
+        // Special case: if rendering panorama, skip orthographic rendering
+        GameRenderer thisRenderer = (GameRenderer)(Object)this;
+        if (thisRenderer.isRenderingPanorama()) {
+            return;
         }
         
-        // Check if camera system is active
-        boolean cameraSystemActive = ninja.trek.camera.CameraSystem.getInstance().isCameraActive();
+        // Get effective ortho factor - either from transition or from camera movement
+        float effectiveOrthoFactor = getEffectiveOrthoFactor();
         
-        // Failsafe: if we have ortho factor > 0 but no active movement or camera system,
-        // this is likely a stale state - force reset ortho factor to 0
-        if (orthoFactor > 0.001f && (!hasActiveMovement || !cameraSystemActive)) {
-            ninja.trek.Craneshot.LOGGER.warn("Detected stale ortho factor with inactive movement/camera - forcing reset");
-            orthoFactor = 0.0f;
-            
-            // Emergency reset - request deactivation of the camera system
-            if (cameraSystemActive) {
-                ninja.trek.Craneshot.LOGGER.warn("Emergency reset: Deactivating camera system");
-                ninja.trek.camera.CameraSystem.getInstance().deactivateCamera();
-            }
+        // Skip further processing if ortho factor is effectively zero
+        if (effectiveOrthoFactor <= 0.001f) {
+            return;
         }
         
-        // Apply orthographic projection if either global ortho mode is enabled or if we have a non-zero ortho factor
-        if (OrthographicCameraManager.isOrthographicMode() || orthoFactor > 0.001f) {
-            ninja.trek.Craneshot.LOGGER.info("Applying orthographic projection, orthoFactor={}, global={}", 
-                                            orthoFactor, OrthographicCameraManager.isOrthographicMode());
-            GameRenderer thisRenderer = (GameRenderer)(Object)this;
+        try {
+            // Access renderer for zoom values
             GameRendererAccessor accessor = (GameRendererAccessor)thisRenderer;
             
+            // Get the original perspective matrix from the return value
+            Matrix4f perspectiveMatrix = cir.getReturnValue();
+            if (perspectiveMatrix == null) {
+                Craneshot.LOGGER.error("Perspective matrix is null, skipping orthographic projection");
+                return;
+            }
+            
+            // Create orthographic projection matrix
+            Matrix4f orthoMatrix = createOrthographicMatrix(fovDegrees, accessor);
+            if (orthoMatrix == null) {
+                return; // Error already logged in createOrthographicMatrix
+            }
+            
+            // If we're fully in orthographic mode (or almost), just use the ortho matrix
+            if (effectiveOrthoFactor >= 0.999f) {
+                cir.setReturnValue(orthoMatrix);
+            } else {
+                // Otherwise blend between perspective and orthographic matrices
+                try {
+                    Matrix4f blendedMatrix = new Matrix4f();
+                    blendedMatrix.set(perspectiveMatrix);
+                    blendedMatrix.lerp(orthoMatrix, effectiveOrthoFactor);
+                    cir.setReturnValue(blendedMatrix);
+                    
+                    if (transitionActive) {
+                        Craneshot.LOGGER.debug("Blending with transition factor: {}", effectiveOrthoFactor);
+                    }
+                } catch (Exception e) {
+                    Craneshot.LOGGER.error("Error blending matrices: {}", e.getMessage());
+                    // Fall back to perspective matrix if blending fails
+                    cir.setReturnValue(perspectiveMatrix);
+                }
+            }
+            
+            // Disable chunk culling for any amount of orthographic projection
+            // This prevents chunks from disappearing at extreme angles
+            this.client.chunkCullingEnabled = false;
+        } catch (Exception e) {
+            // Catch-all for any unexpected errors
+            Craneshot.LOGGER.error("Critical error in orthographic projection: {}", e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Creates an orthographic projection matrix with appropriate safeguards
+     * to prevent NaN values and extreme angles issues
+     */
+    private Matrix4f createOrthographicMatrix(float fovDegrees, GameRendererAccessor accessor) {
+        try {
             Matrix4f matrix = new Matrix4f();
             
             // Get window dimensions
-            float aspectRatio = (float) this.client.getWindow().getFramebufferWidth() / this.client.getWindow().getFramebufferHeight();
-            float scale = OrthographicCameraManager.getOrthoScale();
-            
-            // Skip if rendering panorama
-            if (thisRenderer.isRenderingPanorama()) {
-                return;
-            }
+            float aspectRatio = (float) this.client.getWindow().getFramebufferWidth() / 
+                               (float) this.client.getWindow().getFramebufferHeight();
+            float baseScale = calculateBaseScale(fovDegrees);
             
             // Apply zoom transformation if needed
             float zoom = accessor.getZoom();
@@ -84,134 +158,140 @@ public class OrthographicGameRendererMixin {
                 matrix.scale(zoom, zoom, 1.0F);
             }
             
-            // Get the original perspective matrix from the return value
-            Matrix4f perspectiveMatrix = cir.getReturnValue();
+            // Calculate view dimensions
+            float width = baseScale * aspectRatio;
+            float height = baseScale;
             
-            // If we're using blended projection from camera movement
-            if (currentTarget != null && orthoFactor > 0.001f && orthoFactor < 0.999f) {
-                // Create orthographic projection
-                Matrix4f orthoMatrix = new Matrix4f();
+            // Ensure positive non-zero values
+            float safeWidth = Math.max(0.1f, width);
+            float safeHeight = Math.max(0.1f, height);
+            
+            // Use a fixed near plane to prevent issues with upward rotations
+            float nearPlane = 0.05F;
+            // Use a far plane that's distant enough but not too far to cause precision issues
+            float farPlane = 1000.0F;
+            
+            // Check if camera is at an extreme angle
+            boolean extremeAngle = false;
+            Camera camera = this.client.gameRenderer.getCamera();
+            if (camera != null) {
+                float pitch = Math.abs(camera.getPitch());
+                extremeAngle = pitch > 80.0f; // Near vertical looking up or down
                 
-                // Calculate distance-adaptive scale
-                float baseScale = scale;
-                if (currentTarget != null && this.client.player != null) {
-                    // Use distance to player to match orthographic view with perspective view
-                    double distanceToPlayer = currentTarget.getPosition().distanceTo(this.client.player.getEyePos());
+                // Apply special handling for extreme angles
+                if (extremeAngle) {
+                    Craneshot.LOGGER.debug("Applying special matrix handling for extreme camera angle: pitch={}", pitch);
                     
-                    // Calculate a stable scale factor based on FOV and distance
-                    // This makes the orthographic view match what the player sees in perspective
-                    float fovRadians = (float) Math.toRadians(fovDegrees);
-                    baseScale = (float)(Math.tan(fovRadians/2) * distanceToPlayer * 2.0f);
+                    // Use a more conservative near plane for extreme angles
+                    nearPlane = 0.1F;
                     
-                    // Make sure we get a safe value for the scale factor
-                    baseScale = (float)Math.max(1.0f, Math.min(100.0f, baseScale)); 
-                    
-                    ninja.trek.Craneshot.LOGGER.debug("Distance to player: {}, FOV: {}, calculated baseScale: {}", 
-                            distanceToPlayer, fovDegrees, baseScale);
+                    // Use smaller width/height for extreme angles to prevent precision issues
+                    safeWidth = Math.min(safeWidth, 100.0f);
+                    safeHeight = Math.min(safeHeight, 100.0f);
                 }
-                
-                // The scale affects how much of the world is visible (larger = more zoomed out)
-                float width = baseScale * aspectRatio;
-                float height = baseScale;
-                
-                // Apply zoom transformation if needed
-                if (zoom != 1.0F) {
-                    orthoMatrix.translate(accessor.getZoomX(), -accessor.getZoomY(), 0.0F);
-                    orthoMatrix.scale(zoom, zoom, 1.0F);
-                }
-                
-                // Create orthographic projection with safe values
-                try {
-                    // Ensure positive non-zero values for width and height
-                    float safeWidth = Math.max(0.1f, width * 2);
-                    float safeHeight = Math.max(0.1f, height * 2);
-                    
-                    orthoMatrix.ortho(
-                        -safeWidth, safeWidth,             // left, right 
-                        -safeHeight, safeHeight,           // bottom, top 
-                        0.1F,                              // safe near plane that's not too close
-                        Math.max(100.0F, baseScale * 50)  // safe far plane
-                            , true
-                    );
-                    
-                    ninja.trek.Craneshot.LOGGER.debug("Created ortho matrix with width={}, height={}, near=0.1, far={}",
-                                              safeWidth, safeHeight, Math.max(100.0F, baseScale * 50));
-                } catch (Exception e) {
-                    ninja.trek.Craneshot.LOGGER.error("Error creating orthographic matrix: {}", e.getMessage());
-                    return; // Skip orthographic rendering if there's an error
-                }
-                
-                // Blend between perspective and orthographic matrices
-                // This is a basic approximation but should provide a smooth transition
-                // Use temporary matrices to avoid modifying the originals
-                try {
-                    Matrix4f blendedMatrix = new Matrix4f();
-                    blendedMatrix.set(perspectiveMatrix);
-                    
-                    // Ensure orthoFactor is within valid range to prevent NaN issues
-                    float safeOrthoFactor = Math.max(0.0f, Math.min(1.0f, orthoFactor));
-                    blendedMatrix.lerp(orthoMatrix, safeOrthoFactor);
-                    
-                    ninja.trek.Craneshot.LOGGER.info("Blending ortho projection with factor: {}", safeOrthoFactor);
-                    cir.setReturnValue(blendedMatrix);
-                } catch (Exception e) {
-                    ninja.trek.Craneshot.LOGGER.error("Error blending matrices: {}", e.getMessage());
-                    // Fall back to the original perspective matrix if blending fails
-                    cir.setReturnValue(perspectiveMatrix);
-                }
-            } 
-            else if (orthoFactor >= 0.999f || OrthographicCameraManager.isOrthographicMode()) {
-                // Full orthographic projection for either global ortho mode or full ortho factor
-                // Calculate distance-adaptive scale
-                float baseScale = scale;
-                if (currentTarget != null && this.client.player != null) {
-                    // Use distance to player to match orthographic view with perspective view
-                    double distanceToPlayer = currentTarget.getPosition().distanceTo(this.client.player.getEyePos());
-                    
-                    // Calculate a stable scale factor based on FOV and distance
-                    // This makes the orthographic view match what the player sees in perspective
-                    float fovRadians = (float) Math.toRadians(fovDegrees);
-                    baseScale = (float)(Math.tan(fovRadians/2) * distanceToPlayer * 2.0f);
-                    
-                    // Make sure we get a safe value for the scale factor
-                    baseScale = (float)Math.max(1.0f, Math.min(100.0f, baseScale)); 
-                    
-                    ninja.trek.Craneshot.LOGGER.debug("Full ortho - Distance to player: {}, FOV: {}, calculated baseScale: {}", 
-                            distanceToPlayer, fovDegrees, baseScale);
-                }
-                
-                // The scale affects how much of the world is visible (larger = more zoomed out)
-                float width = baseScale * aspectRatio;
-                float height = baseScale;
-                
-                // Make the view frustum extremely large to prevent any culling
-                // Use safe near and far planes to avoid infinity/NaN issues
-                try {
-                    // Ensure positive non-zero values for width and height
-                    float safeWidth = Math.max(0.1f, width * 2);
-                    float safeHeight = Math.max(0.1f, height * 2);
-
-                    matrix.ortho(
-                        -safeWidth, safeWidth,             // left, right 
-                        -safeHeight, safeHeight,           // bottom, top 
-                        0.1F,                              // safe near plane that's not too close
-                        Math.max(100.0F, baseScale * 50)  // safe far plane
-                            , true
-                    );
-                    
-                    ninja.trek.Craneshot.LOGGER.debug("Created full ortho matrix with width={}, height={}, near=0.1, far={}",
-                                               safeWidth, safeHeight, Math.max(100.0F, baseScale * 50));
-                } catch (Exception e) {
-                    ninja.trek.Craneshot.LOGGER.error("Error creating full orthographic matrix: {}", e.getMessage());
-                    return; // Skip orthographic rendering if there's an error
-                }
-                
-                ninja.trek.Craneshot.LOGGER.info("Applying full orthographic projection");
-                cir.setReturnValue(matrix);
             }
             
-            // Make sure chunk culling is disabled for any ortho mode
-            this.client.chunkCullingEnabled = false;
+            // Create the orthographic projection with special handling for extreme angles
+            try {
+                matrix.ortho(
+                    -safeWidth, safeWidth,          // left, right 
+                    -safeHeight, safeHeight,        // bottom, top 
+                    nearPlane, farPlane,            // near, far
+                    true                           // zero to one depth range
+                );
+            } catch (Exception e) {
+                // If ortho creation fails, try with even more conservative values
+                Craneshot.LOGGER.warn("Failed to create ortho matrix, trying with more conservative values: {}", e.getMessage());
+                safeWidth = 50.0f;
+                safeHeight = 50.0f;
+                nearPlane = 0.5f;
+                farPlane = 500.0f;
+                
+                matrix.ortho(
+                    -safeWidth, safeWidth, 
+                    -safeHeight, safeHeight,
+                    nearPlane, farPlane,
+                    true
+                );
+            }
+            
+            // Return the configured matrix
+            return matrix;
+        } catch (Exception e) {
+            Craneshot.LOGGER.error("Failed to create orthographic matrix: {}", e.getMessage());
+            return null;
         }
+    }
+    
+    /**
+     * Calculates a stable and safe scale factor for orthographic projection
+     */
+    private float calculateBaseScale(float fovDegrees) {
+        // Start with the configured scale from settings
+        float scale = OrthographicCameraManager.getOrthoScale();
+        
+        // Get the camera target if available
+        CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
+        
+        // If we have a camera target and player, adjust scale based on distance
+        if (currentTarget != null && this.client.player != null) {
+            try {
+                // Calculate distance to player
+                double distanceToPlayer = currentTarget.getPosition().distanceTo(this.client.player.getEyePos());
+                distanceToPlayer = Math.max(1.0, Math.min(200.0, distanceToPlayer));
+                
+                // Calculate scale based on FOV and distance
+                float fovRadians = (float) Math.toRadians(fovDegrees);
+                float calculatedScale = (float)(Math.tan(fovRadians/2) * distanceToPlayer * 2.0f);
+                
+                // Blend between configured scale and calculated scale
+                scale = scale * 0.7f + calculatedScale * 0.3f;
+            } catch (Exception e) {
+                Craneshot.LOGGER.warn("Error calculating adaptive scale: {}", e.getMessage());
+                // Keep using the default scale if calculation fails
+            }
+        }
+        
+        // Ensure the scale is within safe bounds
+        return Math.max(1.0f, Math.min(100.0f, scale));
+    }
+    
+    /**
+     * Gets the effective orthographic factor considering both transition and camera movement
+     */
+    private float getEffectiveOrthoFactor() {
+        // Start with transition progress
+        float factor = transitionProgress;
+        
+        // Check if we have an active camera movement with ortho component
+        CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
+        boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+        
+        if (currentTarget != null && hasActiveMovement) {
+            float movementOrthoFactor = currentTarget.getOrthoFactor();
+            
+            // Use the maximum of transition and movement ortho factors
+            factor = Math.max(factor, movementOrthoFactor);
+            
+            // Log significant ortho factor from camera movement
+            if (movementOrthoFactor > 0.01f) {
+                Craneshot.LOGGER.debug("Camera movement ortho factor: {}", movementOrthoFactor);
+            }
+        }
+        
+        // Ensure factor is in valid range
+        return Math.max(0.0f, Math.min(1.0f, factor));
+    }
+    
+    /**
+     * Utility method to check if there's an active camera movement with orthographic component
+     */
+    private boolean hasActiveMovementWithOrtho() {
+        CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
+        boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+        
+        return currentTarget != null && 
+               hasActiveMovement && 
+               currentTarget.getOrthoFactor() > 0.001f;
     }
 }
