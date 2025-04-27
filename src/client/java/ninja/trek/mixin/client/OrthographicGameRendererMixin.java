@@ -131,6 +131,7 @@ public class OrthographicGameRendererMixin {
                         -safeHeight, safeHeight,           // bottom, top 
                         0.1F,                              // safe near plane that's not too close
                         Math.max(100.0F, baseScale * 50)  // safe far plane
+                            , true
                     );
                     
                     ninja.trek.Craneshot.LOGGER.debug("Created ortho matrix with width={}, height={}, near=0.1, far={}",
@@ -189,12 +190,13 @@ public class OrthographicGameRendererMixin {
                     // Ensure positive non-zero values for width and height
                     float safeWidth = Math.max(0.1f, width * 2);
                     float safeHeight = Math.max(0.1f, height * 2);
-                    
+
                     matrix.ortho(
                         -safeWidth, safeWidth,             // left, right 
                         -safeHeight, safeHeight,           // bottom, top 
                         0.1F,                              // safe near plane that's not too close
                         Math.max(100.0F, baseScale * 50)  // safe far plane
+                            , true
                     );
                     
                     ninja.trek.Craneshot.LOGGER.debug("Created full ortho matrix with width={}, height={}, near=0.1, far={}",
