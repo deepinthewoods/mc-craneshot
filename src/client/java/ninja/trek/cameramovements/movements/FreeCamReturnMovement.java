@@ -54,12 +54,20 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float targetYaw = CameraController.controlStick.getYaw();
         float targetPitch = CameraController.controlStick.getPitch();
         
-        // Ensure target rotation is correct for the original movement's end target type
+        // Set initial target rotation based on the original movement's end target type
+        // Note: For dynamic targets like HEAD_BACK and HEAD_FRONT, this will be 
+        // continuously updated in calculateState() to track the player's current orientation
         if (originalEndTarget == END_TARGET.HEAD_FRONT) {
             // For HEAD_FRONT we need to ensure we return to the player's head rotation inverted
             if (client.player != null) {
                 targetYaw = (client.player.getYaw() + 180) % 360;
                 targetPitch = -client.player.getPitch();
+            }
+        } else if (originalEndTarget == END_TARGET.HEAD_BACK) {
+            // For HEAD_BACK we use the player's current orientation
+            if (client.player != null) {
+                targetYaw = client.player.getYaw();
+                targetPitch = client.player.getPitch();
             }
         }
         
@@ -80,14 +88,37 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             return new MovementState(current, true);
         }
         
-        // For HEAD_FRONT target type, we need to continuously update the target rotation
-        // since the player might be moving and changing their orientation
+        // Continuously update the target rotation based on the player's current orientation
+        // This ensures we always return to the current player head position, not just the initial one
         if (originalEndTarget == END_TARGET.HEAD_FRONT) {
-            // Update the end target rotation based on player's current orientation
+            // For HEAD_FRONT target type, invert the player's orientation
             float targetYaw = (client.player.getYaw() + 180) % 360;
             float targetPitch = -client.player.getPitch();
+            float oldYaw = end.getYaw();
+            float oldPitch = end.getPitch();
             end = new CameraTarget(end.getPosition(), targetYaw, targetPitch, end.getFovMultiplier());
-        }
+            
+            // Log significant rotation changes (when greater than 1 degree)
+            if (Math.abs(targetYaw - oldYaw) > 1.0f || Math.abs(targetPitch - oldPitch) > 1.0f) {
+                Craneshot.LOGGER.debug("Updating HEAD_FRONT target rotation: yaw {} -> {}, pitch {} -> {}", 
+                    oldYaw, targetYaw, oldPitch, targetPitch);
+            }
+        } else if (originalEndTarget == END_TARGET.HEAD_BACK) {
+            // For HEAD_BACK target type, use the player's current orientation
+            float targetYaw = client.player.getYaw();
+            float targetPitch = client.player.getPitch();
+            float oldYaw = end.getYaw();
+            float oldPitch = end.getPitch();
+            end = new CameraTarget(end.getPosition(), targetYaw, targetPitch, end.getFovMultiplier());
+            
+            // Log significant rotation changes (when greater than 1 degree)
+            if (Math.abs(targetYaw - oldYaw) > 1.0f || Math.abs(targetPitch - oldPitch) > 1.0f) {
+                Craneshot.LOGGER.debug("Updating HEAD_BACK target rotation: yaw {} -> {}, pitch {} -> {}", 
+                    oldYaw, targetYaw, oldPitch, targetPitch);
+            }
+        } 
+        // For VELOCITY and FIXED types, we keep the original end rotation since they're not
+        // directly tied to the player's head orientation
         
         // Position interpolation with speed limit
         Vec3d desired = current.getPosition().lerp(end.getPosition(), positionEasing);
@@ -174,14 +205,17 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         // Only mark as complete when all aspects (position, rotation, FOV) are complete
         isComplete = positionComplete && rotationComplete && fovComplete;
         
-        // Log the remaining values for debugging
-        if (fovRemaining > 0.001) {
-            Craneshot.LOGGER.debug("FreeCamReturn - Remaining: Pos={}, Yaw={}, Pitch={}, FOV={}",
-                                remainingDistance, yawRemaining, pitchRemaining, fovRemaining);
-        }
-        
-        if (isComplete) {
-            Craneshot.LOGGER.info("FreeCamReturnMovement completed");
+        // Log the current target rotation and actual rotation values
+        if (Craneshot.LOGGER.isDebugEnabled()) {
+            Craneshot.LOGGER.debug("FreeCamReturnMovement progress - Position: {} / {} blocks, Rotation: {},{} -> {},{}, FOV: {} -> {}",
+                String.format("%.2f", remainingDistance),
+                String.format("%.2f", completionThreshold),
+                String.format("%.1f", current.getYaw()),
+                String.format("%.1f", current.getPitch()),
+                String.format("%.1f", end.getYaw()),
+                String.format("%.1f", end.getPitch()),
+                String.format("%.2f", current.getFovMultiplier()),
+                String.format("%.2f", end.getFovMultiplier()));
         }
         
         return new MovementState(current, isComplete);
