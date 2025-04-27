@@ -154,7 +154,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         if (client.gameRenderer instanceof FovAccessor) {
             ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
             
-          
+
         }
 
         // Check if we've reached the destination
