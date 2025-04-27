@@ -113,6 +113,10 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         if (!isStarted || client.player == null) {
             return new MovementState(current, true);
         }
+        Craneshot.LOGGER.info("FreeCamReturnMovement processing");
+        // Ensure the keyboard movement flag is reset when in the return phase
+        // This prevents any issues if we resume normal movement during return
+        ninja.trek.CameraController.hasMovedWithKeyboard = false;
         
         // Continuously update the target rotation based on the player's current orientation
         // This ensures we always return to the current player head position, not just the initial one

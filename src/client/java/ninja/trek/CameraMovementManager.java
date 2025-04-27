@@ -183,8 +183,9 @@ public class CameraMovementManager {
                 CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
                 CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA;
 
-            if (inFreeCameraMode) {
-                ninja.trek.Craneshot.LOGGER.info("Starting FreeCamReturnMovement to handle return from free camera");
+            // Only use FreeCamReturnMovement if we've actually moved with keyboard
+            if (inFreeCameraMode && CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard) {
+                ninja.trek.Craneshot.LOGGER.info("Starting FreeCamReturnMovement to handle return from free camera (keyboard moved)");
                 
                 // Store the original active movement to return to after FreeCamReturnMovement completes
                 ICameraMovement originalMovement = activeMovement;
@@ -231,13 +232,27 @@ public class CameraMovementManager {
                 activeMovement = freeCamReturnMovement;
                 inFreeCamReturnPhase = true;
                 
+                // Reset the keyboard movement flag
+                CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
+                
                 // We'll keep track of the original movement to queue its reset after FreeCamReturnMovement completes
                 return;
+            } else if (inFreeCameraMode) {
+                // If we're in free camera mode but haven't moved with keyboard, log this information
+                ninja.trek.Craneshot.LOGGER.info("In free camera mode but no keyboard movement detected - using regular camera return");
+                
+                // Log the current camera modes for debugging
+                AbstractMovementSettings.POST_MOVE_KEYS keyMode = CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode;
+                AbstractMovementSettings.POST_MOVE_MOUSE mouseMode = CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode;
+                ninja.trek.Craneshot.LOGGER.info("Current modes - Key: {}, Mouse: {}", keyMode, mouseMode);
             }
             
             // Normal case - queue reset directly
             // This will trigger return to the player's head position and rotation
             activeMovement.queueReset(client, camera);
+            
+            // Reset the keyboard movement flag
+            CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
         }
     }
 

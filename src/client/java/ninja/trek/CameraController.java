@@ -23,6 +23,9 @@ public class CameraController {
     public static float freeCamYaw = 0f;
     public static float freeCamPitch = 0f;
     public static CameraTarget controlStick = new CameraTarget();
+    
+    // Track whether the camera has been moved with keyboard input
+    public static boolean hasMovedWithKeyboard = false;
 
     private String currentMessage = "";
     private long messageTimer = 0;
@@ -172,6 +175,9 @@ public class CameraController {
             MinecraftClient client = MinecraftClient.getInstance();
             Camera camera = client.gameRenderer.getCamera();
             
+            // Reset the keyboard movement tracking flag when entering a new camera mode
+            hasMovedWithKeyboard = false;
+            
             // This is where the position must be preserved
             // freeCamPosition, freeCamYaw, and freeCamPitch should already be set by CameraMovementManager
             // before this method is called, so we don't need to capture them again here
@@ -231,11 +237,16 @@ public class CameraController {
         CameraSystem cameraSystem = CameraSystem.getInstance();
         if (cameraSystem.isCameraActive()) {
             FreeCamSettings settings = GeneralMenuSettings.getFreeCamSettings();
-            cameraSystem.handleMovementInput(
+            boolean moved = cameraSystem.handleMovementInput(
                 settings.getMoveSpeed(),
                 settings.getAcceleration(),
                 settings.getDeceleration()
             );
+            
+            // Track if camera moved when using the camera system
+            if (moved) {
+                hasMovedWithKeyboard = true;
+            }
             return;
         }
 
@@ -353,6 +364,12 @@ public class CameraController {
             currentVelocity = currentVelocity.add(
                     targetVelocity.subtract(currentVelocity).multiply(acceleration)
             );
+            
+            // Mark as moved with keyboard if acceleration is happening
+            if (!hasMovedWithKeyboard) {
+                hasMovedWithKeyboard = true;
+                ninja.trek.Craneshot.LOGGER.info("Camera movement detected - enabling smooth return");
+            }
         } else {
             // Decelerating
             currentVelocity = currentVelocity.multiply(1.0 - deceleration);
@@ -547,6 +564,9 @@ public class CameraController {
         // Reset all movement modes completely
         currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
         currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        
+        // Reset the keyboard movement tracking flag
+        hasMovedWithKeyboard = false;
         
         // Ensure keyboard input is enabled for the player
         MinecraftClient client = MinecraftClient.getInstance();

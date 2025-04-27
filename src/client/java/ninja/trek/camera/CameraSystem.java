@@ -245,27 +245,39 @@ public class CameraSystem {
     
     /**
      * Handles keyboard movement input for the camera
+     * @return true if any movement occurred, false otherwise
      */
-    public void handleMovementInput(float baseSpeed, float acceleration, float deceleration) {
-        if (!cameraActive) return;
+    public boolean handleMovementInput(float baseSpeed, float acceleration, float deceleration) {
+        if (!cameraActive) return false;
         
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null) return;
+        if (mc == null) return false;
         
         // Calculate target velocity based on input
         Vec3d targetVelocity = calculateTargetVelocity(mc, baseSpeed);
         
+        boolean isMoved = false;
+        
         // Apply acceleration/deceleration
         if (targetVelocity.lengthSquared() > 0.0001) {
-            // Accelerate toward target velocity
+            // Accelerating
             cameraVelocity = cameraVelocity.add(
                 targetVelocity.subtract(cameraVelocity).multiply(acceleration));
+            isMoved = true;
+            
+            // Log the first detected movement
+            if (isMoved && !ninja.trek.CameraController.hasMovedWithKeyboard) {
+                ninja.trek.Craneshot.LOGGER.info("Camera system detected movement - enabling smooth return");
+            }
         } else {
             // Decelerate when no input
             cameraVelocity = cameraVelocity.multiply(1.0 - deceleration);
             // Zero out very small velocities to prevent drift
             if (cameraVelocity.lengthSquared() < 0.0001) {
                 cameraVelocity = Vec3d.ZERO;
+            } else {
+                // Still moving due to momentum
+                isMoved = true;
             }
         }
         
@@ -277,6 +289,8 @@ public class CameraSystem {
         if (camera != null) {
             updateCamera(camera);
         }
+        
+        return isMoved;
     }
     
     /**
