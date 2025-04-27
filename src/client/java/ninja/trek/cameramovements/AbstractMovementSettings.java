@@ -90,9 +90,30 @@ public abstract class AbstractMovementSettings {
     protected double maxFov = 180.0;
 
     @MovementSetting(label = "FOV Multiplier", min = 0.1, max = 3.0)
-    protected float fovMultiplier = 1.0f;
+    public float fovMultiplier = 1.0f;
 
-    public void adjustFov(boolean increase, MinecraftClient client){};
+    public void adjustFov(boolean increase, MinecraftClient client){
+        // Change target multiplier by 20% each scroll
+        float change = increase ? 0.2f : -0.2f;
+        float newMultiplier = fovMultiplier + change;
+        float basefov = client.options.getFov().getValue();
+
+        // Calculate the new FOV
+        float newFov = basefov * newMultiplier;
+
+        // Clamp the FOV between min and max
+        newFov = Math.max((float)minFov, Math.min(newFov, (float)maxFov));
+
+        // Adjust the fovMultiplier to ensure the FOV stays within the desired range
+        fovMultiplier = newFov / basefov;
+        
+        // Do NOT set the FOV directly here
+        // Instead, log the new target FOV multiplier which will be used in gradual easing
+        ninja.trek.Craneshot.LOGGER.debug("FOV target adjusted to: {}", fovMultiplier);
+        
+        // The actual FOV change will happen gradually through the movement's calculateState method
+        // which applies easing and speed limits defined in fovEasing and fovSpeedLimit
+    };
 
 
 

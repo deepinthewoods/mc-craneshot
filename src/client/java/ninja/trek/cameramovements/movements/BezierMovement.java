@@ -63,8 +63,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         baseFov = client.options.getFov().getValue().floatValue();
 
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch());
+                CameraController.controlStick.getPitch(), fovMultiplier);
 
         controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
         progress = 0.0;
@@ -165,14 +166,26 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Apply rotation easing
         float yawError = targetYaw - current.getYaw();
         float pitchError = targetPitch - current.getPitch();
-        float fovError = (float) (targetFovDelta - current.getFovMultiplier());
-
+        
+        // Normalize angles to [-180, 180]
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
 
         float desiredYawSpeed = (float)(yawError * rotationEasing);
         float desiredPitchSpeed = (float)(pitchError * rotationEasing);
-        float desiredFovSpeed = (float)(fovError * fovEasing);
+        
+        // Apply FOV multiplier transitions with easing
+        // Use a custom curve for FOV transitions to make them extra smooth
+        // As the FOV approaches its target, we slow down the transition further
+        float fovError = (float) (targetFovDelta - current.getFovMultiplier());
+        float absFovError = Math.abs(fovError);
+        
+        // Use a decreasing easing factor as we get closer to the target
+        // This avoids abrupt changes at the end of transitions
+        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
+        if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
+        
+        float desiredFovSpeed = fovError * adaptiveFovEasing;
 
         // Apply speed limits
         float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
@@ -264,9 +277,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 Vec3d playerPos = client.player.getEyePos();
                 
                 // Set the target position to player head with proper rotation for return
+                // Always reset FOV to normal (1.0) when returning to player view
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
                 
-                ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
+                ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}, fov=1.0", 
                     playerPos, playerYaw, playerPitch);
             }
             
@@ -301,25 +315,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public void adjustFov(boolean increase, MinecraftClient client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
-        // Change multiplier by 10% each scroll
-        float change = increase ? 0.2f : -0.2f;
-        float newMultiplier = (float) (fovMultiplier + change);
-        float basefov = client.options.getFov().getValue();
+        
+        // Call the parent implementation to update the target FOV multiplier
+        super.adjustFov(increase, client);
 
-        // Calculate the new FOV
-        float newFov = basefov * newMultiplier;
-
-        // Clamp the FOV between 1 and 180
-        newFov = Math.max(1, Math.min(newFov, 180));
-
-        // Adjust the fovMultiplier to ensure the FOV stays within the desired range
-        fovMultiplier = newFov / basefov;
-
-        // Update current target's FOV immediately
-        current.setFovMultiplier(fovMultiplier);
-
-        // Update end target's FOV for smooth transitions
+        // Don't immediately update the current FOV, let it transition smoothly using easing
+        // Only update the end target's FOV as the goal to transition toward
         end.setFovMultiplier(fovMultiplier);
+        
+        ninja.trek.Craneshot.LOGGER.debug("BezierMovement - Target FOV updated to: {}, current: {}", 
+            fovMultiplier, current.getFovMultiplier());
     }
 
     @Override
@@ -340,10 +345,18 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public boolean hasCompletedOutPhase() {
         if (resetting) return false;
+        
+        // Consider both position/rotation progress and FOV transition
         if (linearMode) {
+            // In linear mode, use alpha which tracks position progress
             return alpha < 0.1;
         } else {
+            // In Bezier mode, use progress which tracks the curve progress
             return progress >= 0.999;
         }
+        
+        // We're not checking FOV specifically since this could cause inconsistent
+        // behavior with other movement aspects. The FOV will continue to transition
+        // smoothly using fovEasing even after the position/rotation has completed.
     }
 }

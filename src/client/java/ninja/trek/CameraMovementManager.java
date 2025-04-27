@@ -11,6 +11,7 @@ import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
+import ninja.trek.mixin.client.FovAccessor;
 
 import java.util.*;
 
@@ -328,6 +329,11 @@ public class CameraMovementManager {
                 CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentTarget.getPosition();
                 CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentTarget.getYaw();
                 CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentTarget.getPitch();
+                
+                // Note the FOV multiplier is already being properly interpolated in the movement's
+                // calculateState method, we're just capturing it here for post-move phase
+                // The value in currentTarget already has the correct FOV multiplier
+                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Current FOV multiplier: {}", currentTarget.getFovMultiplier());
                 
                 // Set the camera directly to this position before applying post-move settings
                 if (camera != null) {

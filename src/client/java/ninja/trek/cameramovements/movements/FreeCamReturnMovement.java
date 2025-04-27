@@ -25,6 +25,12 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
 
     @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 3600.0)
     private double rotationSpeedLimit = 90.0;
+    
+    @MovementSetting(label = "FOV Easing", min = 0.01, max = 1.0)
+    private double fovEasing = 0.05; // Slower easing for smoother FOV transition
+
+    @MovementSetting(label = "FOV Speed Limit", min = 0.1, max = 100.0)
+    private double fovSpeedLimit = 1.0; // Slower speed limit for smoother transitions
 
     private CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
@@ -57,6 +63,8 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             }
         }
         
+        // Always return to the default FOV (1.0) when returning to player view
+        // The transition will use the fovEasing and fovSpeedLimit settings
         end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         
         isComplete = false;
@@ -121,23 +129,56 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
 
-        // Update current target
-        current = new CameraTarget(desired, newYaw, newPitch, current.getFovMultiplier());
+        // FOV interpolation with adaptive easing - slower as we approach the target
+        float targetFovMultiplier = end.getFovMultiplier();
+        float fovDiff = targetFovMultiplier - current.getFovMultiplier();
+        float absFovDiff = Math.abs(fovDiff);
+        
+        // Calculate an adaptive easing that slows down as we get closer to the target
+        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovDiff / 0.1)));
+        if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
+        
+        float desiredFovSpeed = fovDiff * adaptiveFovEasing;
+        float maxFovChange = (float) (fovSpeedLimit * (1.0f/20.0f));
+        
+        if (Math.abs(desiredFovSpeed) > maxFovChange) {
+            desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
+        }
+        
+        float newFovMultiplier = current.getFovMultiplier() + desiredFovSpeed;
+        
+        // Update current target with all new values
+        current = new CameraTarget(desired, newYaw, newPitch, newFovMultiplier);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
+            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+            
+          
         }
 
         // Check if we've reached the destination
         double remainingDistance = current.getPosition().distanceTo(end.getPosition());
         double yawRemaining = Math.abs(yawDiff);
         double pitchRemaining = Math.abs(pitchDiff);
+        double fovRemaining = Math.abs(fovDiff);
         
         // Movement is complete when we're close enough to the destination
         boolean positionComplete = remainingDistance < completionThreshold;
         boolean rotationComplete = yawRemaining < 1.0 && pitchRemaining < 1.0;
-        isComplete = positionComplete && rotationComplete;
+        
+        // Use a larger threshold for FOV to ensure smoother final transition
+        // This allows the FOV to continue its gradual transition longer
+        boolean fovComplete = fovRemaining < 0.05; 
+        
+        // Only mark as complete when all aspects (position, rotation, FOV) are complete
+        isComplete = positionComplete && rotationComplete && fovComplete;
+        
+        // Log the remaining values for debugging
+        if (fovRemaining > 0.001) {
+            Craneshot.LOGGER.debug("FreeCamReturn - Remaining: Pos={}, Yaw={}, Pitch={}, FOV={}",
+                                remainingDistance, yawRemaining, pitchRemaining, fovRemaining);
+        }
         
         if (isComplete) {
             Craneshot.LOGGER.info("FreeCamReturnMovement completed");

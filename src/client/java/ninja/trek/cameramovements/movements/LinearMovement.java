@@ -53,8 +53,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         current.setFovMultiplier(1.0f); // Start at normal FOV
         // Calculate end target based on controlStick
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        // Use the FOV multiplier from settings for the end target
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset, 1.0f);
+                CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
         resetting = false;
         weight = 1.0f;
     }
@@ -135,10 +136,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
         }
 
-        // FOV interpolation with speed limit
+        // FOV interpolation with adaptive easing - slower as we approach the target
         float targetFovDelta = b.getFovMultiplier();
         float fovDiff = targetFovDelta - current.getFovMultiplier();
-        float desiredFovSpeed = (float) (fovDiff * fovEasing);
+        float absFovDiff = Math.abs(fovDiff);
+        
+        // Calculate an adaptive easing that slows down as we get closer to the target
+        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovDiff / 0.1)));
+        if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
+        
+        float desiredFovSpeed = fovDiff * adaptiveFovEasing;
         float maxFovChange = (float) (fovSpeedLimit * (1.0f/20.0f));
 
         if (Math.abs(desiredFovSpeed) > maxFovChange) {
@@ -179,6 +186,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             
             // Set the target position to player head and proper rotation for return
             Vec3d playerPos = client.player.getEyePos();
+            
+            // When resetting, use the default FOV multiplier (1.0) to reset view to normal
             end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
             
             ninja.trek.Craneshot.LOGGER.info("LinearMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
@@ -206,25 +215,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public void adjustFov(boolean increase, MinecraftClient client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
-        // Change multiplier by 10% each scroll
-        float change = increase ? 0.2f : -0.2f;
-        float newMultiplier = fovMultiplier + change;
-        float basefov = client.options.getFov().getValue();
+        
+        // Call the parent implementation to update the target FOV multiplier
+        super.adjustFov(increase, client);
 
-        // Calculate the new FOV
-        float newFov = basefov * newMultiplier;
-
-        // Clamp the FOV between 1 and 180
-        newFov = Math.max(1, Math.min(newFov, 140));
-
-        // Adjust the fovMultiplier to ensure the FOV stays within the desired range
-        fovMultiplier = newFov / basefov;
-
-        // Update current target's FOV immediately
-        current.setFovMultiplier(fovMultiplier);
-
-        // Update end target's FOV for smooth transitions
+        // Don't immediately update the current FOV, let it transition smoothly using easing
+        // Only update the end target's FOV as the goal to transition toward
         end.setFovMultiplier(fovMultiplier);
+        
+        ninja.trek.Craneshot.LOGGER.debug("LinearMovement - Target FOV updated to: {}, current: {}", 
+            fovMultiplier, current.getFovMultiplier());
     }
 
     @Override
@@ -244,6 +244,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean hasCompletedOutPhase() {
+        // Consider movement complete when the position has nearly reached its target
+        // The FOV will continue to transition smoothly using fovEasing even after
+        // the out phase is considered complete
         return !resetting && alpha < .1;
     }
 }
