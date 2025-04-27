@@ -51,11 +51,22 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         baseFov = client.options.getFov().getValue().doubleValue();
         start.setFovMultiplier(1.0f);  // Start at normal FOV
         current.setFovMultiplier(1.0f); // Start at normal FOV
+        // Set initial ortho factor based on projection setting
+        start.setOrthoFactor(0.0f);  // Start with perspective (non-ortho)
+        current.setOrthoFactor(0.0f); // Start with perspective (non-ortho)
         // Calculate end target based on controlStick
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         // Use the FOV multiplier from settings for the end target
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
+        // Set ortho factor for end target based on projection setting
+        if (projection == PROJECTION.ORTHO) {
+            end.setOrthoFactor(1.0f); // Target full orthographic
+            ninja.trek.Craneshot.LOGGER.info("LinearMovement started with ORTHO projection mode");
+        } else {
+            end.setOrthoFactor(0.0f); // Stay in perspective mode
+            ninja.trek.Craneshot.LOGGER.info("LinearMovement started with PERSPECTIVE projection mode");
+        }
         resetting = false;
         weight = 1.0f;
     }
@@ -80,13 +91,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset,
-                start.getFovMultiplier()
+                start.getFovMultiplier(),
+                start.getOrthoFactor() // Preserve ortho factor
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset, end.getFovMultiplier());
+                CameraController.controlStick.getPitch() + pitchOffset, 
+                end.getFovMultiplier(),
+                end.getOrthoFactor()); // Preserve ortho factor
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
@@ -151,14 +165,32 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (Math.abs(desiredFovSpeed) > maxFovChange) {
             desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
         }
+        
+        // Orthographic projection factor interpolation
+        float targetOrthoFactor = b.getOrthoFactor();
+        float orthoDiff = targetOrthoFactor - current.getOrthoFactor();
+        
+        // Use similar easing for ortho projection transition
+        // We want projection changes to be fairly smooth
+        float orthoEasing = (float) fovEasing; // Reuse FOV easing value for consistency
+        float desiredOrthoSpeed = orthoDiff * orthoEasing;
+        
+        ninja.trek.Craneshot.LOGGER.debug("Ortho interpolation: current={}, target={}, diff={}, desiredSpeed={}",
+                                           current.getOrthoFactor(), targetOrthoFactor, orthoDiff, desiredOrthoSpeed);
+        
+        // Apply speed limit for ortho changes similar to FOV
+        if (Math.abs(desiredOrthoSpeed) > maxFovChange) {
+            desiredOrthoSpeed = Math.signum(desiredOrthoSpeed) * maxFovChange;
+        }
 
         // Apply final changes
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
         float newFovDelta = current.getFovMultiplier() + desiredFovSpeed;
+        float newOrthoFactor = Math.max(0.0f, Math.min(1.0f, current.getOrthoFactor() + desiredOrthoSpeed));
 
         // Update current target with all new values
-        current = new CameraTarget(desired, newYaw, newPitch, newFovDelta);
+        current = new CameraTarget(desired, newYaw, newPitch, newFovDelta, newOrthoFactor);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
@@ -188,7 +220,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             Vec3d playerPos = client.player.getEyePos();
             
             // When resetting, use the default FOV multiplier (1.0) to reset view to normal
-            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+            // and reset the ortho factor to 0.0 (perspective) during return phase
+            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, 0.0f);
             
             ninja.trek.Craneshot.LOGGER.info("LinearMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
                 playerPos, playerYaw, playerPitch);

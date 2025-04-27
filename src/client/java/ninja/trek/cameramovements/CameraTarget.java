@@ -11,12 +11,22 @@ public class CameraTarget {
     private float yaw;
     private float pitch;
     private float fovMultiplier;  // 1.0 = normal FOV, >1 = wider, <1 = narrower
+    private float orthoFactor = 0.0f; // 0.0 = perspective, 1.0 = orthographic
 
     public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = Math.max(0.1f, fovMultiplier);
+        this.orthoFactor = 0.0f;
+    }
+    
+    public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
+        this.position = position;
+        this.yaw = yaw;
+        this.pitch = pitch;
+        this.fovMultiplier = Math.max(0.1f, fovMultiplier);
+        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, orthoFactor));
     }
 
     public CameraTarget(Vec3d position, float yaw, float pitch) {
@@ -37,7 +47,9 @@ public class CameraTarget {
             currentFovMultiplier = ((FovAccessor) client.gameRenderer).getFovModifier();
             if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
         }
-        return new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), currentFovMultiplier);
+        CameraTarget target = new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), currentFovMultiplier);
+        ninja.trek.Craneshot.LOGGER.debug("Created CameraTarget from camera with default orthoFactor=0.0");
+        return target;
     }
 
     public static CameraTarget fromDistanceBack(PlayerEntity player, double distance) {
@@ -75,6 +87,14 @@ public class CameraTarget {
     public float getFovMultiplier() {
         return fovMultiplier;
     }
+    
+    public float getOrthoFactor() {
+        return orthoFactor;
+    }
+    
+    public void setOrthoFactor(float factor) {
+        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, factor));
+    }
 
     public void setFovMultiplier(float multiplier) {
         this.fovMultiplier = Math.max(0.1f, multiplier); // Ensure we never have a zero or negative multiplier
@@ -82,7 +102,9 @@ public class CameraTarget {
 
     public CameraTarget withAdjustedPosition(PlayerEntity player, RaycastType raycastType) {
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
-        return new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier);
+        CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier, this.orthoFactor);
+        ninja.trek.Craneshot.LOGGER.debug("Applying collision adjustment, preserving orthoFactor={}", this.orthoFactor);
+        return adjusted;
     }
 
     public void set(Vec3d v, float yaw, float pitch) {
@@ -95,12 +117,21 @@ public class CameraTarget {
         this.pitch = pitch;
         this.fovMultiplier = fovMultiplier != 0 ? fovMultiplier : 1.0f;
     }
+    
+    public void set(Vec3d v, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
+        position = v;
+        this.yaw = yaw;
+        this.pitch = pitch;
+        this.fovMultiplier = fovMultiplier != 0 ? fovMultiplier : 1.0f;
+        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, orthoFactor));
+    }
 
     public void set(CameraTarget t) {
         position = t.position;
         this.pitch = t.pitch;
         this.yaw = t.yaw;
         this.fovMultiplier = t.fovMultiplier != 0 ? t.fovMultiplier : 1.0f;
+        this.orthoFactor = t.orthoFactor;
     }
 
     public CameraTarget lerp(CameraTarget other, float t) {
@@ -112,8 +143,11 @@ public class CameraTarget {
         float startFov = this.fovMultiplier != 0 ? this.fovMultiplier : 1.0f;
         float endFov = other.fovMultiplier != 0 ? other.fovMultiplier : 1.0f;
         float lerpedFov = startFov + (endFov - startFov) * t;
+        
+        // Interpolate ortho factor
+        float lerpedOrtho = this.orthoFactor + (other.orthoFactor - this.orthoFactor) * t;
 
-        return new CameraTarget(lerpedPos, lerpedYaw, lerpedPitch, lerpedFov);
+        return new CameraTarget(lerpedPos, lerpedYaw, lerpedPitch, lerpedFov, lerpedOrtho);
     }
 
     private float lerpAngle(float start, float end, float t) {

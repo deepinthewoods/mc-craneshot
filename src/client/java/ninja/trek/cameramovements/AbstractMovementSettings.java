@@ -70,6 +70,15 @@ public abstract class AbstractMovementSettings {
 
     public enum SCROLL_WHEEL {NONE, DISTANCE, FOV};
 
+    public enum PROJECTION {PERSPECTIVE, ORTHO};
+
+    @MovementSetting(
+            label = "Projection",
+            type = MovementSettingType.ENUM,
+            description = "Controls camera projection mode during movement"
+    )
+    protected PROJECTION projection = PROJECTION.PERSPECTIVE;
+
     @MovementSetting(
             label = "Scroll",
             type = MovementSettingType.ENUM,
@@ -82,6 +91,10 @@ public abstract class AbstractMovementSettings {
 
     @MovementSetting(label = "FOV Speed Limit", min = 0.1, max = 100.0)
     protected double fovSpeedLimit = 10.0;
+    
+    public PROJECTION getProjection() {
+        return projection;
+    }
 
 
     protected double minFov = 1.0;
@@ -184,6 +197,8 @@ public abstract class AbstractMovementSettings {
                         field.set(this, enumValue);
                         if (key.equals("raycastType")) {
                             setRaycastType((RaycastType)enumValue);
+                        } else if (key.equals("projection")) {
+                            ninja.trek.Craneshot.LOGGER.info("Updated projection setting to: {}", enumValue);
                         }
                     }
                 } else if (field.getType() == double.class || field.getType() == Double.class) {

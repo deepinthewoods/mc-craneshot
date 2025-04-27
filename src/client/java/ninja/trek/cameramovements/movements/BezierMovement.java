@@ -61,11 +61,22 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         // Store base FOV
         baseFov = client.options.getFov().getValue().floatValue();
+        
+        // Set initial ortho factor to 0 (perspective)
+        start.setOrthoFactor(0.0f);
+        current.setOrthoFactor(0.0f);
 
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), fovMultiplier);
+                
+        // Set ortho factor for end target based on projection setting
+        if (projection == PROJECTION.ORTHO) {
+            end.setOrthoFactor(1.0f); // Target full orthographic
+        } else {
+            end.setOrthoFactor(0.0f); // Stay in perspective mode
+        }
 
         controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
         progress = 0.0;
@@ -94,13 +105,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(),
-                start.getFovMultiplier()
+                start.getFovMultiplier(),
+                start.getOrthoFactor() // Preserve ortho factor
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(), end.getFovMultiplier());
+                CameraController.controlStick.getPitch(), 
+                end.getFovMultiplier(),
+                end.getOrthoFactor()); // Preserve ortho factor
 
         if (distanceChanged) {
             controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
@@ -162,6 +176,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
         float targetFovDelta = (float) b.getFovMultiplier();
+        float targetOrthoFactor = b.getOrthoFactor();
 
         // Apply rotation easing
         float yawError = targetYaw - current.getYaw();
@@ -186,6 +201,11 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
         
         float desiredFovSpeed = fovError * adaptiveFovEasing;
+        
+        // Similar adaptive easing for orthographic projection
+        float orthoError = targetOrthoFactor - current.getOrthoFactor();
+        float orthoEasing = (float) fovEasing; // Reuse FOV easing for consistency
+        float desiredOrthoSpeed = orthoError * orthoEasing;
 
         // Apply speed limits
         float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
@@ -200,13 +220,17 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (Math.abs(desiredFovSpeed) > maxFovChange) {
             desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
         }
+        if (Math.abs(desiredOrthoSpeed) > maxFovChange) {
+            desiredOrthoSpeed = Math.signum(desiredOrthoSpeed) * maxFovChange;
+        }
 
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
         float newFovDelta = (float) (current.getFovMultiplier() + desiredFovSpeed);
+        float newOrthoFactor = Math.max(0.0f, Math.min(1.0f, current.getOrthoFactor() + desiredOrthoSpeed));
 
         // Update current target
-        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
+        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta, newOrthoFactor);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
@@ -277,8 +301,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 Vec3d playerPos = client.player.getEyePos();
                 
                 // Set the target position to player head with proper rotation for return
-                // Always reset FOV to normal (1.0) when returning to player view
-                end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+                // Always reset FOV to normal (1.0) and projection to perspective (0.0) when returning to player view
+                end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, 0.0f);
                 
                 ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}, fov=1.0", 
                     playerPos, playerYaw, playerPitch);

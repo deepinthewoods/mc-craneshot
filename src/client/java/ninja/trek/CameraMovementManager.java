@@ -398,7 +398,11 @@ public class CameraMovementManager {
         }
         MovementState state = calculateState(client, camera);
         if (state == null) return null;
-        return state.getCameraTarget();
+        
+        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+        ninja.trek.Craneshot.LOGGER.debug("CameraMovementManager.update - orthoFactor={}", 
+                                         adjustedTarget != null ? adjustedTarget.getOrthoFactor() : "null");
+        return adjustedTarget;
     }
 
     public Integer getActiveMovementSlot() {
@@ -450,5 +454,18 @@ public class CameraMovementManager {
             return ((AbstractMovementSettings) activeMovement).mouseWheel;
         }
         return AbstractMovementSettings.SCROLL_WHEEL.NONE;
+    }
+    
+    /**
+     * Gets the current camera target, which is used for rendering and projection calculations.
+     * @return The current camera target, or null if no active movement.
+     */
+    public CameraTarget getCurrentTarget() {
+        if (baseTarget != null) {
+            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning baseTarget with orthoFactor={}", baseTarget.getOrthoFactor());
+        } else {
+            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning null (no active movement)");
+        }
+        return baseTarget;
     }
 }
