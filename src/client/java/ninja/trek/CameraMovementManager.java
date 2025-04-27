@@ -3,10 +3,8 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
-import ninja.trek.cameramovements.CameraTarget;
-import ninja.trek.cameramovements.ICameraMovement;
-import ninja.trek.cameramovements.AbstractMovementSettings;
-import ninja.trek.cameramovements.MovementState;
+import ninja.trek.camera.CameraSystem;
+import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
@@ -204,6 +202,29 @@ public class CameraMovementManager {
                     freeCamReturnMovement.endTarget = originalSettings.getEndTarget();
                 }
                 
+                // Check if we have a current target and preserve its orthographic state
+                if (baseTarget != null) {
+                    // Get the current orthographic state from both the base target and the global setting
+                    float orthoFactor = baseTarget.getOrthoFactor();
+                    boolean isGlobalOrthoEnabled = ninja.trek.OrthographicCameraManager.isOrthographicMode();
+                    
+                    ninja.trek.Craneshot.LOGGER.info("Preserving ortho factor {} during FreeCamReturn (global ortho: {})", 
+                                                     orthoFactor, isGlobalOrthoEnabled);
+                    
+                    // If there's a mismatch between the target's ortho factor and the global setting,
+                    // we need to ensure consistency for the return movement
+                    if ((orthoFactor > 0.5f) != isGlobalOrthoEnabled) {
+                        ninja.trek.Craneshot.LOGGER.warn("Detected inconsistency between ortho target ({}) and global state ({})",
+                                                        orthoFactor > 0.5f ? "enabled" : "disabled",
+                                                        isGlobalOrthoEnabled ? "enabled" : "disabled");
+                        
+                        // For safety, use the target's orthographic factor as the source of truth
+                        // during the return movement
+                        boolean shouldBeOrtho = orthoFactor > 0.5f;
+                        freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
+                    }
+                }
+                
                 freeCamReturnMovement.start(client, camera);
                 
                 // Set the FreeCamReturnMovement as the active movement
@@ -292,6 +313,24 @@ public class CameraMovementManager {
                 if (state.isComplete() || freeCamReturnMovement.isComplete()) {
                     ninja.trek.Craneshot.LOGGER.info("FreeCamReturnMovement completed, returning to normal camera");
                     
+                    // Get the final ortho factor from the state
+                    float finalOrthoFactor = state.getCameraTarget().getOrthoFactor();
+                    ninja.trek.Craneshot.LOGGER.info("Final ortho factor: {}", finalOrthoFactor);
+                    
+                    // Since we're completing the movement, check if we need to update the global
+                    // orthographic mode based on the final state
+                    boolean shouldBeInOrthoMode = finalOrthoFactor > 0.5f;
+                    if (ninja.trek.OrthographicCameraManager.isOrthographicMode() != shouldBeInOrthoMode) {
+                        ninja.trek.Craneshot.LOGGER.info("Updating global ortho mode to {}", shouldBeInOrthoMode);
+                        
+                        // Only update if current state differs from what we want
+                        if (shouldBeInOrthoMode != ninja.trek.OrthographicCameraManager.isOrthographicMode()) {
+                            // Set the orthographic mode silently to avoid unwanted feedback messages
+                            // when returning from a movement
+                            ninja.trek.OrthographicCameraManager.setOrthographicMode(shouldBeInOrthoMode, false);
+                        }
+                    }
+                    
                     // Reset the FreeCamReturnMovement phase
                     inFreeCamReturnPhase = false;
                     
@@ -300,9 +339,27 @@ public class CameraMovementManager {
                     activeMovement = null;
                     isOut = false;
                     
-                    // Reset state in the controller
-                    CraneshotClient.CAMERA_CONTROLLER.onComplete();
+                    // Make sure to fully deactivate the camera system to restore default camera behavior
+                    CameraSystem cameraSystem = CameraSystem.getInstance();
+                    cameraSystem.deactivateCamera();
+                    
+                    // Explicitly reset camera state in controller - this prevents camera lock
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePos();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYaw();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getPitch();
+                    
+                    // Clear any post-move states to ensure default behavior
                     CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                    
+                    // Notify controller of completion
+                    CraneshotClient.CAMERA_CONTROLLER.onComplete();
+                    
+                    // CRITICAL FIX: Set baseTarget to null to force default camera behavior
+                    // This fixes the issue with orthographic projections persisting
+                    baseTarget = null;
+                    
+                    // Log the reset for debugging
+                    ninja.trek.Craneshot.LOGGER.info("Camera reset complete - base target nullified, ortho factor reset");
                     
                     return null;
                 }
@@ -393,13 +450,25 @@ public class CameraMovementManager {
     }
 
     public CameraTarget update(MinecraftClient client, Camera camera) {
+        // First check if active movement is null
         if (activeMovement == null || client.player == null) {
-            return null;
+            return baseTarget; // Return the last known target instead of null
         }
-        MovementState state = calculateState(client, camera);
-        if (state == null) return null;
         
-        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+        MovementState state = calculateState(client, camera);
+        if (state == null) {
+            // If we have no state but had a previous target, return it
+            return baseTarget;
+        }
+        
+        // Get the raycast type safely with a null check
+        RaycastType raycastType = RaycastType.NONE; // Default to NONE
+        if (activeMovement != null) { // Explicit null check before calling getRaycastType
+            raycastType = activeMovement.getRaycastType();
+        }
+        
+        // At this point we have a valid state and raycast type
+        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, raycastType);
         ninja.trek.Craneshot.LOGGER.debug("CameraMovementManager.update - orthoFactor={}", 
                                          adjustedTarget != null ? adjustedTarget.getOrthoFactor() : "null");
         return adjustedTarget;
@@ -461,11 +530,19 @@ public class CameraMovementManager {
      * @return The current camera target, or null if no active movement.
      */
     public CameraTarget getCurrentTarget() {
-        if (baseTarget != null) {
+        // Only return a target if we have an active movement
+        if (activeMovement != null && baseTarget != null) {
             ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning baseTarget with orthoFactor={}", baseTarget.getOrthoFactor());
+            return baseTarget;
+        } else if (baseTarget != null && activeMovement == null) {
+            // If we have a baseTarget but no active movement, log this inconsistency and return null
+            ninja.trek.Craneshot.LOGGER.warn("Inconsistent state: baseTarget exists but no active movement - returning null");
+            // Force clear the stale base target
+            baseTarget = null;
+            return null;
         } else {
             ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning null (no active movement)");
+            return null;
         }
-        return baseTarget;
     }
 }

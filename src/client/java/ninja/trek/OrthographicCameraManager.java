@@ -16,36 +16,62 @@ public class OrthographicCameraManager {
     private static final float SCALE_STEP = 1.0f;
 
     /**
+     * Sets the orthographic mode to a specific state without toggling.
+     * This is used internally when we need to ensure consistency between
+     * camera movements and the global orthographic state.
+     * 
+     * @param enabled Whether orthographic mode should be enabled or disabled
+     * @param showMessage Whether to show a feedback message to the player
+     * @return The new state
+     */
+    public static boolean setOrthographicMode(boolean enabled, boolean showMessage) {
+        // Only perform actions if the state is actually changing
+        if (orthographicMode != enabled) {
+            orthographicMode = enabled;
+            
+            // Activate camera system with appropriate mode when entering orthographic mode
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (orthographicMode) {
+                cameraSystem.activateCamera(CameraSystem.CameraMode.ORTHOGRAPHIC);
+                
+                // Force third-person view for better visualization
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client != null && client.options != null) {
+                    client.options.setPerspective(net.minecraft.client.option.Perspective.THIRD_PERSON_BACK);
+                }
+            } else if (cameraSystem.isCameraActive()) {
+                // Deactivate camera when leaving orthographic mode
+                cameraSystem.deactivateCamera();
+            }
+            
+            // Display a message to the player if requested
+            if (showMessage && MinecraftClient.getInstance().player != null) {
+                MinecraftClient.getInstance().player.sendMessage(
+                    Text.translatable("message.craneshot.orthographic." + (orthographicMode ? "enabled" : "disabled")),
+                    true
+                );
+            }
+        }
+        
+        return orthographicMode;
+    }
+    
+    /**
+     * Convenience method to set the orthographic mode with a message to the player.
+     * 
+     * @param enabled Whether orthographic mode should be enabled or disabled
+     * @return The new state
+     */
+    public static boolean setOrthographicMode(boolean enabled) {
+        return setOrthographicMode(enabled, true);
+    }
+    
+    /**
      * Toggles the camera mode between perspective and orthographic.
      * @return The new state (true if orthographic mode is now enabled)
      */
     public static boolean toggleOrthographicMode() {
-        orthographicMode = !orthographicMode;
-        
-        // Activate camera system with appropriate mode when entering orthographic mode
-        CameraSystem cameraSystem = CameraSystem.getInstance();
-        if (orthographicMode) {
-            cameraSystem.activateCamera(CameraSystem.CameraMode.ORTHOGRAPHIC);
-            
-            // Force third-person view for better visualization
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null && client.options != null) {
-                client.options.setPerspective(net.minecraft.client.option.Perspective.THIRD_PERSON_BACK);
-            }
-        } else if (cameraSystem.isCameraActive()) {
-            // Deactivate camera when leaving orthographic mode
-            cameraSystem.deactivateCamera();
-        }
-        
-        // Display a message to the player
-        if (MinecraftClient.getInstance().player != null) {
-            MinecraftClient.getInstance().player.sendMessage(
-                Text.translatable("message.craneshot.orthographic." + (orthographicMode ? "enabled" : "disabled")),
-                true
-            );
-        }
-        
-        return orthographicMode;
+        return setOrthographicMode(!orthographicMode, true);
     }
 
     /**

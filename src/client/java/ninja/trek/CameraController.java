@@ -373,6 +373,10 @@ public class CameraController {
         // Get the base camera state from movement manager - always update to track state
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
 
+        // Check if we have an active camera system
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        boolean cameraSystemActive = cameraSystem.isCameraActive();
+
         if (baseTarget != null) {
             // Update FOV in game renderer
             if (client.gameRenderer instanceof FovAccessor) {
@@ -384,10 +388,7 @@ public class CameraController {
                 }
             }
             
-            // Check if camera system is active
-            CameraSystem cameraSystem = CameraSystem.getInstance();
-            
-            if (cameraSystem.isCameraActive()) {
+            if (cameraSystemActive) {
                 // Let the camera system update its state
                 if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
                     IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
@@ -446,6 +447,14 @@ public class CameraController {
                 ((CameraAccessor) camera).invokesetPos(freeCamPosition);
                 ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
+        } else if (cameraSystemActive) {
+            // If we have no target but the camera system is active, let it update
+            cameraSystem.updateCamera(camera);
+            
+            // Update tracking variables
+            freeCamPosition = cameraSystem.getCameraPosition();
+            freeCamYaw = cameraSystem.getCameraYaw();
+            freeCamPitch = cameraSystem.getCameraPitch();
         }
 
         // Handle keyboard movement for camera modes
@@ -535,26 +544,37 @@ public class CameraController {
     }
 
     public void onComplete() {
-        // Only reset mouse/key modes if they're not actively being used in post-move mode
-        // This preserves post-movement settings when a camera movement completes
-        if (currentMouseMoveMode != POST_MOVE_MOUSE.ROTATE_CAMERA) {
-            currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+        // Reset all movement modes completely
+        currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+        currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        
+        // Ensure keyboard input is enabled for the player
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null && client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+            ((IKeyboardInputMixin) client.player.input).setDisabled(false);
         }
         
-        if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT && 
-            currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE && 
-            currentKeyMoveMode != POST_MOVE_KEYS.MOVE8) {
-            currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        // Disable mouse interception
+        MouseInterceptor.setIntercepting(false);
+        
+        // Make sure to restore default camera behavior by deactivating the camera system
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (cameraSystem.isCameraActive()) {
+            cameraSystem.deactivateCamera();
+            ninja.trek.Craneshot.LOGGER.info("Deactivated camera system during onComplete");
         }
         
-        // Keep camera system active if we're using post-movement controls
-        boolean hasPostMoveControls = 
-            currentMouseMoveMode != POST_MOVE_MOUSE.NONE || 
-            currentKeyMoveMode != POST_MOVE_KEYS.NONE;
-            
-        if (!hasPostMoveControls) {
-            // Deactivate camera system only if not using post-movement controls
-            CameraSystem.getInstance().deactivateCamera();
+        // Reset the camera position to follow the player
+        if (client != null && client.player != null) {
+            freeCamPosition = client.player.getEyePos();
+            freeCamYaw = client.player.getYaw();
+            freeCamPitch = client.player.getPitch();
+            ninja.trek.Craneshot.LOGGER.info("Reset camera position to player position");
+        }
+        
+        // Reset FOV to default
+        if (client != null && client.gameRenderer instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
         }
     }
 }

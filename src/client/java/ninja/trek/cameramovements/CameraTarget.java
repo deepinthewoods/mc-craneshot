@@ -101,6 +101,11 @@ public class CameraTarget {
     }
 
     public CameraTarget withAdjustedPosition(PlayerEntity player, RaycastType raycastType) {
+        // Handle null raycastType safely
+        if (raycastType == null) {
+            raycastType = RaycastType.NONE;
+        }
+        
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
         CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier, this.orthoFactor);
         ninja.trek.Craneshot.LOGGER.debug("Applying collision adjustment, preserving orthoFactor={}", this.orthoFactor);

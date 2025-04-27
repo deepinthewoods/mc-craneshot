@@ -143,22 +143,51 @@ public class CameraSystem {
         ninja.trek.Craneshot.LOGGER.info("Deactivating camera system");
         
         // Restore original settings
-        if (originalCameraEntity != null && mc != null) {
-            ninja.trek.Craneshot.LOGGER.info("Restoring original camera entity");
-            mc.setCameraEntity(originalCameraEntity);
-        }
-        
         if (mc != null) {
+            // Force reset to original camera entity if available
+            if (originalCameraEntity != null) {
+                ninja.trek.Craneshot.LOGGER.info("Restoring original camera entity: {}", originalCameraEntity);
+                mc.setCameraEntity(originalCameraEntity);
+            } else if (mc.player != null) {
+                // Fall back to player if original entity is null
+                ninja.trek.Craneshot.LOGGER.info("Setting camera entity to player");
+                mc.setCameraEntity(mc.player);
+            }
+            
+            // Restore chunk culling
             mc.chunkCullingEnabled = originalChunkCulling;
+            
+            // Reset FOV to default
+            if (mc.gameRenderer instanceof ninja.trek.mixin.client.FovAccessor) {
+                ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer).setFovModifier(1.0f);
+            }
         }
         
-        // Reset camera state
+        // Reset all camera state
         cameraActive = false;
         cameraVelocity = Vec3d.ZERO;
+        
+        // Explicitly reset camera position to the player position if possible
+        if (mc != null && mc.player != null) {
+            cameraPosition = mc.player.getEyePos();
+            cameraYaw = mc.player.getYaw();
+            cameraPitch = mc.player.getPitch();
+        }
         
         ninja.trek.Craneshot.LOGGER.info("Final camera position: {} {} {}", 
             cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
         ninja.trek.Craneshot.LOGGER.info("Final camera rotation: {} {}", cameraYaw, cameraPitch);
+        
+        // Apply updated camera settings to the actual camera if available
+        if (mc != null && mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
+            Camera camera = mc.gameRenderer.getCamera();
+            
+            // Force the camera to use the player's position
+            if (mc.player != null) {
+                ((CameraAccessor) camera).invokesetPos(mc.player.getEyePos());
+                ((CameraAccessor) camera).invokeSetRotation(mc.player.getYaw(), mc.player.getPitch());
+            }
+        }
         
         // Mark chunks for rebuild to fix any rendering issues
         if (mc != null && mc.worldRenderer != null) {
@@ -173,6 +202,7 @@ public class CameraSystem {
             }
         }
         
+        // Clear the original entity reference
         originalCameraEntity = null;
     }
     

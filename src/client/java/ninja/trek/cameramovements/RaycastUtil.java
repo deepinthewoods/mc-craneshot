@@ -13,8 +13,13 @@ public class RaycastUtil {
     private static final double FINE_STEP_SIZE = 0.1;
 
     public static Vec3d adjustForCollision(Vec3d playerPos, Vec3d targetPos, RaycastType raycastType) {
+        // Handle null inputs safely
+        if (playerPos == null || targetPos == null) {
+            return targetPos;
+        }
+        
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || raycastType == RaycastType.NONE) {
+        if (client == null || client.world == null || raycastType == null || raycastType == RaycastType.NONE) {
             return targetPos;
         }
 
@@ -87,7 +92,18 @@ public class RaycastUtil {
     }
 
     private static boolean isPositionInAir(MinecraftClient client, Vec3d pos) {
-        BlockPos blockPos = BlockPos.ofFloored(pos);
-        return client.world.getBlockState(blockPos).isAir();
+        // Perform null checks
+        if (client == null || client.world == null || pos == null) {
+            return true; // Assume air if we can't check
+        }
+        
+        try {
+            BlockPos blockPos = BlockPos.ofFloored(pos);
+            return client.world.getBlockState(blockPos).isAir();
+        } catch (Exception e) {
+            // Log and fallback in case of any error
+            ninja.trek.Craneshot.LOGGER.error("Error checking if position is in air: {}", e.getMessage());
+            return true; // Assume air in case of error
+        }
     }
 }

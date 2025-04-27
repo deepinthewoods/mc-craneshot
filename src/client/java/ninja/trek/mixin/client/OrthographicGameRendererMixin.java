@@ -30,10 +30,33 @@ public class OrthographicGameRendererMixin {
         CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
         float orthoFactor = 0.0f;
         
-        // Check if we have an active camera movement with ortho factor
-        if (currentTarget != null) {
+        // Additional check to ensure we don't use stale targets when no movement is active
+        boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+        
+        // Only get ortho factor from the target if we have an active movement
+        if (currentTarget != null && hasActiveMovement) {
             orthoFactor = currentTarget.getOrthoFactor();
             ninja.trek.Craneshot.LOGGER.info("Current ortho factor: {}", orthoFactor);
+        } else if (currentTarget != null && !hasActiveMovement) {
+            // If we have a target but no active movement, something is wrong - force reset
+            ninja.trek.Craneshot.LOGGER.warn("Found target but no active movement - ignoring stale ortho factor");
+            orthoFactor = 0.0f;
+        }
+        
+        // Check if camera system is active
+        boolean cameraSystemActive = ninja.trek.camera.CameraSystem.getInstance().isCameraActive();
+        
+        // Failsafe: if we have ortho factor > 0 but no active movement or camera system,
+        // this is likely a stale state - force reset ortho factor to 0
+        if (orthoFactor > 0.001f && (!hasActiveMovement || !cameraSystemActive)) {
+            ninja.trek.Craneshot.LOGGER.warn("Detected stale ortho factor with inactive movement/camera - forcing reset");
+            orthoFactor = 0.0f;
+            
+            // Emergency reset - request deactivation of the camera system
+            if (cameraSystemActive) {
+                ninja.trek.Craneshot.LOGGER.warn("Emergency reset: Deactivating camera system");
+                ninja.trek.camera.CameraSystem.getInstance().deactivateCamera();
+            }
         }
         
         // Apply orthographic projection if either global ortho mode is enabled or if we have a non-zero ortho factor
