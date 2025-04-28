@@ -21,57 +21,38 @@ public class OrthographicGameRendererMixin {
     @Shadow @Final
     private MinecraftClient client;
     
-    // Transition state
+    // Transition state - simplified to rely on camera movement's alpha
     private float transitionProgress = 0.0f;
-    private boolean transitionActive = false;
     private boolean transitionTargetOrtho = false;
-    private static final float TRANSITION_SPEED = 0.08f; // Adjust for faster/slower transitions
 
     /**
-     * Updates the transition progress on each tick.
-     * This creates a smooth transition effect between perspective and orthographic modes.
+     * Updates the transition target state.
+     * The actual transition progress is now derived directly from camera movement alpha.
      */
     @Inject(method = "tick", at = @At("TAIL"))
     private void onTick(CallbackInfo ci) {
         boolean shouldBeOrtho = CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode();
         
-        // Start transition if needed
+        // Just update the target state - no manual progress management
         if (shouldBeOrtho != transitionTargetOrtho) {
-            transitionActive = true;
             transitionTargetOrtho = shouldBeOrtho;
-            Craneshot.LOGGER.info("Starting projection transition to: {}", transitionTargetOrtho ? "orthographic" : "perspective");
-        }
-        
-        // Update transition progress
-        if (transitionActive) {
-            if (transitionTargetOrtho) {
-                // Transitioning to orthographic
-                transitionProgress = Math.min(1.0f, transitionProgress + TRANSITION_SPEED);
-                if (transitionProgress >= 1.0f) {
-                    transitionActive = false;
-                }
-            } else {
-                // Transitioning to perspective
-                transitionProgress = Math.max(0.0f, transitionProgress - TRANSITION_SPEED);
-                if (transitionProgress <= 0.0f) {
-                    transitionActive = false;
-                }
-            }
+            Craneshot.LOGGER.info("Setting projection transition target to: {}", 
+                transitionTargetOrtho ? "orthographic" : "perspective");
         }
     }
     
     /**
      * Modifies the projection matrix to use orthographic projection when enabled.
      * Uses an extremely wide view to prevent culling at the edges.
-     * Also handles blending between perspective and orthographic projection during camera movements.
+     * Also handles blending between perspective and orthographic projection based on camera movement.
      */
     @Inject(method = "getBasicProjectionMatrix", at = @At("RETURN"), cancellable = true)
     private void onGetBasicProjectionMatrix(float fovDegrees, CallbackInfoReturnable<Matrix4f> cir) {
-        // If we're in perspective mode with no transition active, return early
-        if (!CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() && 
-            !transitionActive && 
-            transitionProgress <= 0.001f &&
-            !hasActiveMovementWithOrtho()) {
+        // Get effective ortho factor
+        float effectiveOrthoFactor = getEffectiveOrthoFactor();
+        
+        // If we're in full perspective mode with no transition happening, return early
+        if (effectiveOrthoFactor <= 0.001f) {
             return;
         }
 
@@ -80,9 +61,6 @@ public class OrthographicGameRendererMixin {
         if (thisRenderer.isRenderingPanorama()) {
             return;
         }
-        
-        // Get effective ortho factor - either from transition or from camera movement
-        float effectiveOrthoFactor = getEffectiveOrthoFactor();
         
         // Skip further processing if ortho factor is effectively zero
         if (effectiveOrthoFactor <= 0.001f) {
@@ -117,7 +95,8 @@ public class OrthographicGameRendererMixin {
                     blendedMatrix.lerp(orthoMatrix, effectiveOrthoFactor);
                     cir.setReturnValue(blendedMatrix);
                     
-                    if (transitionActive) {
+                    // Log occasionally when blending matrices
+                    if (Math.random() < 0.01) { // Only log occasionally
                         Craneshot.LOGGER.debug("Blending with transition factor: {}", effectiveOrthoFactor);
                     }
                 } catch (Exception e) {
@@ -256,41 +235,50 @@ public class OrthographicGameRendererMixin {
     }
     
     /**
-     * Gets the effective orthographic factor considering both transition and camera movement
+     * Gets the effective orthographic factor directly from the camera movement.
+     * When no movement is active, smoothly transitions to the target state.
      */
     private float getEffectiveOrthoFactor() {
-        // Start with transition progress
-        float factor = transitionProgress;
-        
         // Check if we have an active camera movement with ortho component
         CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
         boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
         
+        // If we have an active camera movement, use its ortho factor directly
         if (currentTarget != null && hasActiveMovement) {
+            // Get the ortho factor from the movement - this already has the correct
+            // interpolation between perspective and orthographic modes
             float movementOrthoFactor = currentTarget.getOrthoFactor();
             
-            // Use the maximum of transition and movement ortho factors
-            factor = Math.max(factor, movementOrthoFactor);
+            // Update our transition progress to match for smoother transitions
+            // when the movement completes
+            transitionProgress = movementOrthoFactor;
             
-            // Log significant ortho factor from camera movement
-            if (movementOrthoFactor > 0.01f) {
-                Craneshot.LOGGER.debug("Camera movement ortho factor: {}", movementOrthoFactor);
+            // Log significant ortho factor changes from movements
+            if (Math.abs(movementOrthoFactor) > 0.01f && Math.random() < 0.01) { // Occasional logging
+                Craneshot.LOGGER.debug("Using camera movement ortho factor: {}", movementOrthoFactor);
             }
+            
+            return Math.max(0.0f, Math.min(1.0f, movementOrthoFactor));
         }
         
-        // Ensure factor is in valid range
-        return Math.max(0.0f, Math.min(1.0f, factor));
+        // If no active movement, check if we need to match the target state
+        if (transitionTargetOrtho && transitionProgress < 1.0f) {
+            // No active movement but should be in ortho mode - use saved progress
+            return Math.max(0.0f, Math.min(1.0f, transitionProgress));
+        } else if (!transitionTargetOrtho && transitionProgress > 0.0f) {
+            // No active movement but should be in perspective mode - use saved progress
+            return Math.max(0.0f, Math.min(1.0f, transitionProgress));
+        }
+        
+        // At target state
+        return transitionTargetOrtho ? 1.0f : 0.0f;
     }
     
     /**
-     * Utility method to check if there's an active camera movement with orthographic component
+     * No longer needed as we use getEffectiveOrthoFactor() for all ortho factor checks
      */
     private boolean hasActiveMovementWithOrtho() {
-        CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();
-        boolean hasActiveMovement = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
-        
-        return currentTarget != null && 
-               hasActiveMovement && 
-               currentTarget.getOrthoFactor() > 0.001f;
+        // For backward compatibility - not used in the new implementation
+        return getEffectiveOrthoFactor() > 0.001f;
     }
 }

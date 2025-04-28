@@ -214,35 +214,49 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         
         float newFovMultiplier = current.getFovMultiplier() + desiredFovSpeed;
         
-        // Now handle orthographic factor transition
+        // Update the position and fov of the current target
+        // (we'll update orthoFactor separately below)
+        current = new CameraTarget(desired, newYaw, newPitch, newFovMultiplier, current.getOrthoFactor());
+        
+        // Handle orthographic factor transition using actual movement progress
         float currentOrthoFactor = current.getOrthoFactor();
         float targetOrthoFactor = end.getOrthoFactor();
-        float orthoDiff = targetOrthoFactor - currentOrthoFactor;
         
-        // Only interpolate if there's a difference and we're not at the target
-        if (Math.abs(orthoDiff) > 0.001f) {
-            // Use the same adaptive easing as for FOV
-            float adaptiveOrthoEasing = (float) (fovEasing * (0.5 + 0.5 * (Math.abs(orthoDiff) / 0.1)));
-            if (adaptiveOrthoEasing > fovEasing) adaptiveOrthoEasing = (float)fovEasing;
-            
-            float desiredOrthoSpeed = orthoDiff * adaptiveOrthoEasing;
-            float maxOrthoChange = (float) (fovSpeedLimit * (1.0f/20.0f)); 
-            
-            if (Math.abs(desiredOrthoSpeed) > maxOrthoChange) {
-                desiredOrthoSpeed = Math.signum(desiredOrthoSpeed) * maxOrthoChange;
-            }
-            
-            float newOrthoFactor = currentOrthoFactor + desiredOrthoSpeed;
-            // Keep within valid range
-            newOrthoFactor = Math.max(0.0f, Math.min(1.0f, newOrthoFactor));
-            
+        // Calculate total position progress (0.0 to 1.0) based on position and rotation
+        double positionProgress = Math.min(1.0, current.getPosition().distanceTo(end.getPosition()) / 
+                                         Math.max(0.1, start.getPosition().distanceTo(end.getPosition())));
+                                         
+        // Normalize to 0.0-1.0 range where 1.0 means we're at start, 0.0 means we're at destination
+        double normalizedProgress = 1.0 - positionProgress;
+        
+        // Use the normalized movement progress for ortho factor interpolation
+        float newOrthoFactor;
+        if (normalizedProgress < 0.1) {
+            // Start of transition (first 10%) - very gentle curve
+            newOrthoFactor = currentOrthoFactor + (targetOrthoFactor - currentOrthoFactor) * 
+                            (float)(normalizedProgress * 2.0);
+        } else if (normalizedProgress > 0.9) {
+            // End of transition (last 10%) - very gentle curve
+            float remainingFactor = 1.0f - (float)((normalizedProgress - 0.9) * 5.0);
+            newOrthoFactor = targetOrthoFactor - (targetOrthoFactor - currentOrthoFactor) * remainingFactor;
+        } else {
+            // Middle of transition - linear interpolation
+            newOrthoFactor = currentOrthoFactor + (targetOrthoFactor - currentOrthoFactor) * 
+                            (float)((normalizedProgress - 0.1) / 0.8);
+        }
+        
+        // Keep within valid range
+        newOrthoFactor = Math.max(0.0f, Math.min(1.0f, newOrthoFactor));
+        
+        // Only apply if there's a significant change
+        if (Math.abs(newOrthoFactor - currentOrthoFactor) > 0.001f) {
             // Update the current ortho factor
             current.setOrthoFactor(newOrthoFactor);
             
             // Log significant changes
             if (Math.abs(newOrthoFactor - currentOrthoFactor) > 0.05f) {
-                Craneshot.LOGGER.debug("Ortho factor transition: {} -> {}", 
-                    currentOrthoFactor, newOrthoFactor);
+                Craneshot.LOGGER.debug("Ortho transition using movement progress: {} -> {}, progress: {}", 
+                    currentOrthoFactor, newOrthoFactor, normalizedProgress);
             }
         }
 

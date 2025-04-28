@@ -480,27 +480,10 @@ public class CameraController {
             handleKeyboardMovement(client, camera);
         }
 
-        updatePerspective(client, camera);
         updateMessageTimer();
     }
 
-    /**
-     * Previously updated the camera perspective based on the distance.
-     * Now this method is no longer needed as CameraSystem handles rendering decisions.
-     * Kept as a stub for backwards compatibility.
-     */
-    private void updatePerspective(MinecraftClient client, Camera camera) {
-        // In orthographic mode, we still need to ensure third person mode
-        if (client.player == null) return;
-        
-        // In orthographic mode, we always want to be in third person
-        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() && 
-            client.options.getPerspective() == Perspective.FIRST_PERSON) {
-            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-        }
-        
-        // No other perspective changes needed - CameraSystem now handles arm/body rendering
-    }
+
 
     //=== Message Handling ========================================================
 

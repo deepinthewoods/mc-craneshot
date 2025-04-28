@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
+import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
@@ -202,10 +203,25 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         
         float desiredFovSpeed = fovError * adaptiveFovEasing;
         
-        // Similar adaptive easing for orthographic projection
-        float orthoError = targetOrthoFactor - current.getOrthoFactor();
-        float orthoEasing = (float) fovEasing; // Reuse FOV easing for consistency
-        float desiredOrthoSpeed = orthoError * orthoEasing;
+        // Handle orthographic projection directly based on movement progress
+        float calculatedOrthoTarget = resetting ? 0.0f : (projection == PROJECTION.ORTHO ? 1.0f : 0.0f);
+        
+        // Use actual movement progress value for ortho transitions
+        if (!linearMode) {
+            // In bezier mode, use the curve progress directly (smooth transitions)
+            float progressBasedOrtho = resetting ? (1.0f - (float)progress) * end.getOrthoFactor() : (float)progress * calculatedOrthoTarget;
+            current.setOrthoFactor(progressBasedOrtho);
+        } else {
+            // In linear mode, use the alpha value which is movement progress
+            float alphaBasedOrtho = resetting ? (float)alpha * end.getOrthoFactor() : (1.0f - (float)alpha) * calculatedOrthoTarget;
+            current.setOrthoFactor(alphaBasedOrtho);
+        }
+        
+        // Log significant ortho factor changes
+        if (Math.abs(current.getOrthoFactor() - calculatedOrthoTarget) > 0.05f && Math.random() < 0.01) {
+            ninja.trek.Craneshot.LOGGER.debug("Ortho factor using movement progress: {}, target: {}, progress: {}, alpha: {}",
+                current.getOrthoFactor(), calculatedOrthoTarget, progress, alpha);
+        }
 
         // Apply speed limits
         float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
@@ -220,17 +236,15 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (Math.abs(desiredFovSpeed) > maxFovChange) {
             desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
         }
-        if (Math.abs(desiredOrthoSpeed) > maxFovChange) {
-            desiredOrthoSpeed = Math.signum(desiredOrthoSpeed) * maxFovChange;
-        }
+        // Replaced with direct movement-based ortho factor calculation above
 
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
         float newFovDelta = (float) (current.getFovMultiplier() + desiredFovSpeed);
-        float newOrthoFactor = Math.max(0.0f, Math.min(1.0f, current.getOrthoFactor() + desiredOrthoSpeed));
+        // We're now directly setting orthoFactor based on movement progress above
 
-        // Update current target
-        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta, newOrthoFactor);
+        // Update current target - note we're keeping the orthoFactor that was already set directly
+        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta, current.getOrthoFactor());
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
@@ -301,8 +315,18 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 Vec3d playerPos = client.player.getEyePos();
                 
                 // Set the target position to player head with proper rotation for return
-                // Always reset FOV to normal (1.0) and projection to perspective (0.0) when returning to player view
+                // When returning to player view, we'll gradually transition back to perspective mode
+                // but we need to ensure a smooth transition by starting from the current ortho state
+                float currentOrthoFactor = current.getOrthoFactor();
+                
+                // Create a target with normal FOV (1.0) and a smooth transition to perspective
+                // Instead of immediately setting target to 0.0 ortho factor, we'll transition
+                // more gradually based on the current factor
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, 0.0f);
+                
+                // Log the transition
+                ninja.trek.Craneshot.LOGGER.info("BezierMovement smooth return transition from ortho={} to perspective", 
+                    currentOrthoFactor);
                 
                 ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}, fov=1.0", 
                     playerPos, playerYaw, playerPitch);
