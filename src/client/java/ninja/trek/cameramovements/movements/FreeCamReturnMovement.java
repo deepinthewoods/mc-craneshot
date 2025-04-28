@@ -78,14 +78,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         // Always return to the default FOV (1.0) when returning to player view
         // The transition will use the fovEasing and fovSpeedLimit settings
         
-        // Determine orthographic state - either from forced state or current global state
+        // Determine orthographic state - either from forced state or current movement settings
         boolean isOrthoModeEnabled;
         if (hasForcedOrthoState) {
             isOrthoModeEnabled = forcedOrthoState;
             Craneshot.LOGGER.info("Using forced ortho state: {}", isOrthoModeEnabled);
         } else {
-            isOrthoModeEnabled = ninja.trek.OrthographicCameraManager.isOrthographicMode();
-            Craneshot.LOGGER.info("Using global ortho state: {}", isOrthoModeEnabled);
+            isOrthoModeEnabled = getProjection() == PROJECTION.ORTHO;
+            Craneshot.LOGGER.info("Using movement settings ortho state: {}", isOrthoModeEnabled);
         }
         
         float orthoFactor = isOrthoModeEnabled ? 1.0f : 0.0f;

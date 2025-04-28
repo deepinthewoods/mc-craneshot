@@ -4,7 +4,7 @@ import net.minecraft.block.enums.CameraSubmersionType;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.CameraController;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import org.spongepowered.asm.mixin.Mixin;
@@ -32,7 +32,7 @@ public class CameraSubmersionMixin {
             boolean isSpecialCameraMode = 
                 CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
                 CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                OrthographicCameraManager.isOrthographicMode() ||
+                CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() ||
                 CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
                 CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
                 CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK;

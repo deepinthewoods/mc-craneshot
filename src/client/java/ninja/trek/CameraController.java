@@ -494,7 +494,7 @@ public class CameraController {
         if (client.player == null) return;
         
         // In orthographic mode, we always want to be in third person
-        if (OrthographicCameraManager.isOrthographicMode() && 
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() && 
             client.options.getPerspective() == Perspective.FIRST_PERSON) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
         }

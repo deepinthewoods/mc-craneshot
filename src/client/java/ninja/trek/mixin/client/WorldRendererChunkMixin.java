@@ -2,7 +2,7 @@ package ninja.trek.mixin.client;
 
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.util.math.BlockPos;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,7 +21,7 @@ public class WorldRendererChunkMixin {
      */
     @Inject(method = "isRenderingReady", at = @At("HEAD"), cancellable = true)
     private void alwaysRenderInOrthoMode(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             // In orthographic mode, we want to render everything
             cir.setReturnValue(true);
         }

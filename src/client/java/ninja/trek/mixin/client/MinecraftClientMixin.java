@@ -2,7 +2,7 @@ package ninja.trek.mixin.client;
 
 import net.minecraft.client.MinecraftClient;
 import ninja.trek.CameraController;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,7 +23,7 @@ public class MinecraftClientMixin {
     private void updateChunkCullingOnTickStart(CallbackInfo ci) {
         // For orthographic mode, we disable culling at the start of every tick
         // This ensures it's always disabled, even if something else tries to enable it
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             if (this.chunkCullingEnabled) {
                 wasChunkCullingEnabled = true;
                 this.chunkCullingEnabled = false;
@@ -46,7 +46,7 @@ public class MinecraftClientMixin {
         }
         
         // Check orthographic mode - this should ALWAYS disable culling
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             shouldDisableCulling = true;
         }
         

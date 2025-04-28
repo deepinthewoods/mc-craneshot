@@ -3,7 +3,7 @@ package ninja.trek.mixin.client;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
@@ -31,7 +31,7 @@ public class GameRendererMixin {
     private void forceRenderBlockOutline(CallbackInfoReturnable<Boolean> cir) {
         // In orthographic mode, we want to ensure block outlines are visible
         // This helps with block selection and visualization
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             // Enable block outlines in orthographic mode
             cir.setReturnValue(true);
         }

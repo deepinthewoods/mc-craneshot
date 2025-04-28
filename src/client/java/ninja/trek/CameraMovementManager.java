@@ -205,25 +205,15 @@ public class CameraMovementManager {
                 
                 // Check if we have a current target and preserve its orthographic state
                 if (baseTarget != null) {
-                    // Get the current orthographic state from both the base target and the global setting
+                    // Get the orthographic state from the base target
                     float orthoFactor = baseTarget.getOrthoFactor();
-                    boolean isGlobalOrthoEnabled = ninja.trek.OrthographicCameraManager.isOrthographicMode();
+                    boolean shouldBeOrtho = orthoFactor > 0.5f;
                     
-                    ninja.trek.Craneshot.LOGGER.info("Preserving ortho factor {} during FreeCamReturn (global ortho: {})", 
-                                                     orthoFactor, isGlobalOrthoEnabled);
+                    ninja.trek.Craneshot.LOGGER.info("Preserving ortho factor {} during FreeCamReturn", 
+                                                     orthoFactor);
                     
-                    // If there's a mismatch between the target's ortho factor and the global setting,
-                    // we need to ensure consistency for the return movement
-                    if ((orthoFactor > 0.5f) != isGlobalOrthoEnabled) {
-                        ninja.trek.Craneshot.LOGGER.warn("Detected inconsistency between ortho target ({}) and global state ({})",
-                                                        orthoFactor > 0.5f ? "enabled" : "disabled",
-                                                        isGlobalOrthoEnabled ? "enabled" : "disabled");
-                        
-                        // For safety, use the target's orthographic factor as the source of truth
-                        // during the return movement
-                        boolean shouldBeOrtho = orthoFactor > 0.5f;
-                        freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
-                    }
+                    // Set the orthographic state for the return movement
+                    freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
                 }
                 
                 freeCamReturnMovement.start(client, camera);
@@ -332,19 +322,9 @@ public class CameraMovementManager {
                     float finalOrthoFactor = state.getCameraTarget().getOrthoFactor();
                     ninja.trek.Craneshot.LOGGER.info("Final ortho factor: {}", finalOrthoFactor);
                     
-                    // Since we're completing the movement, check if we need to update the global
-                    // orthographic mode based on the final state
+                    // Log the final orthographic factor for debugging
                     boolean shouldBeInOrthoMode = finalOrthoFactor > 0.5f;
-                    if (ninja.trek.OrthographicCameraManager.isOrthographicMode() != shouldBeInOrthoMode) {
-                        ninja.trek.Craneshot.LOGGER.info("Updating global ortho mode to {}", shouldBeInOrthoMode);
-                        
-                        // Only update if current state differs from what we want
-                        if (shouldBeInOrthoMode != ninja.trek.OrthographicCameraManager.isOrthographicMode()) {
-                            // Set the orthographic mode silently to avoid unwanted feedback messages
-                            // when returning from a movement
-                            ninja.trek.OrthographicCameraManager.setOrthographicMode(shouldBeInOrthoMode, false);
-                        }
-                    }
+                    ninja.trek.Craneshot.LOGGER.info("Final orthographic state: {}", shouldBeInOrthoMode ? "enabled" : "disabled");
                     
                     // Reset the FreeCamReturnMovement phase
                     inFreeCamReturnPhase = false;
@@ -559,5 +539,40 @@ public class CameraMovementManager {
             ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning null (no active movement)");
             return null;
         }
+    }
+    
+    /**
+     * Checks if orthographic mode should currently be active based on the active movement's settings
+     * @return true if orthographic mode should be active, false otherwise
+     */
+    public boolean isOrthographicMode() {
+        // First check if we have an active camera target with orthographic factor
+        CameraTarget target = getCurrentTarget();
+        if (target != null && target.getOrthoFactor() > 0.5f) {
+            return true;
+        }
+        
+        // If no target or ortho factor is low, check active movement settings
+        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
+            AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+            return settings.getProjection() == AbstractMovementSettings.PROJECTION.ORTHO;
+        }
+        
+        // Default to perspective mode if no active target or movement
+        return false;
+    }
+    
+    /**
+     * Gets the current orthographic scale factor based on active movement settings
+     * @return The ortho scale value, or a default value if no active settings
+     */
+    public float getOrthoScale() {
+        // Check if we have active movement settings
+        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
+            return ((AbstractMovementSettings) activeMovement).getOrthoScale();
+        }
+        
+        // Default scale if no active movement
+        return 20.0f;
     }
 }

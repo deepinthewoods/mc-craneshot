@@ -110,18 +110,29 @@ public class CraneShotEventHandler {
         }
 
         // Handle orthographic camera zoom if in orthographic mode
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             // Use shift key as a modifier for orthographic zoom
             boolean shiftPressed = client.options.sneakKey.isPressed();
             if (shiftPressed) {
-                if (scrollUp) {
-                    OrthographicCameraManager.zoomIn();
-                } else {
-                    OrthographicCameraManager.zoomOut();
+                // Get the active movement settings
+                if (activeMovement instanceof AbstractMovementSettings) {
+                    AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                    if (scrollUp) {
+                        settings.adjustOrthoScale(-1.0f);
+                    } else {
+                        settings.adjustOrthoScale(1.0f);
+                    }
+                    // Show zoom level message
+                    if (client.player != null) {
+                        client.player.sendMessage(
+                            net.minecraft.text.Text.literal("Orthographic zoom: " + String.format("%.1f", settings.getOrthoScale())),
+                            true
+                        );
+                    }
+                    lastScrollTime = currentTime;
+                    resetScrollValue(client);
+                    return;
                 }
-                lastScrollTime = currentTime;
-                resetScrollValue(client);
-                return;
             }
         }
         

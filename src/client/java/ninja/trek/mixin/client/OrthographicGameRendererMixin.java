@@ -5,7 +5,6 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
 import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
-import ninja.trek.OrthographicCameraManager;
 import ninja.trek.cameramovements.CameraTarget;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
@@ -34,7 +33,7 @@ public class OrthographicGameRendererMixin {
      */
     @Inject(method = "tick", at = @At("TAIL"))
     private void onTick(CallbackInfo ci) {
-        boolean shouldBeOrtho = OrthographicCameraManager.isOrthographicMode();
+        boolean shouldBeOrtho = CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode();
         
         // Start transition if needed
         if (shouldBeOrtho != transitionTargetOrtho) {
@@ -69,7 +68,7 @@ public class OrthographicGameRendererMixin {
     @Inject(method = "getBasicProjectionMatrix", at = @At("RETURN"), cancellable = true)
     private void onGetBasicProjectionMatrix(float fovDegrees, CallbackInfoReturnable<Matrix4f> cir) {
         // If we're in perspective mode with no transition active, return early
-        if (!OrthographicCameraManager.isOrthographicMode() && 
+        if (!CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() && 
             !transitionActive && 
             transitionProgress <= 0.001f &&
             !hasActiveMovementWithOrtho()) {
@@ -228,7 +227,7 @@ public class OrthographicGameRendererMixin {
      */
     private float calculateBaseScale(float fovDegrees) {
         // Start with the configured scale from settings
-        float scale = OrthographicCameraManager.getOrthoScale();
+        float scale = CraneshotClient.MOVEMENT_MANAGER.getOrthoScale();
         
         // Get the camera target if available
         CameraTarget currentTarget = CraneshotClient.MOVEMENT_MANAGER.getCurrentTarget();

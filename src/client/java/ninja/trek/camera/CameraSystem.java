@@ -6,7 +6,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import org.jetbrains.annotations.Nullable;
@@ -297,7 +297,7 @@ public class CameraSystem {
      * Calculates the target velocity based on keyboard input
      */
     private Vec3d calculateTargetVelocity(MinecraftClient mc, float baseSpeed) {
-        boolean isOrtho = OrthographicCameraManager.isOrthographicMode();
+        boolean isOrtho = CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode();
         boolean isFreeMode = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
         
         double x = 0, y = 0, z = 0;

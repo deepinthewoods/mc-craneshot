@@ -6,7 +6,7 @@ import net.minecraft.client.render.Frustum;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.OrthographicCameraManager;
+import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import org.spongepowered.asm.mixin.Mixin;
@@ -41,7 +41,7 @@ public abstract class WorldRendererMixin {
     )
     private void resetLastCameraPitchInOrthoOut(Camera camera, Frustum frustum, boolean hasForcedFrustum, boolean spectator, CallbackInfo ci) {
         // Check if orthographic mode is active
-        if (OrthographicCameraManager.isOrthographicMode()) {
+        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
             // Check if we're in the "out" phase of movement
             boolean isOutPhase = 
                 CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
@@ -67,7 +67,7 @@ public abstract class WorldRendererMixin {
 //    )
 //    private void onSetupTerrainStart(Camera camera, Frustum frustum, boolean hasForcedFrustum, boolean spectator, CallbackInfo ci) {
 //        // Instead of setting needsTerrainUpdate directly, call scheduleTerrainUpdate() method
-//        if (OrthographicCameraManager.isOrthographicMode()) {
+//        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
 //            WorldRenderer worldRenderer = (WorldRenderer)(Object)this;
 //            worldRenderer.scheduleTerrainUpdate();
 //        }
@@ -80,7 +80,7 @@ public abstract class WorldRendererMixin {
 //        boolean isLegacyCameraActive =
 //            CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
 //            CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-//            OrthographicCameraManager.isOrthographicMode() ||
+//            CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() ||
 //            CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
 //            CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
 //            CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK;
@@ -93,7 +93,7 @@ public abstract class WorldRendererMixin {
 //            frustum.setPosition(camPos.x, camPos.y, camPos.z);
 //
 //            // For orthographic mode, we need special handling to render more chunks
-//            boolean isOrthographic = OrthographicCameraManager.isOrthographicMode();
+//            boolean isOrthographic = CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode();
 //
 //            // Check if enough time has passed since last update for chunk rebuilding
 //            long currentTime = System.currentTimeMillis();
@@ -167,7 +167,7 @@ public abstract class WorldRendererMixin {
         boolean isLegacyCameraActive = 
             CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
             CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-            OrthographicCameraManager.isOrthographicMode() ||
+            CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode() ||
             CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
             CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
             CameraController.currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK;

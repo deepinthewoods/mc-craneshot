@@ -78,6 +78,13 @@ public abstract class AbstractMovementSettings {
             description = "Controls camera projection mode during movement"
     )
     protected PROJECTION projection = PROJECTION.PERSPECTIVE;
+    
+    @MovementSetting(label = "Ortho Scale", min = 1.0, max = 100.0, description = "Controls the zoom level of orthographic view")
+    protected float orthoScale = 20.0f;
+    
+    private static final float MIN_ORTHO_SCALE = 1.0f;
+    private static final float MAX_ORTHO_SCALE = 100.0f;
+    private static final float ORTHO_SCALE_STEP = 1.0f;
 
     @MovementSetting(
             label = "Scroll",
@@ -94,6 +101,40 @@ public abstract class AbstractMovementSettings {
     
     public PROJECTION getProjection() {
         return projection;
+    }
+    
+    /**
+     * Gets the current orthographic scale factor.
+     * @return The scale value that determines the zoom level
+     */
+    public float getOrthoScale() {
+        return orthoScale;
+    }
+
+    /**
+     * Sets the orthographic scale factor.
+     * @param scale The new scale value
+     */
+    public void setOrthoScale(float scale) {
+        orthoScale = clampOrthoScale(scale);
+    }
+
+    /**
+     * Adjusts the orthographic scale by the given amount.
+     * Positive values zoom out (increase scale), negative values zoom in (decrease scale).
+     * @param amount The amount to add to the current scale
+     */
+    public void adjustOrthoScale(float amount) {
+        orthoScale = clampOrthoScale(orthoScale + amount);
+    }
+    
+    /**
+     * Ensures the ortho scale stays within the valid range
+     * @param scale The scale to clamp
+     * @return The clamped scale value
+     */
+    private float clampOrthoScale(float scale) {
+        return Math.max(MIN_ORTHO_SCALE, Math.min(MAX_ORTHO_SCALE, scale));
     }
 
 
