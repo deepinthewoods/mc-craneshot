@@ -7,7 +7,6 @@
 		"CameraMixin",
 		"CameraSubmersionMixin",
 		"FovAccessor",
-		"FrustumMixin",
 		"GameRendererAccessor",
 		"GameRendererMixin",
 		"KeyboardInputMixin",
