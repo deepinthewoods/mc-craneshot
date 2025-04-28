@@ -16,7 +16,6 @@ import java.util.List;
 public class CraneshotClient implements ClientModInitializer {
 	public static KeyBinding[] cameraKeyBinds;
 	public static KeyBinding selectMovementType;
-	public static KeyBinding toggleOrthographicMode;
 	public static final CameraController CAMERA_CONTROLLER = new CameraController();
 	public static KeyBinding toggleMenuKey;
 	private static boolean isMenuOpen = false;
@@ -37,13 +36,6 @@ public class CraneshotClient implements ClientModInitializer {
 				"key.craneshot.select_movement",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_X,
-				"category.craneshot.camera"
-		));
-		
-		toggleOrthographicMode = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-				"key.craneshot.toggle_orthographic",
-				InputUtil.Type.KEYSYM,
-				GLFW.GLFW_KEY_O,
 				"category.craneshot.camera"
 		));
 
@@ -77,12 +69,6 @@ public class CraneshotClient implements ClientModInitializer {
 	public static void checkKeybinds() {
 		if (toggleMenuKey.wasPressed()) {
 			MENU.toggleMenu();
-		}
-		
-		if (toggleOrthographicMode.wasPressed()) {
-			boolean isOrthoEnabled = OrthographicCameraManager.toggleOrthographicMode();
-			// Print a message to the player's chat to indicate the mode change
-			ninja.trek.Craneshot.LOGGER.info("Orthographic camera mode: " + (isOrthoEnabled ? "enabled" : "disabled"));
 		}
 	}
 

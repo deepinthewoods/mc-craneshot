@@ -57,23 +57,7 @@ public class OrthographicCameraManager {
         return orthographicMode;
     }
     
-    /**
-     * Convenience method to set the orthographic mode with a message to the player.
-     * 
-     * @param enabled Whether orthographic mode should be enabled or disabled
-     * @return The new state
-     */
-    public static boolean setOrthographicMode(boolean enabled) {
-        return setOrthographicMode(enabled, true);
-    }
-    
-    /**
-     * Toggles the camera mode between perspective and orthographic.
-     * @return The new state (true if orthographic mode is now enabled)
-     */
-    public static boolean toggleOrthographicMode() {
-        return setOrthographicMode(!orthographicMode, true);
-    }
+
 
     /**
      * Checks if orthographic mode is currently enabled.
