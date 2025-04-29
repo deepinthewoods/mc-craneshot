@@ -52,25 +52,7 @@ public class CameraTarget {
         return target;
     }
 
-    public static CameraTarget fromDistanceBack(PlayerEntity player, double distance) {
-        double yaw = Math.toRadians(player.getYaw());
-        double pitch = Math.toRadians(player.getPitch());
-        double xOffset = Math.sin(yaw) * Math.cos(pitch) * distance;
-        double yOffset = Math.sin(pitch) * distance;
-        double zOffset = -Math.cos(yaw) * Math.cos(pitch) * distance;
-        Vec3d targetPos = player.getEyePos().add(xOffset, yOffset, zOffset);
-        return new CameraTarget(targetPos, player.getYaw(), player.getPitch(), 1.0f);
-    }
 
-    public static CameraTarget fromDistanceFront(PlayerEntity player, double distance) {
-        double yaw = Math.toRadians(player.getYaw() + 180);
-        double pitch = Math.toRadians(-player.getPitch());
-        double xOffset = Math.sin(yaw) * Math.cos(pitch) * distance;
-        double yOffset = Math.sin(pitch) * distance;
-        double zOffset = -Math.cos(yaw) * Math.cos(pitch) * distance;
-        Vec3d targetPos = player.getEyePos().add(xOffset, yOffset, zOffset);
-        return new CameraTarget(targetPos, player.getYaw() + 180, -player.getPitch(), 1.0f);
-    }
 
     public Vec3d getPosition() {
         return position;
