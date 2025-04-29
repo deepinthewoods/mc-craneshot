@@ -255,7 +255,8 @@ public class OrthographicGameRendererMixin {
             
             // Log significant ortho factor changes from movements
             if (Math.abs(movementOrthoFactor) > 0.01f && Math.random() < 0.01) { // Occasional logging
-                Craneshot.LOGGER.debug("Using camera movement ortho factor: {}", movementOrthoFactor);
+                Craneshot.LOGGER.error("Using camera movement ortho factor: {} (target: {})", 
+                    movementOrthoFactor, transitionTargetOrtho ? 1.0f : 0.0f);
             }
             
             return Math.max(0.0f, Math.min(1.0f, movementOrthoFactor));

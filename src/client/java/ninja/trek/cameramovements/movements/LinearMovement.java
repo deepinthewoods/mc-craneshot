@@ -88,19 +88,19 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Update start target with controlStick's current state
         start = new CameraTarget(
-                CameraController.controlStick.getPosition(),
-                CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset,
-                start.getFovMultiplier(),
-                start.getOrthoFactor() // Preserve ortho factor
+        CameraController.controlStick.getPosition(),
+        CameraController.controlStick.getYaw(),
+        CameraController.controlStick.getPitch() + pitchOffset,
+        start.getFovMultiplier(),
+        start.getOrthoFactor() // Preserve ortho factor
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset, 
-                end.getFovMultiplier(),
-                end.getOrthoFactor()); // Preserve ortho factor
+        CameraController.controlStick.getPitch() + pitchOffset, 
+        end.getFovMultiplier(),
+        end.getOrthoFactor()); // Preserve ortho factor
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
@@ -112,13 +112,49 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             float playerPitch = client.player.getPitch();
             
             // Update return target to always be the player's current head position and rotation
-            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
+            // But preserve the orthoFactor from the existing target
+            float preservedOrtho = b.getOrthoFactor();
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier(), preservedOrtho);
+            
+            // Debug logging of position updates
+            if (Math.random() < 0.001) { // Very rarely log to avoid spam
+                ninja.trek.Craneshot.LOGGER.info("LinearMovement updating return target position - preserving orthoFactor={}", 
+                    preservedOrtho);
+            }
         }
 
         // Position interpolation with speed limit
-        Vec3d desired = current.getPosition().lerp(b.getPosition(), positionEasing);
+        // Use a distance-based adaptive easing that increases as we get closer to the target
+        // This helps ensure the camera actually reaches the target position
+        double distanceToTarget = current.getPosition().distanceTo(b.getPosition());
+        double adaptiveEasing;
+        
+        if (resetting) {
+            // For return phase, use a special curve that speeds up as we get closer
+            // This helps ensure we reach the exact target position
+            if (distanceToTarget < 1.0) {
+                // When very close, use higher easing to ensure we reach the target
+                adaptiveEasing = Math.max(positionEasing, positionEasing * (2.0 - distanceToTarget));
+            } else {
+                adaptiveEasing = positionEasing;
+            }
+            
+            // Log the adaptive easing occasionally
+            if (Math.random() < 0.005 && distanceToTarget < 2.0) {
+                ninja.trek.Craneshot.LOGGER.info("LinearMovement return phase - distance: {}, adaptive easing: {}",
+                    String.format("%.3f", distanceToTarget),
+                    String.format("%.3f", adaptiveEasing));
+            }
+        } else {
+            // Standard easing for outbound phase
+            adaptiveEasing = positionEasing;
+        }
+        
+        // Calculate the desired position using adaptive easing
+        Vec3d desired = current.getPosition().lerp(b.getPosition(), adaptiveEasing);
         Vec3d moveVector = desired.subtract(current.getPosition());
         double moveDistance = moveVector.length();
+        
         if (moveDistance > 0.01) {
             double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
             if (moveDistance > maxMove) {
@@ -173,10 +209,53 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // Use similar easing for ortho projection transition
         // We want projection changes to be fairly smooth
         float orthoEasing = (float) fovEasing; // Reuse FOV easing value for consistency
-        float desiredOrthoSpeed = orthoDiff * orthoEasing;
+        float desiredOrthoSpeed; // Declare the variable here
         
-        ninja.trek.Craneshot.LOGGER.debug("Ortho interpolation: current={}, target={}, diff={}, desiredSpeed={}",
-                                           current.getOrthoFactor(), targetOrthoFactor, orthoDiff, desiredOrthoSpeed);
+        // Make the return transition (to perspective) as smooth as the out transition
+        // Apply special case if we're returning to player view
+        if (resetting) {
+            // During the initial phase of reset (first ~20% of movement), maintain the current ortho factor
+            // This prevents the immediate jump to perspective
+            float positionProgress = (float) (current.getPosition().distanceTo(start.getPosition()) / 
+                                             Math.max(0.1f, start.getPosition().distanceTo(end.getPosition())));
+                                             
+            // Normalize to 0.0-1.0 range where 1.0 means at start, 0.0 means at end
+            positionProgress = 1.0f - positionProgress;
+            
+            // Only begin transitioning ortho factor after we've moved a bit
+            if (positionProgress < 0.2f) {
+                // In the first 20% of movement, maintain the initial ortho factor
+                // This means setting desiredOrthoSpeed to 0
+                desiredOrthoSpeed = 0.0f;
+                
+                if (Math.random() < 0.01) { // Log occasionally
+                    ninja.trek.Craneshot.LOGGER.debug("Initial return phase - preserving original orthoFactor={}", 
+                        current.getOrthoFactor());
+                }
+            } else {
+                // After 20% movement, start a slow transition to perspective
+                // Remap progress to 0-1 range for the remaining 80% of movement
+                float transitionProgress = (positionProgress - 0.2f) / 0.8f;
+                
+                // Use a special returnEasing that's slower for more visual smoothness
+                float returnPhaseOrthoEasing = (float) (fovEasing * 0.5f * transitionProgress);
+                orthoDiff = -current.getOrthoFactor(); // Target 0.0 (perspective)
+                desiredOrthoSpeed = orthoDiff * returnPhaseOrthoEasing;
+                
+                if (Math.random() < 0.01) { // Log occasionally
+                    ninja.trek.Craneshot.LOGGER.debug("Return transition - orthoFactor={}, progress={}, easing={}", 
+                        current.getOrthoFactor(), positionProgress, returnPhaseOrthoEasing);
+                }
+            }
+        } else {
+            // Regular ortho easing during out phase
+            desiredOrthoSpeed = orthoDiff * orthoEasing;
+        }
+        
+        if (Math.random() < 0.01) { // Log occasionally
+            ninja.trek.Craneshot.LOGGER.debug("Ortho interpolation: current={}, target={}, diff={}, desiredSpeed={}, resetting={}",
+                                               current.getOrthoFactor(), targetOrthoFactor, orthoDiff, desiredOrthoSpeed, resetting);
+        }
         
         // Apply speed limit for ortho changes similar to FOV
         if (Math.abs(desiredOrthoSpeed) > maxFovChange) {
@@ -201,7 +280,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         alpha = current.getPosition().distanceTo(b.getPosition()) /
                 a.getPosition().distanceTo(b.getPosition());
 
-        boolean complete = resetting && moveDistance < 0.01;
+        // Log final approach distances during return phase
+        if (resetting && current.getPosition().distanceTo(b.getPosition()) < 0.05) {
+            ninja.trek.Craneshot.LOGGER.info("LinearMovement final approach - distance to target: {}, alpha: {}",
+                String.format("%.5f", current.getPosition().distanceTo(b.getPosition())),
+                String.format("%.5f", alpha));
+        }
+
+        boolean complete = resetting && current.getPosition().distanceTo(b.getPosition()) < 0.01;
         return new MovementState(current, complete);
     }
 
@@ -219,12 +305,28 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             // Set the target position to player head and proper rotation for return
             Vec3d playerPos = client.player.getEyePos();
             
-            // When resetting, use the default FOV multiplier (1.0) to reset view to normal
-            // and reset the ortho factor to 0.0 (perspective) during return phase
-            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, 0.0f);
+            // Get the current orthographic factor
+            float currentOrtho = current.getOrthoFactor();
             
-            ninja.trek.Craneshot.LOGGER.info("LinearMovement return to player head rotation: pos={}, yaw={}, pitch={}", 
-                playerPos, playerYaw, playerPitch);
+            // First preserve the current orthographic factor in end target
+            // This is crucial for a smooth transition
+            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, currentOrtho);
+            
+            // Log this important transition
+            ninja.trek.Craneshot.LOGGER.info("LinearMovement return transition starting with orthoFactor={}", currentOrtho);
+            
+            // Create a new temporary start point that matches current state exactly
+            // This ensures our interpolation starts from exactly where we are
+            start = new CameraTarget(
+                current.getPosition(),
+                current.getYaw(),
+                current.getPitch(),
+                current.getFovMultiplier(),
+                current.getOrthoFactor()
+            );
+            
+            ninja.trek.Craneshot.LOGGER.debug("LinearMovement return - current={}, target={}", 
+                current.getOrthoFactor(), end.getOrthoFactor());
         }
         
         // For free camera, also update the current target's position to ensure smooth transition
@@ -272,7 +374,34 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        return resetting && current.getPosition().distanceTo(start.getPosition()) < 0.03;
+        // Consider the movement complete when:
+        // 1. We're in the resetting phase
+        // 2. We're very close to the target position (player's head)
+        // 3. The FOV has nearly returned to normal
+        if (resetting) {
+            // Using end position (player position) as the target
+            double positionDistance = current.getPosition().distanceTo(end.getPosition());
+            float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
+            float orthoDifference = current.getOrthoFactor(); // Distance to 0.0
+            
+            // Log completion progress for debugging
+            if (Math.random() < 0.01) { // Only log occasionally
+                ninja.trek.Craneshot.LOGGER.info("LinearMovement completion check - pos distance: {}, fov diff: {}, ortho: {}",
+                    String.format("%.3f", positionDistance),
+                    String.format("%.3f", fovDifference),
+                    String.format("%.3f", orthoDifference));
+            }
+            
+            // Much stricter requirements to ensure movement completes fully
+            // Position must be very close to destination
+            boolean positionComplete = positionDistance < 0.03;
+            boolean fovComplete = fovDifference < 0.01f;
+            
+            // We don't require ortho to be complete for the movement to end
+            // as that will continue to blend after the movement
+            return positionComplete && fovComplete;
+        }
+        return false;
     }
 
     @Override
@@ -280,6 +409,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // Consider movement complete when the position has nearly reached its target
         // The FOV will continue to transition smoothly using fovEasing even after
         // the out phase is considered complete
-        return !resetting && alpha < .1;
+        return !resetting && alpha < .02;
     }
 }
