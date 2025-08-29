@@ -54,6 +54,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private boolean distanceChanged = false;
     private float weight = 1.0f;
     private float baseFov;
+    // Prevent orthoFactor from dipping during OUT phase when mouse input retargets end
+    private float orthoOutLock = -1.0f;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -86,6 +88,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         distanceChanged = false;
         weight = 1.0f;
         alpha = 1;
+        // Initialize ortho lock for OUT phase
+        orthoOutLock = (projection == PROJECTION.ORTHO) ? 0.0f : -1.0f;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
@@ -238,6 +242,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Handle orthographic projection with smooth transitions in both directions
         float calculatedOrthoTarget;
         if (resetting) {
+            // Unlock ortho when returning so it can smoothly blend back to perspective
+            orthoOutLock = -1.0f;
             // During return phase, preserve the end orthographic factor
             // We'll still set it to 0.0 for the target, but we want a slow transition
             calculatedOrthoTarget = 0.0f;
@@ -266,14 +272,22 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             calculatedOrthoTarget = (projection == PROJECTION.ORTHO ? 1.0f : 0.0f);
             
             // Use actual movement progress value for ortho transitions
+            float computedOutPhaseOrtho;
             if (!linearMode) {                
                 // In bezier mode, use the curve progress directly (smooth transitions)
-                float progressBasedOrtho = (float)progress * calculatedOrthoTarget;
-                current.setOrthoFactor(progressBasedOrtho);
+                computedOutPhaseOrtho = (float)progress * calculatedOrthoTarget;
             } else {
                 // During out phase in linear mode
-                float alphaBasedOrtho = (1.0f - (float)alpha) * calculatedOrthoTarget;
-                current.setOrthoFactor(alphaBasedOrtho);
+                computedOutPhaseOrtho = (1.0f - (float)alpha) * calculatedOrthoTarget;
+            }
+            // Lock ortho during OUT phase for ORTHO projection so it never dips on mouse move
+            if (projection == PROJECTION.ORTHO) {
+                float baseLock = (orthoOutLock < 0.0f) ? 0.0f : orthoOutLock;
+                float locked = Math.max(baseLock, computedOutPhaseOrtho);
+                orthoOutLock = locked;
+                current.setOrthoFactor(locked);
+            } else {
+                current.setOrthoFactor(computedOutPhaseOrtho);
             }
         }
         

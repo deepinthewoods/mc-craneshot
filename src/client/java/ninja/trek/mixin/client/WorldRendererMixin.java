@@ -22,12 +22,7 @@ public abstract class WorldRendererMixin {
     @Shadow private double lastCameraZ;
     @Shadow private double lastCameraPitch;
     
-    // Remove the shadow for needsTerrainUpdate since it doesn't exist in WorldRenderer
-    @Unique
-    private boolean needsTerrainUpdate;
-
-    @Unique
-    private long lastUpdateTime = 0;
+    
     @Unique
     private static final long UPDATE_INTERVAL = 500; // Half second between forced updates
     
