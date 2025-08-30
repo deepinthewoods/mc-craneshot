@@ -1,7 +1,6 @@
 package ninja.trek.mixin.client;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
 import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
@@ -27,7 +26,7 @@ public class GameRendererMixin {
      * Control block outline rendering in orthographic mode
      * This injection targets the private shouldRenderBlockOutline method
      */
-    @Inject(method = "shouldRenderBlockOutline", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "shouldRenderBlockOutline()Z", at = @At("RETURN"), cancellable = true)
     private void forceRenderBlockOutline(CallbackInfoReturnable<Boolean> cir) {
         // In orthographic mode, we want to ensure block outlines are visible
         // This helps with block selection and visualization
@@ -41,8 +40,8 @@ public class GameRendererMixin {
      * Control hand rendering based on camera distance threshold
      * If camera is closer than threshold, render hands; if further, don't render hands
      */
-    @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
-    private void onRenderHand(Camera camera, float tickDelta, Matrix4f matrix4f, CallbackInfo ci) {
+    @Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
+    private void onRenderHand(float tickDelta, boolean renderHand, Matrix4f matrix4f, CallbackInfo ci) {
         CameraSystem cameraSystem = CameraSystem.getInstance();
         
         // Cancel hand rendering if camera system is active and says not to render hands

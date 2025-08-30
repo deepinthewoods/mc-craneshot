@@ -7,7 +7,7 @@
 		"CameraMixin",
 		"CameraSubmersionMixin",
 		"FovAccessor",
-		"GameRendererAccessor",
+		"GameRendererFovAccessor",
 		"GameRendererMixin",
 		"MinecraftClientCameraMixin",
 		"KeyboardInputMixin",

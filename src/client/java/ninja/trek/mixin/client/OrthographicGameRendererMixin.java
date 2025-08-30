@@ -14,9 +14,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import ninja.trek.IMouseMixin;
 
 @Mixin(GameRenderer.class)
 public class OrthographicGameRendererMixin {
+    private static float orthoPanX = 0f;
+    private static float orthoPanY = 0f;
 
     @Shadow @Final
     private MinecraftClient client;
@@ -38,6 +41,12 @@ public class OrthographicGameRendererMixin {
             transitionTargetOrtho = shouldBeOrtho;
             Craneshot.LOGGER.info("Setting projection transition target to: {}", 
                 transitionTargetOrtho ? "orthographic" : "perspective");
+        }
+
+        // Reset panning offsets when leaving orthographic mode
+        if (!shouldBeOrtho) {
+            orthoPanX = 0f;
+            orthoPanY = 0f;
         }
     }
     
@@ -68,9 +77,6 @@ public class OrthographicGameRendererMixin {
         }
         
         try {
-            // Access renderer for zoom values
-            GameRendererAccessor accessor = (GameRendererAccessor)thisRenderer;
-            
             // Get the original perspective matrix from the return value
             Matrix4f perspectiveMatrix = cir.getReturnValue();
             if (perspectiveMatrix == null) {
@@ -79,7 +85,7 @@ public class OrthographicGameRendererMixin {
             }
             
             // Create orthographic projection matrix
-            Matrix4f orthoMatrix = createOrthographicMatrix(fovDegrees, accessor);
+            Matrix4f orthoMatrix = createOrthographicMatrix(fovDegrees);
             if (orthoMatrix == null) {
                 return; // Error already logged in createOrthographicMatrix
             }
@@ -120,20 +126,51 @@ public class OrthographicGameRendererMixin {
      * Creates an orthographic projection matrix with appropriate safeguards
      * to prevent NaN values and extreme angles issues
      */
-    private Matrix4f createOrthographicMatrix(float fovDegrees, GameRendererAccessor accessor) {
+    private Matrix4f createOrthographicMatrix(float fovDegrees) {
         try {
             Matrix4f matrix = new Matrix4f();
-            
+
             // Get window dimensions
             float aspectRatio = (float) this.client.getWindow().getFramebufferWidth() / 
                                (float) this.client.getWindow().getFramebufferHeight();
             float baseScale = calculateBaseScale(fovDegrees);
-            
-            // Apply zoom transformation if needed
-            float zoom = accessor.getZoom();
-            if (zoom != 1.0F) {
-                matrix.translate(accessor.getZoomX(), -accessor.getZoomY(), 0.0F);
-                matrix.scale(zoom, zoom, 1.0F);
+
+            // Apply FOV-based zoom if present (replacement for removed zoom fields)
+            try {
+                GameRenderer renderer = this.client.gameRenderer;
+                float fovMul = ((GameRendererFovAccessor) (Object) renderer).getFovMultiplier();
+                if (fovMul != 1.0F) {
+                    matrix.scale(fovMul, fovMul, 1.0F);
+                }
+            } catch (Throwable ignored) {
+                // Accessor failure should not break rendering
+            }
+
+            // Mouse-based panning while in orthographic mode (replacement for removed zoomX/zoomY)
+            // Hold sneak (Shift) to pan the view when moving the mouse
+            try {
+                if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()
+                        && this.client.currentScreen == null
+                        && this.client.options.sneakKey.isPressed()) {
+                    double dx;
+                    double dy;
+                    // Prefer captured deltas if our mouse mixin is active, else fall back to raw deltas
+                    if (this.client.mouse instanceof IMouseMixin mm) {
+                        dx = mm.getCapturedDeltaX();
+                        dy = mm.getCapturedDeltaY();
+                    } else {
+                        dx = 0.0;
+                        dy = 0.0;
+                    }
+
+                    if (dx != 0.0 || dy != 0.0) {
+                        // Scale panning speed with base scale so it feels consistent
+                        float panFactor = baseScale * 0.0025f;
+                        orthoPanX += (float) dx * panFactor;
+                        orthoPanY -= (float) dy * panFactor; // invert Y to match screen coords
+                    }
+                }
+            } catch (Throwable ignored) {
             }
             
             // Calculate view dimensions
@@ -169,6 +206,11 @@ public class OrthographicGameRendererMixin {
                 }
             }
             
+            // Apply accumulated panning prior to projection
+            if (orthoPanX != 0.0f || orthoPanY != 0.0f) {
+                matrix.translate(orthoPanX, orthoPanY, 0.0f);
+            }
+
             // Create the orthographic projection with special handling for extreme angles
             try {
                 matrix.ortho(

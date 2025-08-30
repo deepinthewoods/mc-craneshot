@@ -9,6 +9,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.recipebook.ClientRecipeBook;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.MovementType;
 import net.minecraft.stat.StatHandler;
@@ -34,7 +35,7 @@ public class CameraEntity extends ClientPlayerEntity {
     private CameraEntity(MinecraftClient mc, ClientWorld world,
                          ClientPlayNetworkHandler netHandler, StatHandler stats,
                          ClientRecipeBook recipeBook) {
-        super(mc, world, netHandler, stats, recipeBook, false, false);
+        super(mc, world, netHandler, stats, recipeBook, PlayerInput.DEFAULT, false);
     }
 
     @Override
@@ -257,7 +258,7 @@ public class CameraEntity extends ClientPlayerEntity {
                 removeCamera(mc);
             }
 
-            mc.gameRenderer.setRenderHand(!enabled);
+            // Hand rendering toggle API changed; rely on camera entity + perspective instead.
         }
     }
 

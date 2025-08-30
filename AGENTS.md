@@ -17,6 +17,9 @@ Before Writing or Modifying Mixins
   - Package in the JSON must match the Java package: `ninja.trek.mixin.client`.
 - Add lightweight runtime proof: Temporarily log once in the injected method head (guarded to avoid spam) to confirm it fires. Remove or demote to debug once validated.
 
+Building
+- Use cmd to run gradle commands, not powershell.
+
 When Build Errors Occur
 - Search the linked docs first (Fabric API, Yarn, Loader). Cross-check changed API signatures, removed methods, or renamed classes for the current versions in `gradle.properties`.
 - Read Loom output carefully; resolve descriptor/signature mismatches before proceeding. Do not silence or bypass mixin errors.
@@ -34,4 +37,6 @@ Repository Conventions (summary)
 - Mod id/resources: `craneshot`.
 - Packages under `ninja.trek.*`.
 - Don’t add or run tests for this repo.
+
+
 
