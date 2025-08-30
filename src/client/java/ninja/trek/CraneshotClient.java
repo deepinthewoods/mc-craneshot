@@ -39,26 +39,68 @@ public class CraneshotClient implements ClientModInitializer {
 				"category.craneshot.camera"
 		));
 
-		cameraKeyBinds = new KeyBinding[]{
-				KeyBindingHelper.registerKeyBinding(new KeyBinding(
-						"key.craneshot.camera1",
-						InputUtil.Type.KEYSYM,
-						GLFW.GLFW_KEY_C,
-						"category.craneshot.camera"
-				)),
-				KeyBindingHelper.registerKeyBinding(new KeyBinding(
-						"key.craneshot.camera2",
-						InputUtil.Type.KEYSYM,
-						GLFW.GLFW_KEY_V,
-						"category.craneshot.camera"
-				)),
-				KeyBindingHelper.registerKeyBinding(new KeyBinding(
-						"key.craneshot.camera3",
-						InputUtil.Type.KEYSYM,
-						GLFW.GLFW_KEY_B,
-						"category.craneshot.camera"
-				))
-		};
+        cameraKeyBinds = new KeyBinding[]{
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera1",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_C,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera2",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_V,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera3",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_B,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera4",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera5",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera6",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera7",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera8",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera9",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                )),
+                KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                        "key.craneshot.camera10",
+                        InputUtil.Type.KEYSYM,
+                        GLFW.GLFW_KEY_UNKNOWN,
+                        "category.craneshot.camera"
+                ))
+        };
 		CameraMovementRegistry.initialize();
 		GeneralSettingsIO.loadSettings();
 

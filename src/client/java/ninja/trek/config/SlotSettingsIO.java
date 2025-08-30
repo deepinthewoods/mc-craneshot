@@ -88,10 +88,12 @@ public class SlotSettingsIO {
         List<List<ICameraMovement>> slots = new ArrayList<>();
 
         if (!CONFIG_FILE.exists()) {
-            // Return default configuration with one EasingMovement per slot
-            for (int i = 0; i < 3; i++) {
+            // Return default configuration: first 3 slots with a default movement, rest empty up to 10
+            for (int i = 0; i < 10; i++) {
                 List<ICameraMovement> slot = new ArrayList<>();
-                slot.add(new LinearMovement());
+                if (i < 3) {
+                    slot.add(new LinearMovement());
+                }
                 slots.add(slot);
             }
             return slots;
@@ -115,10 +117,12 @@ public class SlotSettingsIO {
             Craneshot.LOGGER.info("Loaded camera movement slots configuration");
         } catch (IOException e) {
             Craneshot.LOGGER.error("Failed to load camera movement slots", e);
-            // Return default configuration on error
-            for (int i = 0; i < 3; i++) {
+            // Return default configuration on error: first 3 initialized, up to 10 total
+            for (int i = 0; i < 10; i++) {
                 List<ICameraMovement> slot = new ArrayList<>();
-                slot.add(new LinearMovement());
+                if (i < 3) {
+                    slot.add(new LinearMovement());
+                }
                 slots.add(slot);
             }
         }

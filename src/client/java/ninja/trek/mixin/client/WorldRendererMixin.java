@@ -139,7 +139,7 @@ public abstract class WorldRendererMixin {
 //            }
 //        }
 //    }
-//
+
     /**
      * Modifies the chunk builder's camera position
      */

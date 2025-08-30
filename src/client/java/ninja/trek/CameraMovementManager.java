@@ -31,7 +31,7 @@ public class CameraMovementManager {
     private Map<Integer, Long> keyPressStartTimes;
 
     public CameraMovementManager() {
-        int numSlots = 3;
+        int numSlots = 10;
         slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
         toggledStates = new HashMap<>();

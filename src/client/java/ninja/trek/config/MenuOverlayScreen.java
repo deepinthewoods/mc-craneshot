@@ -72,7 +72,7 @@ public class MenuOverlayScreen extends Screen {
 
         for (int i = 0; i <= CraneshotClient.MOVEMENT_MANAGER.getMovementCount(); i++) {
             int tabIndex = i;
-            String tabName = (i == 0) ? "General" : "Slot " + i;
+            String tabName = (i == 0) ? "General" : String.valueOf(i);
             Text buttonText = Text.literal(tabName);
             if (i != selectedTab) {
                 buttonText = buttonText.copy().formatted(Formatting.GRAY);

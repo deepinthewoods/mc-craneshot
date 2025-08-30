@@ -9,6 +9,7 @@
 		"FovAccessor",
 		"GameRendererAccessor",
 		"GameRendererMixin",
+		"MinecraftClientCameraMixin",
 		"KeyboardInputMixin",
 		"MinecraftClientMixin",
 		"MouseAccessor",
