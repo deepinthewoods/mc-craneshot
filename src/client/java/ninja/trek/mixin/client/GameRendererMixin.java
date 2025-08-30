@@ -2,8 +2,10 @@ package ninja.trek.mixin.client;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.Camera;
 import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
+import ninja.trek.Craneshot;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -42,9 +44,24 @@ public class GameRendererMixin {
      */
     @Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
     private void onRenderHand(float tickDelta, boolean renderHand, Matrix4f matrix4f, CallbackInfo ci) {
+        // Always enforce distance-based gating: if camera is farther than threshold, don't render hands
+        if (this.client != null && this.client.player != null) {
+            Camera cam = this.client.gameRenderer.getCamera();
+            if (cam != null) {
+                double dist = cam.getPos().distanceTo(this.client.player.getEyePos());
+                if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
+                    // Lightweight proof (guarded) to confirm firing without spamming
+                    if (Math.random() < 0.01) {
+                        Craneshot.LOGGER.debug("Cancelling hand render: distance {} >= threshold {}", dist, CameraSystem.PLAYER_RENDER_THRESHOLD);
+                    }
+                    ci.cancel();
+                    return;
+                }
+            }
+        }
+
+        // Preserve camera-system explicit overrides (e.g., free-cam hiding hands entirely)
         CameraSystem cameraSystem = CameraSystem.getInstance();
-        
-        // Cancel hand rendering if camera system is active and says not to render hands
         if (cameraSystem.isCameraActive() && !cameraSystem.shouldRenderHands()) {
             ci.cancel();
         }
