@@ -42,6 +42,10 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private boolean resetting = false;
     private float weight = 1.0f;
     private double baseFov;
+    // Final interpolation state
+    private boolean finalInterpActive = false;
+    private double finalInterpT = 0.0;
+    private Vec3d finalInterpStart = null;
 
     public void start(MinecraftClient client, Camera camera) {
         // Initialize with camera's current state
@@ -69,6 +73,10 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         }
         resetting = false;
         weight = 1.0f;
+        // Reset final interpolation state
+        finalInterpActive = false;
+        finalInterpT = 0.0;
+        finalInterpStart = null;
     }
 
 
@@ -123,43 +131,49 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             }
         }
 
-        // Position interpolation with speed limit
-        // Use a distance-based adaptive easing that increases as we get closer to the target
-        // This helps ensure the camera actually reaches the target position
+        // Position interpolation
+        // If within final threshold, perform time-based linear interpolation directly to the target
         double distanceToTarget = current.getPosition().distanceTo(b.getPosition());
-        double adaptiveEasing;
-        
-        if (resetting) {
-            // For return phase, use a special curve that speeds up as we get closer
-            // This helps ensure we reach the exact target position
-            if (distanceToTarget < 1.0) {
-                // When very close, use higher easing to ensure we reach the target
-                adaptiveEasing = Math.max(positionEasing, positionEasing * (2.0 - distanceToTarget));
+        if (resetting && !finalInterpActive && distanceToTarget <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
+            finalInterpActive = true;
+            finalInterpT = 0.0;
+            finalInterpStart = current.getPosition();
+        }
+
+        Vec3d desired;
+        if (finalInterpActive) {
+            double step = 1.0 / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
+            finalInterpT = Math.min(1.0, finalInterpT + step);
+            desired = finalInterpStart.lerp(b.getPosition(), finalInterpT);
+        } else {
+            // Use a distance-based adaptive easing that increases as we get closer to the target
+            // This helps ensure the camera actually reaches the target position
+            double adaptiveEasing;
+            if (resetting) {
+                if (distanceToTarget < 1.0) {
+                    adaptiveEasing = Math.max(positionEasing, positionEasing * (2.0 - distanceToTarget));
+                } else {
+                    adaptiveEasing = positionEasing;
+                }
+                if (Math.random() < 0.005 && distanceToTarget < 2.0) {
+                    ninja.trek.Craneshot.LOGGER.info("LinearMovement return phase - distance: {}, adaptive easing: {}",
+                        String.format("%.3f", distanceToTarget),
+                        String.format("%.3f", adaptiveEasing));
+                }
             } else {
                 adaptiveEasing = positionEasing;
             }
-            
-            // Log the adaptive easing occasionally
-            if (Math.random() < 0.005 && distanceToTarget < 2.0) {
-                ninja.trek.Craneshot.LOGGER.info("LinearMovement return phase - distance: {}, adaptive easing: {}",
-                    String.format("%.3f", distanceToTarget),
-                    String.format("%.3f", adaptiveEasing));
-            }
-        } else {
-            // Standard easing for outbound phase
-            adaptiveEasing = positionEasing;
-        }
-        
-        // Calculate the desired position using adaptive easing
-        Vec3d desired = current.getPosition().lerp(b.getPosition(), adaptiveEasing);
-        Vec3d moveVector = desired.subtract(current.getPosition());
-        double moveDistance = moveVector.length();
-        
-        if (moveDistance > 0.01) {
-            double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
-            if (moveDistance > maxMove) {
-                Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
-                desired = current.getPosition().add(limitedMove);
+
+            // Calculate the desired position using adaptive easing with speed limit
+            desired = current.getPosition().lerp(b.getPosition(), adaptiveEasing);
+            Vec3d moveVector = desired.subtract(current.getPosition());
+            double moveDistance = moveVector.length();
+            if (moveDistance > 0.01) {
+                double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
+                if (moveDistance > maxMove) {
+                    Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
+                    desired = current.getPosition().add(limitedMove);
+                }
             }
         }
 
@@ -287,7 +301,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 String.format("%.5f", alpha));
         }
 
-        boolean complete = resetting && current.getPosition().distanceTo(b.getPosition()) < 0.01;
+        boolean complete = resetting && current.getPosition().distanceTo(b.getPosition()) < 0.03;
         return new MovementState(current, complete);
     }
 
@@ -295,6 +309,10 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (client.player == null) return;
         resetting = true;
+        // Reset final interpolation state when entering reset
+        finalInterpActive = false;
+        finalInterpT = 0.0;
+        finalInterpStart = null;
         
         // Always target the player head position/rotation during return phase
         if (client.player != null) {
@@ -394,8 +412,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             
             // Much stricter requirements to ensure movement completes fully
             // Position must be very close to destination
-            boolean positionComplete = positionDistance < 0.03;
-            boolean fovComplete = fovDifference < 0.01f;
+            boolean positionComplete = positionDistance < 0.05;
+            boolean fovComplete = fovDifference < 0.1f;
             
             // We don't require ortho to be complete for the movement to end
             // as that will continue to blend after the movement

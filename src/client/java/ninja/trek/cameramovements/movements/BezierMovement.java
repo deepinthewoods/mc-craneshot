@@ -56,6 +56,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private float baseFov;
     // Prevent orthoFactor from dipping during OUT phase when mouse input retargets end
     private float orthoOutLock = -1.0f;
+    // Final interpolation state
+    private boolean finalInterpActive = false;
+    private double finalInterpT = 0.0;
+    private Vec3d finalInterpStart = null;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -90,6 +94,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         alpha = 1;
         // Initialize ortho lock for OUT phase
         orthoOutLock = (projection == PROJECTION.ORTHO) ? 0.0f : -1.0f;
+        // Reset final interpolation state
+        finalInterpActive = false;
+        finalInterpT = 0.0;
+        finalInterpStart = null;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
@@ -154,7 +162,19 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         
         Vec3d desiredPos;
 
-        if (!linearMode) {
+        // Determine if we should switch to final time-based interpolation
+        double remainingDistanceForFinal = current.getPosition().distanceTo(b.getPosition());
+        if (resetting && !finalInterpActive && remainingDistanceForFinal <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
+            finalInterpActive = true;
+            finalInterpT = 0.0;
+            finalInterpStart = current.getPosition();
+        }
+
+        if (finalInterpActive) {
+            double step = 1.0 / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
+            finalInterpT = Math.min(1.0, finalInterpT + step);
+            desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
+        } else if (!linearMode) {
             // Bezier movement mode
             double potentialDelta;
             
@@ -394,6 +414,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             resetting = true;
             linearMode = false;
             progress = 0.0;
+            // Reset final interpolation state upon starting reset
+            finalInterpActive = false;
+            finalInterpT = 0.0;
+            finalInterpStart = null;
             
             // Always target the player head position/rotation during return phase
             if (client.player != null) {

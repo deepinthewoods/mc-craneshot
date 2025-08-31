@@ -72,6 +72,11 @@ public abstract class AbstractMovementSettings {
 
     public enum PROJECTION {PERSPECTIVE, ORTHO};
 
+    // Final approach behavior constants
+    // When within this distance, linearly interpolate to target over a fixed time
+    public static final double FINAL_INTERP_DISTANCE_THRESHOLD = 0.2; // blocks
+    public static final double FINAL_INTERP_TIME_SECONDS = 0.25;       // seconds
+
     @MovementSetting(
             label = "Projection",
             type = MovementSettingType.ENUM,

@@ -18,7 +18,7 @@ Before Writing or Modifying Mixins
 - Add lightweight runtime proof: Temporarily log once in the injected method head (guarded to avoid spam) to confirm it fires. Remove or demote to debug once validated.
 
 Building
-- Use cmd to run gradle commands, not powershell.
+- Use cmd to run gradle commands, do not run it through powershell.
 
 When Build Errors Occur
 - Search the linked docs first (Fabric API, Yarn, Loader). Cross-check changed API signatures, removed methods, or renamed classes for the current versions in `gradle.properties`.
