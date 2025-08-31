@@ -506,6 +506,7 @@ public class CameraSystem {
         
         return shouldRenderPlayerModel;
     }
+
     
     /**
      * Set whether to render hands

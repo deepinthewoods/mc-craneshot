@@ -14,6 +14,7 @@
 		"MinecraftClientMixin",
 		"MouseAccessor",
 		"MouseMixin",
+		"EntityRenderDispatcherMixin",
 		"OrthographicGameRendererMixin",
 		"WorldRendererChunkMixin",
 		"WorldRendererMixin"
