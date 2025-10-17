@@ -183,7 +183,9 @@ public class CameraSystem {
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
             return;
         }
-
+        ninja.trek.Craneshot.LOGGER.info("CameraSystem.updateCamera write (editing={}) pos={} yaw={} pitch={}",
+                ninja.trek.nodes.NodeManager.get().isEditing(),
+                cameraPosition, cameraYaw, cameraPitch);
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
     }
@@ -287,24 +289,38 @@ public class CameraSystem {
     }
 
     public void setCameraPosition(Vec3d position) {
+        if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            // When using dedicated camera entity, let vanilla handle camera transform
+            this.cameraPosition = position;
+            return;
+        }
         if (position == null) return;
         this.cameraPosition = position;
         if (cameraActive) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
+                ninja.trek.Craneshot.LOGGER.info("CameraSystem.setCameraPosition write (editing={}) pos={}",
+                        ninja.trek.nodes.NodeManager.get().isEditing(), cameraPosition);
                 if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
     }
 
     public void setCameraRotation(float yaw, float pitch) {
+        if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            this.cameraYaw = yaw;
+            this.cameraPitch = pitch;
+            return;
+        }
         this.cameraYaw = yaw;
         this.cameraPitch = pitch;
         if (cameraActive) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
+                ninja.trek.Craneshot.LOGGER.info("CameraSystem.setCameraRotation write (editing={}) yaw={} pitch={}",
+                        ninja.trek.nodes.NodeManager.get().isEditing(), cameraYaw, cameraPitch);
                 if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }

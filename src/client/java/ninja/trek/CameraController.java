@@ -149,6 +149,10 @@ public class CameraController {
     }
 
     public void setPostMoveStates(AbstractMovementSettings m) {
+        // If node edit is active, ignore requests to clear post-move state so freecam persists
+        ninja.trek.Craneshot.LOGGER.info("setPostMoveStates called with {} (editing={})",
+                (m == null ? "<null>" : m.getClass().getSimpleName()),
+                ninja.trek.nodes.NodeManager.get().isEditing());
         if (m == null) {
             // Reset state when movement ends
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -221,14 +225,11 @@ public class CameraController {
                 ninja.trek.nodes.NodeManager.get().setEditing(false);
             }
             
-            // Determine if we should activate custom camera mode
+            // Determine if we should activate custom camera mode (include NODE_EDIT)
             boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                                     currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
-                                    currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA);
-            // Never activate camera system for NODE_EDIT
-            if (currentMouseMoveMode == POST_MOVE_MOUSE.NODE_EDIT) {
-                isFreeCamMode = false;
-            }
+                                    currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA ||
+                                    currentMouseMoveMode == POST_MOVE_MOUSE.NODE_EDIT);
             
             boolean isOutPosition = (currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
                                     currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK ||
@@ -423,9 +424,9 @@ public class CameraController {
         // Blend camera nodes influence unless in node edit mode
         baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, ninja.trek.nodes.NodeManager.get().isEditing());
 
-        // Check if we have an active camera system (disabled during node edit)
+        // Check if we have an active camera system
         CameraSystem cameraSystem = CameraSystem.getInstance();
-        boolean cameraSystemActive = cameraSystem.isCameraActive() && !ninja.trek.nodes.NodeManager.get().isEditing();
+        boolean cameraSystemActive = cameraSystem.isCameraActive();
 
         if (baseTarget != null) {
             // Update FOV in game renderer
@@ -441,56 +442,60 @@ public class CameraController {
             if (cameraSystemActive) {
                 // Let the camera system update its state
                 boolean rotating = (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) || ninja.trek.nodes.NodeManager.get().isEditing();
-                if (rotating && client.mouse instanceof IMouseMixin) {
-                    IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
-                    double deltaX = mouseMixin.getCapturedDeltaX();
-                    double deltaY = -mouseMixin.getCapturedDeltaY();
-                    
-                    if (deltaX != 0 || deltaY != 0) {
-                        double mouseSensitivity = client.options.getMouseSensitivity().getValue();
-                        double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
-                        cameraSystem.updateRotation(
-                            deltaX * calculatedSensitivity * 0.55D,
-                            deltaY * calculatedSensitivity * 0.55D,
-                            1.0
-                        );
+                boolean entityFreecam = (ninja.trek.util.CameraEntity.getCamera() != null);
+                if (entityFreecam) {
+                    // If using the dedicated camera entity: do not push manual camera pos/rot
+                    if (rotating && client.mouse instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                        double deltaX = mouseMixin.getCapturedDeltaX();
+                        double deltaY = -mouseMixin.getCapturedDeltaY();
+                        if (deltaX != 0 || deltaY != 0) {
+                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+                            if (camEnt != null) {
+                                // Invert Y like vanilla: moving mouse up should decrease pitch
+                                camEnt.updateCameraRotations((float)(deltaX * calculatedSensitivity), (float)(-deltaY * calculatedSensitivity));
+                            }
+                        }
                     }
                 } else {
-                    // Use the movement manager's position/rotation if not freely rotating
-                    cameraSystem.setCameraPosition(baseTarget.getPosition());
-                    cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
+                    if (rotating && client.mouse instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                        double deltaX = mouseMixin.getCapturedDeltaX();
+                        double deltaY = -mouseMixin.getCapturedDeltaY();
+                        if (deltaX != 0 || deltaY != 0) {
+                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            cameraSystem.updateRotation(
+                                deltaX * calculatedSensitivity * 0.55D,
+                                deltaY * calculatedSensitivity * 0.55D,
+                                1.0
+                            );
+                        }
+                    } else {
+                        // Use the movement manager's position/rotation if not freely rotating
+                        cameraSystem.setCameraPosition(baseTarget.getPosition());
+                        cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
+                    }
+                    // Let the camera system update the camera
+                    cameraSystem.updateCamera(camera);
                 }
-                
+
                 // Update our tracking variables for legacy code support
                 freeCamPosition = cameraSystem.getCameraPosition();
                 freeCamYaw = cameraSystem.getCameraYaw();
                 freeCamPitch = cameraSystem.getCameraPitch();
-                
-                // Let the camera system update the camera
-                cameraSystem.updateCamera(camera);
             } else {
                 // Legacy camera handling
-                // In node edit, keep camera at base target position and ignore keyboard free movement
-                if (ninja.trek.nodes.NodeManager.get().isEditing()) {
+                // Only update freeCamPosition from movement if we're not in free movement mode
+                if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
+                        currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
                     freeCamPosition = baseTarget.getPosition();
-                } else {
-                    if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
-                            currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-                        freeCamPosition = baseTarget.getPosition();
-                    }
                 }
 
                 // Handle rotation based on movement mode
-                if (ninja.trek.nodes.NodeManager.get().isEditing()) {
-                    // Use edit-mode yaw/pitch override when editing
-                    if (ninja.trek.nodes.NodeManager.get().hasEditRotation()) {
-                        freeCamYaw = ninja.trek.nodes.NodeManager.get().getEditYaw();
-                        freeCamPitch = ninja.trek.nodes.NodeManager.get().getEditPitch();
-                    } else {
-                        freeCamYaw = baseTarget.getYaw();
-                        freeCamPitch = baseTarget.getPitch();
-                    }
-                } else if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
+                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
                     IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
                     double deltaX = mouseMixin.getCapturedDeltaX();
                     double deltaY = -mouseMixin.getCapturedDeltaY();
@@ -506,8 +511,10 @@ public class CameraController {
                     freeCamYaw = baseTarget.getYaw();
                     freeCamPitch = baseTarget.getPitch();
                 }
-                
+
                 // Apply the camera position and rotation
+                ninja.trek.Craneshot.LOGGER.info("CameraController legacy write (editing={}) pos={} yaw={} pitch={}",
+                        ninja.trek.nodes.NodeManager.get().isEditing(), freeCamPosition, freeCamYaw, freeCamPitch);
                 ((CameraAccessor) camera).invokesetPos(freeCamPosition);
                 ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
@@ -521,10 +528,9 @@ public class CameraController {
             freeCamPitch = cameraSystem.getCameraPitch();
         }
 
-        // Handle keyboard movement for camera modes
-        if (!ninja.trek.nodes.NodeManager.get().isEditing() &&
-                (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                 currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE)) {
+        // Handle keyboard movement for camera modes (also when editor is open)
+        if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+            currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             handleKeyboardMovement(client, camera);
         }
 
@@ -586,29 +592,34 @@ public class CameraController {
     }
 
     public void onComplete() {
+        // If node edit is active, preserve freecam and input states
+        if (ninja.trek.nodes.NodeManager.get().isEditing()) {
+            return;
+        }
+
         // Reset all movement modes completely
         currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
         currentKeyMoveMode = POST_MOVE_KEYS.NONE;
-        
+
         // Reset the keyboard movement tracking flag
         hasMovedWithKeyboard = false;
-        
+
         // Ensure keyboard input is enabled for the player
         MinecraftClient client = MinecraftClient.getInstance();
         if (client != null && client.player != null && client.player.input instanceof IKeyboardInputMixin) {
             ((IKeyboardInputMixin) client.player.input).setDisabled(false);
         }
-        
+
         // Disable mouse interception
         MouseInterceptor.setIntercepting(false);
-        
-        // Make sure to restore default camera behavior by deactivating the camera system
-        CameraSystem cameraSystem = CameraSystem.getInstance();
-        if (cameraSystem.isCameraActive()) {
-            cameraSystem.deactivateCamera();
-            ninja.trek.Craneshot.LOGGER.info("Deactivated camera system during onComplete");
-        }
-        
+
+            // Make sure to restore default camera behavior by deactivating the camera system
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (cameraSystem.isCameraActive()) {
+                cameraSystem.deactivateCamera();
+                ninja.trek.Craneshot.LOGGER.info("Deactivated camera system during onComplete");
+            }
+
         // Reset the camera position to follow the player
         if (client != null && client.player != null) {
             freeCamPosition = client.player.getEyePos();
@@ -616,10 +627,11 @@ public class CameraController {
             freeCamPitch = client.player.getPitch();
             ninja.trek.Craneshot.LOGGER.info("Reset camera position to player position");
         }
-        
+
         // Reset FOV to default
         if (client != null && client.gameRenderer instanceof FovAccessor) {
             ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
         }
     }
 }
+

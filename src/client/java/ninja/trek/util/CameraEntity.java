@@ -17,6 +17,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import ninja.trek.CraneshotClient;
+import ninja.trek.camera.CameraSystem;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.FreeCamSettings;
 
@@ -67,7 +68,7 @@ public class CameraEntity extends ClientPlayerEntity {
 
             if (options.sprintKey.isPressed()) {
                 sprinting = true;
-            } else if (options.forwardKey.isPressed() == false && options.backKey.isPressed() == false) {
+            } else if (!options.forwardKey.isPressed() && !options.backKey.isPressed()) {
                 sprinting = false;
             }
 
@@ -78,8 +79,12 @@ public class CameraEntity extends ClientPlayerEntity {
                                                                settings.getAcceleration(),
                                                                settings.getDeceleration());
             
-            double forward = sprinting ? cameraMotion.x * 3 : cameraMotion.x;
-            camera.handleMotion(forward, cameraMotion.y, cameraMotion.z);
+            // Map axes correctly and apply sprint multiplier uniformly to horizontal movement
+            double mult = sprinting ? 3.0 : 1.0;
+            double forward = cameraMotion.z * mult;
+            double strafe = cameraMotion.x * mult;
+            double up = cameraMotion.y * mult;
+            camera.handleMotion(forward, up, strafe);
         }
     }
 
@@ -271,6 +276,11 @@ public class CameraEntity extends ClientPlayerEntity {
         originalCameraEntity = mc.getCameraEntity();
         originalCameraWasPlayer = originalCameraEntity == mc.player;
         cullChunksOriginal = mc.chunkCullingEnabled;
+
+        // Logging: creation of camera entity
+        ninja.trek.Craneshot.LOGGER.info("CameraEntity createAndSetCamera originalEntity={} pos={}, yaw={}, pitch={}",
+                originalCameraEntity,
+                new Vec3d(camera.getX(), camera.getY(), camera.getZ()), camera.getYaw(), camera.getPitch());
 
         mc.setCameraEntity(camera);
         mc.chunkCullingEnabled = false; // Disable chunk culling

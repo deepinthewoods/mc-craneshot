@@ -41,37 +41,11 @@ public class GameRendererMixin {
      */
     @Inject(method = "renderHand(FZLorg/joml/Matrix4f;)V", at = @At("HEAD"), cancellable = true)
     private void onRenderHand(float tickDelta, boolean renderHand, Matrix4f matrix4f, CallbackInfo ci) {
-        // Enforce distance-based gating universally based on camera distance
-        if (this.client != null && this.client.player != null) {
-            Camera cam = this.client.gameRenderer.getCamera();
-            if (cam != null) {
-                double dist = cam.getPos().distanceTo(this.client.player.getEyePos());
-                if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
-                    // Lightweight proof (guarded) to confirm firing without spamming
-                    if (Math.random() < 0.01) {
-                        Craneshot.LOGGER.debug("Cancelling hand render: distance {} >= threshold {}", dist, CameraSystem.PLAYER_RENDER_THRESHOLD);
-                    }
-                    // Force third-person back so the player body renders when hands are hidden
-                    if (this.client.options.getPerspective() != Perspective.THIRD_PERSON_BACK) {
-                        craneshotPrevPerspective = this.client.options.getPerspective();
-                        this.client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-                        craneshotForcedThirdPerson = true;
-                    }
-                    ci.cancel();
-                    return;
-                }
-                // If we previously forced third-person and we're now within threshold, restore perspective
-                if (craneshotForcedThirdPerson) {
-                    this.client.options.setPerspective(craneshotPrevPerspective);
-                    craneshotForcedThirdPerson = false;
-                }
-            }
-        }
-
-        // Preserve camera-system explicit overrides (e.g., free-cam hiding hands entirely)
+        // Respect camera system flags only; do not force perspective changes
         CameraSystem cameraSystem = CameraSystem.getInstance();
         if (cameraSystem.isCameraActive() && !cameraSystem.shouldRenderHands()) {
             ci.cancel();
+            return;
         }
     }
 }

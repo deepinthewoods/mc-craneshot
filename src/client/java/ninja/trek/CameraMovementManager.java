@@ -391,20 +391,20 @@ public class CameraMovementManager {
                 // The value in currentTarget already has the correct FOV multiplier
                 ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Current FOV multiplier: {}", currentTarget.getFovMultiplier());
                 
-                // Set the camera directly to this position before applying post-move settings
+                // Log post-move settings and apply snap
+                AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - postMoveMouse={} postMoveKeys={}",
+                        settings != null ? settings.getPostMoveMouse() : null,
+                        settings != null ? settings.getPostMoveKeys() : null);
                 if (camera != null) {
                     ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
                     ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
-                    
-                    // Log position for debugging
-                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}", 
-                        currentTarget.getPosition().getX(), 
-                        currentTarget.getPosition().getY(), 
-                        currentTarget.getPosition().getZ());
+                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}",
+                            currentTarget.getPosition().getX(),
+                            currentTarget.getPosition().getY(),
+                            currentTarget.getPosition().getZ());
                 }
-                
-                // Apply post-move settings AFTER we've captured and set the position
-                AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - calling setPostMoveStates");
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
             }
         }

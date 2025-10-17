@@ -12,6 +12,7 @@ import ninja.trek.camera.CameraSystem;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.Area;
 import ninja.trek.nodes.model.CameraNode;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -153,6 +154,15 @@ public class NodeEditorScreen extends Screen {
 
     @Override public boolean shouldPause() { return false; }
 
+    @Override
+    public void tick() {
+        super.tick();
+        // Logging only; no key forwarding hacks
+        if (client != null && client.getWindow() != null) {
+            ninja.trek.Craneshot.LOGGER.debug("NodeEditorScreen.tick (window={}, editing=true)", client.getWindow());
+        }
+    }
+
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         // Render only our widgets; skip Screen default background/separators entirely
         for (net.minecraft.client.gui.Element e : this.children()) {
@@ -229,12 +239,13 @@ public class NodeEditorScreen extends Screen {
         if (dragging) {
             double sens = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             double calc = 0.6 * sens * sens * sens + 0.2;
-            net.minecraft.client.render.Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-            float baseYaw = cam != null ? cam.getYaw() : 0f;
-            float basePitch = cam != null ? cam.getPitch() : 0f;
-            float newYaw = (float)(baseYaw + deltaX * calc * 0.55D);
-            float newPitch = (float)Math.max(-90.0, Math.min(90.0, basePitch - deltaY * calc * 0.55D));
-            ninja.trek.nodes.NodeManager.get().setEditRotation(newYaw, newPitch);
+            // Rotate using regular freecam pipeline: entity if present, otherwise CameraSystem
+            ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+            if (camEnt != null) {
+                camEnt.updateCameraRotations((float)(deltaX * calc), (float)(-deltaY * calc));
+            } else {
+                ninja.trek.camera.CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55D, -deltaY * calc * 0.55D, 1.0);
+            }
         }
         return super.mouseDragged(click, deltaX, deltaY);
     }

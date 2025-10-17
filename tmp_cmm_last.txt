@@ -1,0 +1,100 @@
+                // Set the base target for reference
+                baseTarget = currentTarget;
+                
+                // Store the exact position in static controller variables
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentTarget.getPosition();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentTarget.getYaw();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentTarget.getPitch();
+                
+                // Note the FOV multiplier is already being properly interpolated in the movement's
+                // calculateState method, we're just capturing it here for post-move phase
+                // The value in currentTarget already has the correct FOV multiplier
+                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Current FOV multiplier: {}", currentTarget.getFovMultiplier());
+                
+                // Set the camera directly to this position before applying post-move settings
+                if (camera != null) {
+                    ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
+                    ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
+                    
+                    // Log position for debugging
+                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}", 
+                        currentTarget.getPosition().getX(), 
+                        currentTarget.getPosition().getY(), 
+                        currentTarget.getPosition().getZ());
+                }
+                
+                // Apply post-move settings AFTER we've captured and set the position
+                AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
+            }
+        }
+        if (state.isComplete()) {
+            // Store final camera position before ending movement
+            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+            baseTarget = finalTarget;
+            
+            // Clean up movement state
+            Integer previousSlot = activeMovementSlot;
+            ICameraMovement previousMovement = activeMovement;
+            
+            // Reset movement tracking variables
+            activeMovement = null;
+            activeMovementSlot = null;
+            if (previousSlot != null) {
+                toggledStates.put(previousSlot, false);
+            }
+            
+            // Only clear post-move states if we don't have an active post-movement setting
+            if (previousMovement instanceof AbstractMovementSettings) {
+                AbstractMovementSettings settings = (AbstractMovementSettings) previousMovement;
+                boolean hasPostSettings = settings.getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE || 
+                                          settings.getPostMoveKeys() != AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+                                          
+                if (!hasPostSettings) {
+                    CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                }
+            } else {
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+            }
+            
+            // Notify controller of completion, but maintain final camera position
+            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            
+            // Return the final state to ensure one last smooth frame
+            return new MovementState(finalTarget, true);
+        }
+
+        baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+        return state;
+    }
+
+    public CameraTarget update(MinecraftClient client, Camera camera) {
+        // When no active movement, stop driving the camera explicitly.
+        // Returning null prevents Controller from pinning camera to a stale target.
+        if (activeMovement == null || client.player == null) {
+            return null;
+        }
+        
+        MovementState state = calculateState(client, camera);
+        if (state == null) {
+            // If we have no state but had a previous target, return it
+            return baseTarget;
+        }
+        
+        // Get the raycast type safely with a null check
+        RaycastType raycastType = RaycastType.NONE; // Default to NONE
+        if (activeMovement != null) { // Explicit null check before calling getRaycastType
+            raycastType = activeMovement.getRaycastType();
+        }
+        
+        // At this point we have a valid state and raycast type
+        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, raycastType);
+        ninja.trek.Craneshot.LOGGER.debug("CameraMovementManager.update - orthoFactor={}", 
+                                         adjustedTarget != null ? adjustedTarget.getOrthoFactor() : "null");
+        return adjustedTarget;
+    }
+
+    public Integer getActiveMovementSlot() {
+        return activeMovementSlot;
+    }
+

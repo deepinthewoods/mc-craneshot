@@ -1,0 +1,44 @@
+                // Ensure editor closed if not in node edit mode
+                if (client.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                    client.setScreen(null);
+                }
+                ninja.trek.nodes.NodeManager.get().setEditing(false);
+            }
+            
+            // Determine if we should activate custom camera mode
+            boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                                    currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA);
+            // Never activate camera system for NODE_EDIT
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.NODE_EDIT) {
+                isFreeCamMode = false;
+            }
+            
+            boolean isOutPosition = (currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK);
+            
+            // Capture existing camera position before activating any new camera mode
+            Vec3d existingCameraPos = camera.getPos();
+            float existingYaw = camera.getYaw();
+            float existingPitch = camera.getPitch();
+            
+            // Activate the appropriate camera mode
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (isFreeCamMode) {
+                // Set the position first, so it's available during activation
+                cameraSystem.setCameraPosition(freeCamPosition);
+                cameraSystem.setCameraRotation(freeCamYaw, freeCamPitch);
+                
+                // Then activate the camera
+                cameraSystem.activateCamera(CameraSystem.CameraMode.FREE_CAMERA);
+                
+                // Update the camera immediately to apply our position
+                cameraSystem.updateCamera(camera);
+                
+                // Add debug logging
+                ninja.trek.Craneshot.LOGGER.info("Activating free camera at position: {} {} {}", 
+                    freeCamPosition.getX(), freeCamPosition.getY(), freeCamPosition.getZ());
+            } else if (isOutPosition) {
+                cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
+            }

@@ -1,0 +1,284 @@
+            float existingPitch = camera.getPitch();
+            
+            // Activate the appropriate camera mode
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (isFreeCamMode) {
+                // Set the position first, so it's available during activation
+                cameraSystem.setCameraPosition(freeCamPosition);
+                cameraSystem.setCameraRotation(freeCamYaw, freeCamPitch);
+                
+                // Then activate the camera
+                cameraSystem.activateCamera(CameraSystem.CameraMode.FREE_CAMERA);
+                
+                // Update the camera immediately to apply our position
+                cameraSystem.updateCamera(camera);
+                
+                // Add debug logging
+                ninja.trek.Craneshot.LOGGER.info("Activating free camera at position: {} {} {}", 
+                    freeCamPosition.getX(), freeCamPosition.getY(), freeCamPosition.getZ());
+            } else if (isOutPosition) {
+                cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
+            }
+        }
+    }
+
+    private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
+        if (client.player == null) return;
+
+        // Let the camera system handle movement
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (cameraSystem.isCameraActive()) {
+            FreeCamSettings settings = GeneralMenuSettings.getFreeCamSettings();
+            boolean moved = cameraSystem.handleMovementInput(
+                settings.getMoveSpeed(),
+                settings.getAcceleration(),
+                settings.getDeceleration()
+            );
+            
+            // Track if camera moved when using the camera system
+            if (moved) {
+                hasMovedWithKeyboard = true;
+            }
+            return;
+        }
+
+        // Legacy movement code
+        // Base movement speed in blocks per tick
+        float baseSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
+
+        // Sprint multiplier
+        if (client.options.sprintKey.isPressed()) {
+            baseSpeed *= 3.0f;
+        }
+
+        Vec3d targetVelocity = Vec3d.ZERO;
+        
+        // Calculate movement direction
+        if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+            // Free camera movement in all directions
+            double x = 0, y = 0, z = 0;
+            
+            if (client.options.forwardKey.isPressed()) {
+                z += 1.0;
+            }
+            if (client.options.backKey.isPressed()) {
+                z -= 1.0;
+            }
+            if (client.options.leftKey.isPressed()) {
+                x += 1.0;
+            }
+            if (client.options.rightKey.isPressed()) {
+                x -= 1.0;
+            }
+            if (client.options.jumpKey.isPressed()) {
+                y += 1.0;
+            }
+            if (client.options.sneakKey.isPressed()) {
+                y -= 1.0;
+            }
+            
+            // Normalize if moving in multiple directions simultaneously
+            if ((x != 0 && z != 0) || (x != 0 && y != 0) || (z != 0 && y != 0)) {
+                double length = Math.sqrt(x * x + y * y + z * z);
+                x /= length;
+                y /= length;
+                z /= length;
+            }
+            
+            // Convert to camera-relative movement
+            float yaw = freeCamYaw;
+            float pitch = freeCamPitch;
+            double xFactor = Math.sin(yaw * Math.PI / 180.0);
+            double zFactor = Math.cos(yaw * Math.PI / 180.0);
+            
+            targetVelocity = new Vec3d(
+                (x * zFactor - z * xFactor), 
+                y, 
+                (z * zFactor + x * xFactor)
+            );
+            
+        } else if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
+            // Y-axis locked camera movement
+            double x = 0, z = 0;
+            
+            if (client.options.forwardKey.isPressed()) {
+                z += 1.0;
+            }
+            if (client.options.backKey.isPressed()) {
+                z -= 1.0;
+            }
+            if (client.options.leftKey.isPressed()) {
+                x += 1.0;
+            }
+            if (client.options.rightKey.isPressed()) {
+                x -= 1.0;
+            }
+            
+            // Y movement from jump/sneak
+            double y = 0;
+            if (client.options.jumpKey.isPressed()) {
+                y += 1.0;
+            }
+            if (client.options.sneakKey.isPressed()) {
+                y -= 1.0;
+            }
+            
+            // Normalize XZ movement
+            if (x != 0 && z != 0) {
+                double length = Math.sqrt(x * x + z * z);
+                x /= length;
+                z /= length;
+            }
+            
+            // Convert to camera-relative XZ movement with free Y
+            float yaw = freeCamYaw;
+            double xFactor = Math.sin(yaw * Math.PI / 180.0);
+            double zFactor = Math.cos(yaw * Math.PI / 180.0);
+            
+            targetVelocity = new Vec3d(
+                (x * zFactor - z * xFactor), 
+                y, 
+                (z * zFactor + x * xFactor)
+            );
+        }
+
+        // Normalize and apply speed to target velocity if there's any movement
+        if (targetVelocity.lengthSquared() > 0.0001) {
+            targetVelocity = targetVelocity.normalize().multiply(baseSpeed);
+        }
+
+        // Apply acceleration or deceleration
+        float acceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
+        float deceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
+
+        if (targetVelocity.lengthSquared() > 0.0001) {
+            // Accelerating
+            currentVelocity = currentVelocity.add(
+                    targetVelocity.subtract(currentVelocity).multiply(acceleration)
+            );
+            
+            // Mark as moved with keyboard if acceleration is happening
+            if (!hasMovedWithKeyboard) {
+                hasMovedWithKeyboard = true;
+                ninja.trek.Craneshot.LOGGER.info("Camera movement detected - enabling smooth return");
+            }
+        } else {
+            // Decelerating
+            currentVelocity = currentVelocity.multiply(1.0 - deceleration);
+            // Zero out very small velocities to prevent perpetual drift
+            if (currentVelocity.lengthSquared() < 0.0001) {
+                currentVelocity = Vec3d.ZERO;
+            }
+        }
+
+        // Apply movement
+        freeCamPosition = freeCamPosition.add(currentVelocity);
+        ((CameraAccessor) camera).invokesetPos(freeCamPosition);
+    }
+
+    public void updateCamera(MinecraftClient client, Camera camera, float delta) {
+        updateControlStick(client);
+
+        // Get the base camera state from movement manager - always update to track state
+        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
+        // Blend camera nodes influence unless in node edit mode
+        baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, ninja.trek.nodes.NodeManager.get().isEditing());
+
+        // Check if we have an active camera system
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        boolean cameraSystemActive = cameraSystem.isCameraActive();
+
+        if (baseTarget != null) {
+            // Update FOV in game renderer
+            if (client.gameRenderer instanceof FovAccessor) {
+                float fovMultiplier = (float) baseTarget.getFovMultiplier();
+                ((FovAccessor) client.gameRenderer).setFovModifier(fovMultiplier);
+                // Only log significant FOV changes to reduce console spam
+                if (Math.abs(fovMultiplier - 1.0) > 0.001) {
+                    Craneshot.LOGGER.debug("set fov {}", fovMultiplier);
+                }
+            }
+            
+            if (cameraSystemActive) {
+                // Let the camera system update its state
+                boolean rotating = (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) || ninja.trek.nodes.NodeManager.get().isEditing();
+                boolean entityFreecam = (ninja.trek.util.CameraEntity.getCamera() != null);
+                if (entityFreecam) {
+                    // If using the dedicated camera entity: do not push manual camera pos/rot
+                    if (rotating && client.mouse instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                        double deltaX = mouseMixin.getCapturedDeltaX();
+                        double deltaY = -mouseMixin.getCapturedDeltaY();
+                        if (deltaX != 0 || deltaY != 0) {
+                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+                            if (camEnt != null) {
+                                // Invert Y like vanilla: moving mouse up should decrease pitch
+                                camEnt.updateCameraRotations((float)(deltaX * calculatedSensitivity), (float)(-deltaY * calculatedSensitivity));
+                            }
+                        }
+                    }
+                } else {
+                    if (rotating && client.mouse instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                        double deltaX = mouseMixin.getCapturedDeltaX();
+                        double deltaY = -mouseMixin.getCapturedDeltaY();
+                        if (deltaX != 0 || deltaY != 0) {
+                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            cameraSystem.updateRotation(
+                                deltaX * calculatedSensitivity * 0.55D,
+                                deltaY * calculatedSensitivity * 0.55D,
+                                1.0
+                            );
+                        }
+                    } else {
+                        // Use the movement manager's position/rotation if not freely rotating
+                        cameraSystem.setCameraPosition(baseTarget.getPosition());
+                        cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
+                    }
+                    // Let the camera system update the camera
+                    cameraSystem.updateCamera(camera);
+                }
+
+                // Update our tracking variables for legacy code support
+                freeCamPosition = cameraSystem.getCameraPosition();
+                freeCamYaw = cameraSystem.getCameraYaw();
+                freeCamPitch = cameraSystem.getCameraPitch();
+            } else {
+                // Legacy camera handling
+                // In node edit, keep camera at base target position and ignore keyboard free movement
+                if (ninja.trek.nodes.NodeManager.get().isEditing()) {
+                    freeCamPosition = baseTarget.getPosition();
+                } else {
+                    if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
+                            currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+                        freeCamPosition = baseTarget.getPosition();
+                    }
+                }
+
+                // Handle rotation based on movement mode
+                if (ninja.trek.nodes.NodeManager.get().isEditing()) {
+                    // Use edit-mode yaw/pitch override when editing
+                    if (ninja.trek.nodes.NodeManager.get().hasEditRotation()) {
+                        freeCamYaw = ninja.trek.nodes.NodeManager.get().getEditYaw();
+                        freeCamPitch = ninja.trek.nodes.NodeManager.get().getEditPitch();
+                    } else {
+                        freeCamYaw = baseTarget.getYaw();
+                        freeCamPitch = baseTarget.getPitch();
+                    }
+                } else if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
+                    IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                    double deltaX = mouseMixin.getCapturedDeltaX();
+                    double deltaY = -mouseMixin.getCapturedDeltaY();
+                    double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                    double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                    deltaX *= calculatedSensitivity * 0.55D;
+                    deltaY *= calculatedSensitivity * 0.55D;
+                    if (deltaX != 0 || deltaY != 0) {
+                        freeCamYaw += deltaX;
+                        freeCamPitch = (float) Math.max(-90.0F, Math.min(90.0F, freeCamPitch - deltaY));
+                    }
+                } else {
+                    freeCamYaw = baseTarget.getYaw();

@@ -18,6 +18,14 @@ public class CraneShotEventHandler {
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // If using our dedicated camera entity (freecam), tick it for smooth motion
+            try {
+                if (ninja.trek.util.CameraEntity.getCamera() != null) {
+                    ninja.trek.util.CameraEntity.movementTick();
+                }
+            } catch (Throwable t) {
+                // avoid hard crashes if something is null mid-load
+            }
             handleScrollInput(client);
             CraneshotClient.checkKeybinds();
 
