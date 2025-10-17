@@ -47,6 +47,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private double finalInterpT = 0.0;
     private Vec3d finalInterpStart = null;
 
+    // Jitter suppression state
+    private float lastTargetYaw = 0f;
+    private float lastTargetPitch = 0f;
+    private float lastYawError = 0f;
+    private float lastPitchError = 0f;
+    private Vec3d lastPlayerEyePos = null;
+    private boolean jitterStateInit = false;
+
     public void start(MinecraftClient client, Camera camera) {
         // Initialize with camera's current state
         start = CameraTarget.fromCamera(camera);
@@ -55,28 +63,27 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         baseFov = client.options.getFov().getValue().doubleValue();
         start.setFovMultiplier(1.0f);  // Start at normal FOV
         current.setFovMultiplier(1.0f); // Start at normal FOV
-        // Set initial ortho factor based on projection setting
-        start.setOrthoFactor(0.0f);  // Start with perspective (non-ortho)
-        current.setOrthoFactor(0.0f); // Start with perspective (non-ortho)
+        // Orthographic projection removed
         // Calculate end target based on controlStick
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         // Use the FOV multiplier from settings for the end target
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
-        // Set ortho factor for end target based on projection setting
-        if (projection == PROJECTION.ORTHO) {
-            end.setOrthoFactor(1.0f); // Target full orthographic
-            ninja.trek.Craneshot.LOGGER.info("LinearMovement started with ORTHO projection mode");
-        } else {
-            end.setOrthoFactor(0.0f); // Stay in perspective mode
-            ninja.trek.Craneshot.LOGGER.info("LinearMovement started with PERSPECTIVE projection mode");
-        }
+        // Orthographic factor removed
         resetting = false;
         weight = 1.0f;
         // Reset final interpolation state
         finalInterpActive = false;
         finalInterpT = 0.0;
         finalInterpStart = null;
+
+        // Reset jitter suppression tracking
+        jitterStateInit = false;
+        lastPlayerEyePos = null;
+        lastTargetYaw = current.getYaw();
+        lastTargetPitch = current.getPitch();
+        lastYawError = 0f;
+        lastPitchError = 0f;
     }
 
 
@@ -99,16 +106,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         CameraController.controlStick.getPosition(),
         CameraController.controlStick.getYaw(),
         CameraController.controlStick.getPitch() + pitchOffset,
-        start.getFovMultiplier(),
-        start.getOrthoFactor() // Preserve ortho factor
+        start.getFovMultiplier()
         );
 
         // Update end target based on controlStick and target distance
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
         CameraController.controlStick.getPitch() + pitchOffset, 
-        end.getFovMultiplier(),
-        end.getOrthoFactor()); // Preserve ortho factor
+        end.getFovMultiplier());
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
@@ -120,15 +125,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             float playerPitch = client.player.getPitch();
             
             // Update return target to always be the player's current head position and rotation
-            // But preserve the orthoFactor from the existing target
-            float preservedOrtho = b.getOrthoFactor();
-            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier(), preservedOrtho);
-            
-            // Debug logging of position updates
-            if (Math.random() < 0.001) { // Very rarely log to avoid spam
-                ninja.trek.Craneshot.LOGGER.info("LinearMovement updating return target position - preserving orthoFactor={}", 
-                    preservedOrtho);
-            }
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
         // Position interpolation
@@ -190,6 +187,45 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // Apply easing to get desired rotation speed
         float desiredYawSpeed = (float)(yawDiff * rotationEasing);
         float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
+
+        // Jitter suppression when camera is effectively at the out position and player is moving
+        // Suppress single-frame micro adjustments while keeping overall easing behavior.
+        if (!resetting && client.player != null) {
+            // Consider "fully out" when close to target; allow some slack for running
+            boolean fullyOut = distanceToTarget < 0.5; // blocks
+            if (fullyOut) {
+                Vec3d eye = client.player.getEyePos();
+                double playerMove = 0.0;
+                if (lastPlayerEyePos != null) {
+                    playerMove = eye.distanceTo(lastPlayerEyePos);
+                }
+                final float ANGLE_EPS = 0.7f;      // degrees
+                final float TARGET_EPS = 0.7f;     // degrees
+                final double MOVE_EPS = 0.03;      // blocks per tick
+
+                float targetYawDelta = targetYaw - lastTargetYaw;
+                while (targetYawDelta > 180) targetYawDelta -= 360;
+                while (targetYawDelta < -180) targetYawDelta += 360;
+                float targetPitchDelta = targetPitch - lastTargetPitch;
+                while (targetPitchDelta > 180) targetPitchDelta -= 360;
+                while (targetPitchDelta < -180) targetPitchDelta += 360;
+
+                boolean smallYawJitter = Math.abs(yawDiff) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
+                boolean smallPitchJitter = Math.abs(pitchDiff) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
+                boolean playerMoving = playerMove > MOVE_EPS;
+
+                if (playerMoving && (smallYawJitter || (lastYawError * yawDiff < 0 && Math.abs(yawDiff) < ANGLE_EPS))) {
+                    desiredYawSpeed = 0f;
+                }
+                if (playerMoving && (smallPitchJitter || (lastPitchError * pitchDiff < 0 && Math.abs(pitchDiff) < ANGLE_EPS))) {
+                    desiredPitchSpeed = 0f;
+                }
+
+                // Update jitter tracking state for next frame
+                lastPlayerEyePos = eye;
+                jitterStateInit = true;
+            }
+        }
 
         // Apply rotation speed limit
         float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0));
@@ -283,7 +319,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float newOrthoFactor = Math.max(0.0f, Math.min(1.0f, current.getOrthoFactor() + desiredOrthoSpeed));
 
         // Update current target with all new values
-        current = new CameraTarget(desired, newYaw, newPitch, newFovDelta, newOrthoFactor);
+        current = new CameraTarget(desired, newYaw, newPitch, newFovDelta);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
@@ -300,6 +336,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 String.format("%.5f", current.getPosition().distanceTo(b.getPosition())),
                 String.format("%.5f", alpha));
         }
+
+        // Track last target/errors for next frame
+        lastTargetYaw = targetYaw;
+        lastTargetPitch = targetPitch;
+        lastYawError = yawDiff;
+        lastPitchError = pitchDiff;
 
         boolean complete = resetting && current.getPosition().distanceTo(b.getPosition()) < 0.03;
         return new MovementState(current, complete);
@@ -326,12 +368,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             // Get the current orthographic factor
             float currentOrtho = current.getOrthoFactor();
             
-            // First preserve the current orthographic factor in end target
-            // This is crucial for a smooth transition
-            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f, currentOrtho);
-            
-            // Log this important transition
-            ninja.trek.Craneshot.LOGGER.info("LinearMovement return transition starting with orthoFactor={}", currentOrtho);
+            // Create a new end/start point that matches current state exactly (no orthographic factor)
+            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
             
             // Create a new temporary start point that matches current state exactly
             // This ensures our interpolation starts from exactly where we are
@@ -339,12 +377,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 current.getPosition(),
                 current.getYaw(),
                 current.getPitch(),
-                current.getFovMultiplier(),
-                current.getOrthoFactor()
+                current.getFovMultiplier()
             );
-            
-            ninja.trek.Craneshot.LOGGER.debug("LinearMovement return - current={}, target={}", 
-                current.getOrthoFactor(), end.getOrthoFactor());
         }
         
         // For free camera, also update the current target's position to ensure smooth transition
@@ -400,14 +434,11 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             // Using end position (player position) as the target
             double positionDistance = current.getPosition().distanceTo(end.getPosition());
             float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
-            float orthoDifference = current.getOrthoFactor(); // Distance to 0.0
-            
             // Log completion progress for debugging
             if (Math.random() < 0.01) { // Only log occasionally
-                ninja.trek.Craneshot.LOGGER.info("LinearMovement completion check - pos distance: {}, fov diff: {}, ortho: {}",
+                ninja.trek.Craneshot.LOGGER.info("LinearMovement completion check - pos distance: {}, fov diff: {}",
                     String.format("%.3f", positionDistance),
-                    String.format("%.3f", fovDifference),
-                    String.format("%.3f", orthoDifference));
+                    String.format("%.3f", fovDifference));
             }
             
             // Much stricter requirements to ensure movement completes fully

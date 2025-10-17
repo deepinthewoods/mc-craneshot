@@ -345,6 +345,10 @@ public class CameraMovementManager {
                     
                     // Clear any post-move states to ensure default behavior
                     CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+
+                    // Defensive: ensure mouse interception is disabled when return completes
+                    // This guarantees vanilla mouse look is restored even if other callbacks change.
+                    ninja.trek.MouseInterceptor.setIntercepting(false);
                     
                     // Notify controller of completion
                     CraneshotClient.CAMERA_CONTROLLER.onComplete();
@@ -445,9 +449,10 @@ public class CameraMovementManager {
     }
 
     public CameraTarget update(MinecraftClient client, Camera camera) {
-        // First check if active movement is null
+        // When no active movement, stop driving the camera explicitly.
+        // Returning null prevents Controller from pinning camera to a stale target.
         if (activeMovement == null || client.player == null) {
-            return baseTarget; // Return the last known target instead of null
+            return null;
         }
         
         MovementState state = calculateState(client, camera);
@@ -546,19 +551,6 @@ public class CameraMovementManager {
      * @return true if orthographic mode should be active, false otherwise
      */
     public boolean isOrthographicMode() {
-        // First check if we have an active camera target with orthographic factor
-        CameraTarget target = getCurrentTarget();
-        if (target != null && target.getOrthoFactor() > 0.5f) {
-            return true;
-        }
-        
-        // If no target or ortho factor is low, check active movement settings
-        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
-            AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
-            return settings.getProjection() == AbstractMovementSettings.PROJECTION.ORTHO;
-        }
-        
-        // Default to perspective mode if no active target or movement
         return false;
     }
     
@@ -567,12 +559,6 @@ public class CameraMovementManager {
      * @return The ortho scale value, or a default value if no active settings
      */
     public float getOrthoScale() {
-        // Check if we have active movement settings
-        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
-            return ((AbstractMovementSettings) activeMovement).getOrthoScale();
-        }
-        
-        // Default scale if no active movement
         return 20.0f;
     }
 }

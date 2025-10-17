@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Mixin for GameRenderer to handle block outline rendering in orthographic mode
+ * Mixin for GameRenderer to handle block outline rendering 
  * and to control hand rendering based on camera distance
  */
 @Mixin(GameRenderer.class)
@@ -30,18 +30,10 @@ public class GameRendererMixin {
     private Perspective craneshotPrevPerspective = Perspective.FIRST_PERSON;
     
     /**
-     * Control block outline rendering in orthographic mode
+     * Control block outline rendering 
      * This injection targets the private shouldRenderBlockOutline method
      */
-    @Inject(method = "shouldRenderBlockOutline()Z", at = @At("RETURN"), cancellable = true)
-    private void forceRenderBlockOutline(CallbackInfoReturnable<Boolean> cir) {
-        // In orthographic mode, we want to ensure block outlines are visible
-        // This helps with block selection and visualization
-        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
-            // Enable block outlines in orthographic mode
-            cir.setReturnValue(true);
-        }
-    }
+    
     
     /**
      * Control hand rendering based on camera distance threshold
@@ -83,3 +75,5 @@ public class GameRendererMixin {
         }
     }
 }
+
+

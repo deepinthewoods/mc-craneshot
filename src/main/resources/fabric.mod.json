@@ -25,11 +25,11 @@
 			"environment": "client"
 		}
 	],
-	"depends": {
-		"fabricloader": ">=0.16.10",
-		"minecraft": "~1.21",
-		"java": ">=21",
-		"fabric-api": "*",
-		"fabric-key-binding-api-v1": "*"
-	}
+    "depends": {
+        "fabricloader": ">=0.17.3",
+        "minecraft": "~1.21",
+        "java": ">=21",
+        "fabric-api": "*",
+        "fabric-key-binding-api-v1": "*"
+    }
 }

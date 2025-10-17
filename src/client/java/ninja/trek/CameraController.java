@@ -55,7 +55,7 @@ public class CameraController {
                 // Update movement tracking for VELOCITY targets
                 if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
                         currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_FRONT) {
-                    updateMovementTracking(client.player.getPos());
+                    updateMovementTracking(new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ()));
                 }
 
                 // Calculate final angles based on target type
@@ -528,14 +528,8 @@ public class CameraController {
 
     private void updateKeyboardInput(MinecraftClient client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-            // Check if camera system is active and should disable player movement
-            CameraSystem cameraSystem = CameraSystem.getInstance();
-            if (cameraSystem.isCameraActive()) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
-                return;
-            }
-            
-            // Legacy keyboard input control
+            // Only disable player movement when our post-move mode requires camera keyboard control.
+            // Do NOT blanket-disable just because the camera system is active; Bezier out-phase needs player input.
             boolean shouldDisable = currentKeyMoveMode == POST_MOVE_KEYS.MOVE8 ||
                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;

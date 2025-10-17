@@ -61,6 +61,14 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private double finalInterpT = 0.0;
     private Vec3d finalInterpStart = null;
 
+    // Jitter suppression state
+    private float lastTargetYaw = 0f;
+    private float lastTargetPitch = 0f;
+    private float lastYawError = 0f;
+    private float lastPitchError = 0f;
+    private Vec3d lastPlayerEyePos = null;
+    private boolean jitterStateInit = false;
+
     @Override
     public void start(MinecraftClient client, Camera camera) {
         start = CameraTarget.fromCamera(camera);
@@ -69,21 +77,14 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Store base FOV
         baseFov = client.options.getFov().getValue().floatValue();
         
-        // Set initial ortho factor to 0 (perspective)
-        start.setOrthoFactor(0.0f);
-        current.setOrthoFactor(0.0f);
+        // Orthographic handling removed
 
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), fovMultiplier);
                 
-        // Set ortho factor for end target based on projection setting
-        if (projection == PROJECTION.ORTHO) {
-            end.setOrthoFactor(1.0f); // Target full orthographic
-        } else {
-            end.setOrthoFactor(0.0f); // Stay in perspective mode
-        }
+        // Orthographic handling removed
 
         controlPoint = generateControlPoint(start.getPosition(), end.getPosition());
         progress = 0.0;
@@ -92,12 +93,19 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         distanceChanged = false;
         weight = 1.0f;
         alpha = 1;
-        // Initialize ortho lock for OUT phase
-        orthoOutLock = (projection == PROJECTION.ORTHO) ? 0.0f : -1.0f;
+        // Orthographic handling removed
         // Reset final interpolation state
         finalInterpActive = false;
         finalInterpT = 0.0;
         finalInterpStart = null;
+
+        // Reset jitter suppression tracking
+        jitterStateInit = false;
+        lastPlayerEyePos = null;
+        lastTargetYaw = current.getYaw();
+        lastTargetPitch = current.getPitch();
+        lastYawError = 0f;
+        lastPitchError = 0f;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
@@ -118,8 +126,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(),
-                start.getFovMultiplier(),
-                start.getOrthoFactor() // Preserve ortho factor
+                start.getFovMultiplier()
         );
 
         // Update end target based on controlStick and target distance
@@ -144,15 +151,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             float playerPitch = client.player.getPitch();
             
             // Update return target to always be the player's current head position and rotation
-            // But preserve the orthoFactor from the existing target
-            float preservedOrtho = b.getOrthoFactor();
-            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier(), preservedOrtho);
-            
-            // Log this important tracking update
-            if (Math.random() < 0.001) { // Very rarely log to avoid spam
-                ninja.trek.Craneshot.LOGGER.info("BezierMovement updating return target position - preserving orthoFactor={}", 
-                    preservedOrtho);
-            }
+            // Update the return target
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
             
             // If needed, update the control point to ensure smooth path to player
             if (progress < 0.5) {
@@ -233,7 +233,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
         float targetFovDelta = (float) b.getFovMultiplier();
-        float targetOrthoFactor = b.getOrthoFactor();
 
         // Apply rotation easing
         float yawError = targetYaw - current.getYaw();
@@ -245,6 +244,46 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         float desiredYawSpeed = (float)(yawError * rotationEasing);
         float desiredPitchSpeed = (float)(pitchError * rotationEasing);
+
+        // Jitter suppression: when fully out (linear mode) and player is moving,
+        // ignore one-frame micro corrections caused by tiny oscillations.
+        if (!resetting) {
+            boolean fullyOut = linearMode || progress >= 0.999;
+            if (fullyOut && client.player != null) {
+                Vec3d eye = client.player.getEyePos();
+                double playerMove = 0.0;
+                if (lastPlayerEyePos != null) {
+                    playerMove = eye.distanceTo(lastPlayerEyePos);
+                }
+                // Thresholds tuned to suppress sub-degree jitter while running
+                final float ANGLE_EPS = 0.7f;      // degrees
+                final float TARGET_EPS = 0.7f;     // degrees
+                final double MOVE_EPS = 0.03;      // blocks per tick
+
+                // Angle delta for target (normalize to [-180,180])
+                float targetYawDelta = targetYaw - lastTargetYaw;
+                while (targetYawDelta > 180) targetYawDelta -= 360;
+                while (targetYawDelta < -180) targetYawDelta += 360;
+                float targetPitchDelta = targetPitch - lastTargetPitch;
+                while (targetPitchDelta > 180) targetPitchDelta -= 360;
+                while (targetPitchDelta < -180) targetPitchDelta += 360;
+
+                boolean smallYawJitter = Math.abs(yawError) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
+                boolean smallPitchJitter = Math.abs(pitchError) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
+                boolean playerMoving = playerMove > MOVE_EPS;
+
+                if (playerMoving && (smallYawJitter || (lastYawError * yawError < 0 && Math.abs(yawError) < ANGLE_EPS))) {
+                    desiredYawSpeed = 0f;
+                }
+                if (playerMoving && (smallPitchJitter || (lastPitchError * pitchError < 0 && Math.abs(pitchError) < ANGLE_EPS))) {
+                    desiredPitchSpeed = 0f;
+                }
+
+                // Update jitter tracking state
+                lastPlayerEyePos = eye;
+                jitterStateInit = true;
+            }
+        }
         
         // Apply FOV multiplier transitions with easing
         // Use a custom curve for FOV transitions to make them extra smooth
@@ -344,7 +383,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // We're now directly setting orthoFactor based on movement progress above
 
         // Update current target - note we're keeping the orthoFactor that was already set directly
-        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta, current.getOrthoFactor());
+        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
         // Update FOV in game renderer
         if (client.gameRenderer instanceof FovAccessor) {
@@ -368,6 +407,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 String.format("%.5f", progress),
                 String.format("%.5f", alpha));
         }
+
+        // Track last target/errors for next frame (after we compute current)
+        lastTargetYaw = targetYaw;
+        lastTargetPitch = targetPitch;
+        lastYawError = yawError;
+        lastPitchError = pitchError;
 
         boolean complete = resetting && (remaining < 0.007 || progress >= 0.9999);
         return new MovementState(current, complete);

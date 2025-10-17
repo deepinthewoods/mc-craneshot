@@ -1,7 +1,6 @@
 package ninja.trek;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -21,14 +20,8 @@ public class CraneShotEventHandler {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             handleScrollInput(client);
             CraneshotClient.checkKeybinds();
-        });
 
-        MovementToastRenderer.register();
-
-        WorldRenderEvents.START.register(context -> {
-            MinecraftClient client = MinecraftClient.getInstance();
             Camera camera = client.gameRenderer.getCamera();
-
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isPressed();
                 boolean wasPressed = keyStates.getOrDefault(i, false);
@@ -43,6 +36,8 @@ public class CraneShotEventHandler {
                 keyStates.put(i, currentlyPressed);
             }
         });
+
+        MovementToastRenderer.register();
     }
 
     /**
@@ -102,33 +97,6 @@ public class CraneShotEventHandler {
             } else if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
                 if (activeMovement instanceof AbstractMovementSettings) {
                     ((AbstractMovementSettings) activeMovement).adjustFov(!scrollUp, client);
-                    lastScrollTime = currentTime;
-                    resetScrollValue(client);
-                    return;
-                }
-            }
-        }
-
-        // Handle orthographic camera zoom if in orthographic mode
-        if (CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode()) {
-            // Use shift key as a modifier for orthographic zoom
-            boolean shiftPressed = client.options.sneakKey.isPressed();
-            if (shiftPressed) {
-                // Get the active movement settings
-                if (activeMovement instanceof AbstractMovementSettings) {
-                    AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
-                    if (scrollUp) {
-                        settings.adjustOrthoScale(-1.0f);
-                    } else {
-                        settings.adjustOrthoScale(1.0f);
-                    }
-                    // Show zoom level message
-                    if (client.player != null) {
-                        client.player.sendMessage(
-                            net.minecraft.text.Text.literal("Orthographic zoom: " + String.format("%.1f", settings.getOrthoScale())),
-                            true
-                        );
-                    }
                     lastScrollTime = currentTime;
                     resetScrollValue(client);
                     return;

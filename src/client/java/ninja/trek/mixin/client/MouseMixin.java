@@ -54,7 +54,7 @@ public class MouseMixin implements IMouseMixin {
     }
 
     @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
-    private void onUpdateMouse(CallbackInfo ci) {
+    private void onUpdateMouse(double timeDelta, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
             capturedDeltaX = cursorDeltaX;
@@ -66,7 +66,7 @@ public class MouseMixin implements IMouseMixin {
     }
 
     @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
-    private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
+    private void onMouseButton(long window, net.minecraft.client.input.MouseInput input, int action, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
             ci.cancel();

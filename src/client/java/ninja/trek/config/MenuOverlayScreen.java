@@ -733,19 +733,20 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == CraneshotClient.toggleMenuKey.getDefaultKey().getCode()) {
-            toggleMenu();
-            return true;
-        }
-
-        // Close on ESC (256) or inventory key
-        if (keyCode == 256 || (this.client != null && keyCode == this.client.options.inventoryKey.getDefaultKey().getCode())) {
+    public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+        // ESC
+        if (input.getKeycode() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
             close();
             return true;
         }
 
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        // Inventory key
+        if (this.client != null && this.client.options.inventoryKey.matchesKey(input)) {
+            close();
+            return true;
+        }
+
+        return super.keyPressed(input);
     }
 
     private void scroll(int amount) {

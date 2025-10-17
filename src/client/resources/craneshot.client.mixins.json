@@ -5,19 +5,13 @@
 	"client": [
 		"CameraAccessor",
 		"CameraMixin",
-		"CameraSubmersionMixin",
 		"FovAccessor",
 		"GameRendererFovAccessor",
 		"GameRendererMixin",
-		"MinecraftClientCameraMixin",
 		"KeyboardInputMixin",
-		"MinecraftClientMixin",
 		"MouseAccessor",
 		"MouseMixin",
-		"EntityRenderDispatcherMixin",
-		"OrthographicGameRendererMixin",
-		"WorldRendererChunkMixin",
-		"WorldRendererMixin"
+		"EntityRenderDispatcherMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

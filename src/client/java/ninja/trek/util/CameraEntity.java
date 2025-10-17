@@ -22,7 +22,7 @@ import ninja.trek.config.FreeCamSettings;
 
 /**
  * A dedicated camera entity for free camera movement
- * Used when the camera is in "out" position or in orthographic mode
+ * Used when the camera is in "out" position 
  */
 public class CameraEntity extends ClientPlayerEntity {
     @Nullable private static CameraEntity camera;
@@ -220,7 +220,7 @@ public class CameraEntity extends ClientPlayerEntity {
             throw new RuntimeException("Cannot create CameraEntity from null player!");
         }
 
-        Vec3d entityPos = player.getPos();
+        Vec3d entityPos = new Vec3d(player.getX(), player.getY(), player.getZ());
         float yaw = player.getYaw();
         float pitch = player.getPitch();
 
@@ -291,3 +291,4 @@ public class CameraEntity extends ClientPlayerEntity {
         camera = null;
     }
 }
+

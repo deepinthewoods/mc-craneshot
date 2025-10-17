@@ -77,14 +77,9 @@ public abstract class AbstractMovementSettings {
     public static final double FINAL_INTERP_DISTANCE_THRESHOLD = 0.2; // blocks
     public static final double FINAL_INTERP_TIME_SECONDS = 0.25;       // seconds
 
-    @MovementSetting(
-            label = "Projection",
-            type = MovementSettingType.ENUM,
-            description = "Controls camera projection mode during movement"
-    )
     protected PROJECTION projection = PROJECTION.PERSPECTIVE;
     
-    @MovementSetting(label = "Ortho Scale", min = 1.0, max = 100.0, description = "Controls the zoom level of orthographic view")
+    // Ortho scale retained for legacy internal math; no longer exposed in UI
     protected float orthoScale = 20.0f;
     
     private static final float MIN_ORTHO_SCALE = 1.0f;
@@ -243,8 +238,6 @@ public abstract class AbstractMovementSettings {
                         field.set(this, enumValue);
                         if (key.equals("raycastType")) {
                             setRaycastType((RaycastType)enumValue);
-                        } else if (key.equals("projection")) {
-                            ninja.trek.Craneshot.LOGGER.info("Updated projection setting to: {}", enumValue);
                         }
                     }
                 } else if (field.getType() == double.class || field.getType() == Double.class) {

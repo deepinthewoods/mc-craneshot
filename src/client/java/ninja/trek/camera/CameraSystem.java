@@ -106,15 +106,19 @@ public class CameraSystem {
             
             // Apply chunk culling setting
             mc.chunkCullingEnabled = !disableChunkCulling;
-            
-            // Set the camera entity to null to detach from player
-            ninja.trek.Craneshot.LOGGER.info("Setting camera entity to null");
-            mc.setCameraEntity(null);
+
+            // Use a dedicated camera entity for free camera, otherwise detach
+            if (mode == CameraMode.FREE_CAMERA) {
+                ninja.trek.util.CameraEntity.setCameraState(true);
+            } else {
+                ninja.trek.Craneshot.LOGGER.info("Detaching camera from player (no entity override)");
+                mc.setCameraEntity(null);
+            }
             
             cameraActive = true;
             
-            // Explicitly apply position and rotation to ensure immediate update
-            if (currentCamera != null) {
+            // Explicitly apply position/rotation only if not using the dedicated camera entity
+            if (currentCamera != null && mode != CameraMode.FREE_CAMERA) {
                 ninja.trek.Craneshot.LOGGER.info("Initial camera update");
                 ((CameraAccessor) currentCamera).invokesetPos(cameraPosition);
                 ((CameraAccessor) currentCamera).invokeSetRotation(cameraYaw, cameraPitch);
@@ -137,421 +141,216 @@ public class CameraSystem {
      */
     public void deactivateCamera() {
         if (!cameraActive) return;
-        
+
         MinecraftClient mc = MinecraftClient.getInstance();
-        
+
         ninja.trek.Craneshot.LOGGER.info("Deactivating camera system");
-        
-        // Restore original settings
-        if (mc != null) {
-            // Force reset to original camera entity if available
+
+        // If using dedicated camera entity, disable it (restores chunk culling/camera entity)
+        if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            ninja.trek.util.CameraEntity.setCameraState(false);
+        } else if (mc != null) {
+            // Restore original settings
             if (originalCameraEntity != null) {
                 ninja.trek.Craneshot.LOGGER.info("Restoring original camera entity: {}", originalCameraEntity);
                 mc.setCameraEntity(originalCameraEntity);
             } else if (mc.player != null) {
-                // Fall back to player if original entity is null
                 ninja.trek.Craneshot.LOGGER.info("Setting camera entity to player");
                 mc.setCameraEntity(mc.player);
             }
-            
-            // Restore chunk culling
             mc.chunkCullingEnabled = originalChunkCulling;
-            
-            // Reset FOV to default
             if (mc.gameRenderer instanceof ninja.trek.mixin.client.FovAccessor) {
                 ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer).setFovModifier(1.0f);
             }
         }
-        
+
         // Reset all camera state
         cameraActive = false;
         cameraVelocity = Vec3d.ZERO;
-        
-        // Explicitly reset camera position to the player position if possible
-        if (mc != null && mc.player != null) {
-            cameraPosition = mc.player.getEyePos();
-            cameraYaw = mc.player.getYaw();
-            cameraPitch = mc.player.getPitch();
-        }
-        
-        ninja.trek.Craneshot.LOGGER.info("Final camera position: {} {} {}", 
-            cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
-        ninja.trek.Craneshot.LOGGER.info("Final camera rotation: {} {}", cameraYaw, cameraPitch);
-        
-        // Apply updated camera settings to the actual camera if available
-        if (mc != null && mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
-            Camera camera = mc.gameRenderer.getCamera();
-            
-            // Force the camera to use the player's position
-            if (mc.player != null) {
-                ((CameraAccessor) camera).invokesetPos(mc.player.getEyePos());
-                ((CameraAccessor) camera).invokeSetRotation(mc.player.getYaw(), mc.player.getPitch());
-            }
-        }
-        
-        // Mark chunks for rebuild to fix any rendering issues
-        if (mc != null && mc.worldRenderer != null) {
-            int chunkX = MathHelper.floor(cameraPosition.getX()) >> 4;
-            int chunkZ = MathHelper.floor(cameraPosition.getZ()) >> 4;
-            for (int x = chunkX - 3; x <= chunkX + 3; x++) {
-                for (int z = chunkZ - 3; z <= chunkZ + 3; z++) {
-                    for (int y = 0; y < 16; y++) {
-                        mc.worldRenderer.scheduleChunkRender(x, y, z);
-                    }
-                }
-            }
-        }
-        
-        // Clear the original entity reference
+        shouldRenderHands = true;
+        shouldRenderPlayerModel = true;
+        disableChunkCulling = false;
         originalCameraEntity = null;
     }
-    
+
     /**
-     * Updates the camera position and rotation
-     * @param camera The Minecraft camera instance
+     * Updates the camera position and rotation immediately.
      */
     public void updateCamera(Camera camera) {
         if (!cameraActive || camera == null) return;
-        
-        MinecraftClient mc = MinecraftClient.getInstance();
-        
-        // Ensure we're not using player as camera entity
-        if (mc.getCameraEntity() != null) {
-            ninja.trek.Craneshot.LOGGER.debug("Resetting camera entity to null");
-            mc.setCameraEntity(null);
+
+        // When using the dedicated camera entity, vanilla handles transform; skip manual override
+        if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            return;
         }
-        
-        // Get the current camera position for logging
-        Vec3d currentPos = ((CameraAccessor) camera).getPos();
-        float currentYaw = camera.getYaw();
-        float currentPitch = camera.getPitch();
-        
-        // Log current and target positions
-        ninja.trek.Craneshot.LOGGER.debug("Current camera pos: {} {} {}, target: {} {} {}",
-            currentPos.getX(), currentPos.getY(), currentPos.getZ(),
-            cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
-        
-        // Apply position and rotation to the camera
+
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
-        
-        // Verify that our changes actually took effect
-        Vec3d actualPos = ((CameraAccessor) camera).getPos();
-        if (!actualPos.equals(cameraPosition)) {
-            ninja.trek.Craneshot.LOGGER.warn("Camera position not updated correctly! Expected: {} but got: {}", 
-                cameraPosition, actualPos);
-        }
     }
-    
+
     /**
-     * Handles keyboard movement input for the camera
-     * @return true if any movement occurred, false otherwise
+     * Handles keyboard movement input for the camera.
+     * @return true if any movement occurred.
      */
     public boolean handleMovementInput(float baseSpeed, float acceleration, float deceleration) {
         if (!cameraActive) return false;
-        
+
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc == null) return false;
-        
-        // Calculate target velocity based on input
+
         Vec3d targetVelocity = calculateTargetVelocity(mc, baseSpeed);
-        
         boolean isMoved = false;
-        
-        // Apply acceleration/deceleration
+
         if (targetVelocity.lengthSquared() > 0.0001) {
-            // Accelerating
-            cameraVelocity = cameraVelocity.add(
-                targetVelocity.subtract(cameraVelocity).multiply(acceleration));
+            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).multiply(acceleration));
             isMoved = true;
-            
-            // Log the first detected movement
-            if (isMoved && !ninja.trek.CameraController.hasMovedWithKeyboard) {
-                ninja.trek.Craneshot.LOGGER.info("Camera system detected movement - enabling smooth return");
-            }
         } else {
-            // Decelerate when no input
             cameraVelocity = cameraVelocity.multiply(1.0 - deceleration);
-            // Zero out very small velocities to prevent drift
             if (cameraVelocity.lengthSquared() < 0.0001) {
                 cameraVelocity = Vec3d.ZERO;
             } else {
-                // Still moving due to momentum
                 isMoved = true;
             }
         }
-        
-        // Apply velocity to position
+
         cameraPosition = cameraPosition.add(cameraVelocity);
-        
-        // Immediately update camera if available
+
         Camera camera = mc.gameRenderer.getCamera();
         if (camera != null) {
             updateCamera(camera);
         }
-        
         return isMoved;
     }
-    
+
     /**
-     * Calculates the target velocity based on keyboard input
+     * Calculates the target velocity from input.
      */
     private Vec3d calculateTargetVelocity(MinecraftClient mc, float baseSpeed) {
-        boolean isOrtho = CraneshotClient.MOVEMENT_MANAGER.isOrthographicMode();
         boolean isFreeMode = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
-        
+
         double x = 0, y = 0, z = 0;
-        
-        // Get keyboard input
         if (mc.options.forwardKey.isPressed()) z += 1.0;
         if (mc.options.backKey.isPressed()) z -= 1.0;
         if (mc.options.leftKey.isPressed()) x += 1.0;
         if (mc.options.rightKey.isPressed()) x -= 1.0;
         if (mc.options.jumpKey.isPressed()) y += 1.0;
         if (mc.options.sneakKey.isPressed()) y -= 1.0;
-        
-        // Check if any movement keys are pressed
-        if (x == 0 && y == 0 && z == 0) {
-            return Vec3d.ZERO;
-        }
-        
-        // Apply sprint multiplier
-        if (mc.options.sprintKey.isPressed()) {
-            baseSpeed *= 3.0f;
-        }
-        
-        // Normalize if moving in multiple directions
+
+        if (x == 0 && y == 0 && z == 0) return Vec3d.ZERO;
+
+        if (mc.options.sprintKey.isPressed()) baseSpeed *= 3.0f;
+
         if ((x != 0 && z != 0) || (x != 0 && y != 0) || (z != 0 && y != 0)) {
-            double length = Math.sqrt(x * x + y * y + z * z);
-            x /= length;
-            y /= length;
-            z /= length;
+            double len = Math.sqrt(x * x + y * y + z * z);
+            x /= len; y /= len; z /= len;
         }
-        
+
         Vec3d velocity;
-        
-        // For orthographic or flat movement mode, use camera-relative movement on XZ plane
-        if (isOrtho || CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
             double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
-            
             double moveX = (x * zFactor - z * xFactor);
             double moveZ = (z * zFactor + x * xFactor);
-            
             velocity = new Vec3d(moveX, y, moveZ);
-        }
-        // For free movement, use full camera-relative movement
-        else if (isFreeMode) {
+        } else if (isFreeMode) {
             double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
             double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
             double pitchFactor = Math.sin(cameraPitch * Math.PI / 180.0);
-            
             double moveX = (x * zFactor - z * xFactor);
             double moveY = y;
             double moveZ = (z * zFactor + x * xFactor);
-            
-            if (Math.abs(cameraPitch) > 30 && isFreeMode) {
-                // Adjust vertical movement based on pitch in free mode
+            if (Math.abs(cameraPitch) > 30) {
                 moveY -= z * pitchFactor * 0.5;
             }
-            
             velocity = new Vec3d(moveX, moveY, moveZ);
-        }
-        // Default to simple movement
-        else {
+        } else {
             velocity = new Vec3d(x, y, z);
         }
-        
-        // Normalize and apply speed
-        if (velocity.lengthSquared() > 0.0001) {
-            return velocity.normalize().multiply(baseSpeed);
-        }
-        
-        return Vec3d.ZERO;
+
+        return velocity.lengthSquared() > 0.0001 ? velocity.normalize().multiply(baseSpeed) : Vec3d.ZERO;
     }
-    
+
     /**
-     * Updates the camera rotation based on mouse movement
+     * Mouse rotation update.
      */
     public void updateRotation(double deltaX, double deltaY, double sensitivity) {
         if (!cameraActive) return;
-        
-        // Apply mouse movement to rotation
         cameraYaw += deltaX * sensitivity;
-        // Normalize yaw to prevent floating-point issues after extended rotation
         while (cameraYaw > 360.0f) cameraYaw -= 360.0f;
         while (cameraYaw < 0.0f) cameraYaw += 360.0f;
-        
         cameraPitch = (float) MathHelper.clamp(cameraPitch - deltaY * sensitivity, -90.0f, 90.0f);
-        
-        // Immediately update camera if available
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc != null) {
             Camera camera = mc.gameRenderer.getCamera();
-            if (camera != null) {
-                updateCamera(camera);
-            }
+            if (camera != null) updateCamera(camera);
         }
     }
-    
-    /**
-     * Sets the camera position directly
-     */
+
     public void setCameraPosition(Vec3d position) {
-        if (position == null) {
-            ninja.trek.Craneshot.LOGGER.warn("Attempted to set camera position to null!");
-            return;
-        }
-        
+        if (position == null) return;
         this.cameraPosition = position;
-        
-        // Log position for debugging
-        ninja.trek.Craneshot.LOGGER.debug("CameraSystem.setCameraPosition: {} {} {}", 
-            position.getX(), position.getY(), position.getZ());
-        
-        // Apply changes immediately if camera is active
         if (cameraActive) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
-                if (camera != null) {
-                    ((CameraAccessor) camera).invokesetPos(cameraPosition);
-                }
+                if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
     }
-    
-    /**
-     * Sets the camera rotation directly
-     */
+
     public void setCameraRotation(float yaw, float pitch) {
         this.cameraYaw = yaw;
         this.cameraPitch = pitch;
-        
-        // Log rotation for debugging
-        ninja.trek.Craneshot.LOGGER.debug("CameraSystem.setCameraRotation: {} {}", yaw, pitch);
-        
-        // Apply changes immediately if camera is active
         if (cameraActive) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
-                if (camera != null) {
-                    ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
-                }
+                if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }
     }
-    
-    /**
-     * Get the current camera position
-     */
-    public Vec3d getCameraPosition() {
-        return cameraPosition;
-    }
-    
-    /**
-     * Get the current camera yaw
-     */
-    public float getCameraYaw() {
-        return cameraYaw;
-    }
-    
-    /**
-     * Get the current camera pitch
-     */
-    public float getCameraPitch() {
-        return cameraPitch;
-    }
-    
-    /**
-     * Check if the camera is currently active
-     */
-    public boolean isCameraActive() {
-        return cameraActive;
-    }
-    
-    /**
-     * Check if hands should be rendered
-     * Takes into account both the camera mode setting and distance threshold
-     */
+
+    public Vec3d getCameraPosition() { return cameraPosition; }
+    public float getCameraYaw() { return cameraYaw; }
+    public float getCameraPitch() { return cameraPitch; }
+    public boolean isCameraActive() { return cameraActive; }
+
     public boolean shouldRenderHands() {
         if (!shouldRenderHands) return false;
-        
-        // Check camera distance to player
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && cameraActive) {
-            double distanceToPlayer = cameraPosition.distanceTo(mc.player.getEyePos());
-            // Render hands only when closer than the threshold
-            return distanceToPlayer < PLAYER_RENDER_THRESHOLD;
+            double d = cameraPosition.distanceTo(mc.player.getEyePos());
+            return d < PLAYER_RENDER_THRESHOLD;
         }
-        
         return shouldRenderHands;
     }
-    
-    /**
-     * Check if player model should be rendered
-     * Takes into account both the camera mode setting and distance threshold
-     */
+
     public boolean shouldRenderPlayerModel() {
         if (!shouldRenderPlayerModel) return false;
-        
-        // Check camera distance to player
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null && cameraActive) {
-            double distanceToPlayer = cameraPosition.distanceTo(mc.player.getEyePos());
-            // Render player model only when farther than the threshold
-            return distanceToPlayer >= PLAYER_RENDER_THRESHOLD;
+            double d = cameraPosition.distanceTo(mc.player.getEyePos());
+            return d >= PLAYER_RENDER_THRESHOLD;
         }
-        
         return shouldRenderPlayerModel;
     }
 
-    
-    /**
-     * Set whether to render hands
-     */
     public void setShouldRenderHands(boolean renderHands) {
         this.shouldRenderHands = renderHands;
     }
-    
-    /**
-     * Camera mode defines how the camera should behave
-     */
+
     public static class CameraMode {
         public final boolean hideHands;
         public final boolean showPlayerModel;
         public final boolean disableChunkCulling;
-        
         public CameraMode(boolean hideHands, boolean showPlayerModel, boolean disableChunkCulling) {
             this.hideHands = hideHands;
             this.showPlayerModel = showPlayerModel;
             this.disableChunkCulling = disableChunkCulling;
         }
-        
-        // Predefined camera modes
-        public static final CameraMode ORTHOGRAPHIC = new CameraMode(
-            true,     // Hide hands
-            true,     // Show player model
-            true      // Disable chunk culling
-        );
-        
-        public static final CameraMode THIRD_PERSON = new CameraMode(
-            true,     // Hide hands
-            true,     // Show player model
-            true      // Disable chunk culling
-        );
-        
-        public static final CameraMode FREE_CAMERA = new CameraMode(
-            true,     // Hide hands
-            false,    // Don't show player model
-            true      // Disable chunk culling
-        );
-        
-        public static final CameraMode FIRST_PERSON = new CameraMode(
-            false,    // Show hands
-            false,    // Don't show player model
-            false     // Normal chunk culling
-        );
+        public static final CameraMode THIRD_PERSON = new CameraMode(true, true, true);
+        public static final CameraMode FREE_CAMERA = new CameraMode(true, false, true);
+        public static final CameraMode FIRST_PERSON = new CameraMode(false, false, false);
     }
+
 }

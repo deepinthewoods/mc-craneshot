@@ -13,6 +13,5 @@
   "key.craneshot.camera8": "8",
   "key.craneshot.camera9": "9",
   "key.craneshot.camera10": "10",
-  "message.craneshot.orthographic.enabled": "Orthographic camera enabled (Hold Shift + Scroll to zoom)",
-  "message.craneshot.orthographic.disabled": "Orthographic camera disabled"
+  
 }

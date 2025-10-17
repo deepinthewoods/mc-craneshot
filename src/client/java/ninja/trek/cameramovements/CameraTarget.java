@@ -11,22 +11,21 @@ public class CameraTarget {
     private float yaw;
     private float pitch;
     private float fovMultiplier;  // 1.0 = normal FOV, >1 = wider, <1 = narrower
-    private float orthoFactor = 0.0f; // 0.0 = perspective, 1.0 = orthographic
 
     public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = Math.max(0.1f, fovMultiplier);
-        this.orthoFactor = 0.0f;
+        // orthographic factor removed
     }
     
+    // Legacy signature retained; orthographic factor is ignored
     public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = Math.max(0.1f, fovMultiplier);
-        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, orthoFactor));
     }
 
     public CameraTarget(Vec3d position, float yaw, float pitch) {
@@ -48,7 +47,7 @@ public class CameraTarget {
             if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
         }
         CameraTarget target = new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), currentFovMultiplier);
-        ninja.trek.Craneshot.LOGGER.debug("Created CameraTarget from camera with default orthoFactor=0.0");
+        ninja.trek.Craneshot.LOGGER.debug("Created CameraTarget from camera");
         return target;
     }
 
@@ -70,13 +69,9 @@ public class CameraTarget {
         return fovMultiplier;
     }
     
-    public float getOrthoFactor() {
-        return orthoFactor;
-    }
-    
-    public void setOrthoFactor(float factor) {
-        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, factor));
-    }
+    // Legacy API; no-op after orthographic removal
+    public float getOrthoFactor() { return 0.0f; }
+    public void setOrthoFactor(float factor) { }
 
     public void setFovMultiplier(float multiplier) {
         this.fovMultiplier = Math.max(0.1f, multiplier); // Ensure we never have a zero or negative multiplier
@@ -89,8 +84,8 @@ public class CameraTarget {
         }
         
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
-        CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier, this.orthoFactor);
-        ninja.trek.Craneshot.LOGGER.debug("Applying collision adjustment, preserving orthoFactor={}", this.orthoFactor);
+        CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier);
+        ninja.trek.Craneshot.LOGGER.debug("Applying collision adjustment");
         return adjusted;
     }
 
@@ -110,7 +105,6 @@ public class CameraTarget {
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = fovMultiplier != 0 ? fovMultiplier : 1.0f;
-        this.orthoFactor = Math.max(0.0f, Math.min(1.0f, orthoFactor));
     }
 
     public void set(CameraTarget t) {
@@ -118,7 +112,6 @@ public class CameraTarget {
         this.pitch = t.pitch;
         this.yaw = t.yaw;
         this.fovMultiplier = t.fovMultiplier != 0 ? t.fovMultiplier : 1.0f;
-        this.orthoFactor = t.orthoFactor;
     }
 
     public CameraTarget lerp(CameraTarget other, float t) {
@@ -131,10 +124,7 @@ public class CameraTarget {
         float endFov = other.fovMultiplier != 0 ? other.fovMultiplier : 1.0f;
         float lerpedFov = startFov + (endFov - startFov) * t;
         
-        // Interpolate ortho factor
-        float lerpedOrtho = this.orthoFactor + (other.orthoFactor - this.orthoFactor) * t;
-
-        return new CameraTarget(lerpedPos, lerpedYaw, lerpedPitch, lerpedFov, lerpedOrtho);
+        return new CameraTarget(lerpedPos, lerpedYaw, lerpedPitch, lerpedFov);
     }
 
     private float lerpAngle(float start, float end, float t) {

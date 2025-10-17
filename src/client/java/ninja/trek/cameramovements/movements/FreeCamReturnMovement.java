@@ -40,9 +40,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private double completionThreshold = 0.05; // Distance in blocks to consider movement complete
     private END_TARGET originalEndTarget = END_TARGET.HEAD_BACK; // Store the original movement's target type
     
-    // For handling orthographic mode during transitions
-    private boolean hasForcedOrthoState = false;
-    private boolean forcedOrthoState = false;
+    // Orthographic handling removed
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -78,34 +76,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         // Always return to the default FOV (1.0) when returning to player view
         // The transition will use the fovEasing and fovSpeedLimit settings
         
-        // Determine orthographic state - either from forced state or current movement settings
-        boolean isOrthoModeEnabled;
-        if (hasForcedOrthoState) {
-            isOrthoModeEnabled = forcedOrthoState;
-            Craneshot.LOGGER.info("Using forced ortho state: {}", isOrthoModeEnabled);
-        } else {
-            isOrthoModeEnabled = getProjection() == PROJECTION.ORTHO;
-            Craneshot.LOGGER.info("Using movement settings ortho state: {}", isOrthoModeEnabled);
-        }
-        
-        float orthoFactor = isOrthoModeEnabled ? 1.0f : 0.0f;
-        
-        // Set orthographic factor in start and current positions
-        start.setOrthoFactor(orthoFactor);
-        current.setOrthoFactor(orthoFactor);
-        
-        if (isOrthoModeEnabled) {
-            Craneshot.LOGGER.info("FreeCamReturnMovement started with orthographic mode enabled");
-        }
-        
-        // Create end target with ortho factor to match the determined state
-        end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f, orthoFactor);
+        // Create end target (orthographic support removed)
+        end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         
         isComplete = false;
         isStarted = true;
         
-        Craneshot.LOGGER.info("FreeCamReturnMovement started: {} -> {}, Original Target: {}, Ortho: {}", 
-            start.getPosition(), end.getPosition(), originalEndTarget, isOrthoModeEnabled);
+        Craneshot.LOGGER.info("FreeCamReturnMovement started: {} -> {}, Original Target: {}", 
+            start.getPosition(), end.getPosition(), originalEndTarget);
     }
 
     @Override
@@ -270,8 +248,6 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         double yawRemaining = Math.abs(yawDiff);
         double pitchRemaining = Math.abs(pitchDiff);
         double fovRemaining = Math.abs(fovDiff);
-        double orthoRemaining = Math.abs(current.getOrthoFactor() - end.getOrthoFactor());
-        
         // Movement is complete when we're close enough to the destination
         boolean positionComplete = remainingDistance < completionThreshold;
         boolean rotationComplete = yawRemaining < 1.0 && pitchRemaining < 1.0;
@@ -279,16 +255,12 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         // Use a larger threshold for FOV to ensure smoother final transition
         // This allows the FOV to continue its gradual transition longer
         boolean fovComplete = fovRemaining < 0.05;
-        
-        // Use similar threshold for ortho factor transition
-        boolean orthoComplete = orthoRemaining < 0.05;
-        
-        // Only mark as complete when all aspects (position, rotation, FOV, and ortho factor) are complete
-        isComplete = positionComplete && rotationComplete && fovComplete && orthoComplete;
+        // Only mark as complete when position, rotation and FOV are complete
+        isComplete = positionComplete && rotationComplete && fovComplete;
         
         // Log the current target rotation and actual rotation values
         if (Craneshot.LOGGER.isDebugEnabled()) {
-            Craneshot.LOGGER.debug("FreeCamReturnMovement progress - Position: {} / {} blocks, Rotation: {},{} -> {},{}, FOV: {} -> {}, Ortho: {} -> {}",
+            Craneshot.LOGGER.debug("FreeCamReturnMovement progress - Position: {} / {} blocks, Rotation: {},{} -> {},{}, FOV: {} -> {}",
                 String.format("%.2f", remainingDistance),
                 String.format("%.2f", completionThreshold),
                 String.format("%.1f", current.getYaw()),
@@ -296,9 +268,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
                 String.format("%.1f", end.getYaw()),
                 String.format("%.1f", end.getPitch()),
                 String.format("%.2f", current.getFovMultiplier()),
-                String.format("%.2f", end.getFovMultiplier()),
-                String.format("%.2f", current.getOrthoFactor()),
-                String.format("%.2f", end.getOrthoFactor()));
+                String.format("%.2f", end.getFovMultiplier()));
         }
         
         return new MovementState(current, isComplete);
@@ -342,10 +312,8 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
      * @param pitch The new pitch angle
      */
     private void updateEndPosition(Vec3d position, float yaw, float pitch) {
-        // Preserve the orthographic factor when updating the end position
-        float orthoFactor = end.getOrthoFactor();
         float fovMultiplier = end.getFovMultiplier();
-        end = new CameraTarget(position, yaw, pitch, fovMultiplier, orthoFactor);
+        end = new CameraTarget(position, yaw, pitch, fovMultiplier);
     }
     
     /**
@@ -356,19 +324,6 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
      * @param orthoEnabled Whether orthographic mode should be enabled
      */
     public void setForcedOrthoState(boolean orthoEnabled) {
-        this.hasForcedOrthoState = true;
-        this.forcedOrthoState = orthoEnabled;
-        Craneshot.LOGGER.info("Setting forced ortho state: {}", orthoEnabled);
-        
-        // Update the target ortho factors immediately to match
-        float orthoFactor = orthoEnabled ? 1.0f : 0.0f;
-        this.end.setOrthoFactor(orthoFactor);
-        
-        // If we haven't started yet, also set the start/current ortho factor
-        // to create a smooth transition from the current state
-        if (!isStarted) {
-            this.start.setOrthoFactor(orthoFactor);
-            this.current.setOrthoFactor(orthoFactor);
-        }
+        // No-op: orthographic projection removed
     }
 }
