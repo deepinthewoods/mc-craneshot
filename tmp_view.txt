@@ -1,0 +1,200 @@
+package ninja.trek.nodes.ui;
+
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.render.Camera;
+import net.minecraft.text.Text;
+import net.minecraft.util.math.Vec3d;
+import ninja.trek.camera.CameraSystem;
+import ninja.trek.nodes.NodeManager;
+import ninja.trek.nodes.model.Area;
+import ninja.trek.nodes.model.CameraNode;
+
+import java.util.List;
+
+public class NodeEditorScreen extends Screen {
+    private double lastMouseX, lastMouseY;
+    private boolean dragging = false;
+
+    public NodeEditorScreen() {
+        super(Text.literal("Node Edit"));
+    }
+
+    @Override protected void init() {
+        this.clearChildren();
+        int rightX = this.width - 120;
+        int y = 10;
+        int w = 110, h = 20, sp=4;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Color"), b-> {
+            client.setScreen(new ColorPickerModal(col -> {
+                CameraNode sel = NodeManager.get().getSelected();
+                if (sel != null) { sel.colorARGB = col; NodeManager.get().save(); }
+            }));
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Add Node"), b-> {
+            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+            if (cam != null) {
+                CameraNode n = NodeManager.get().addNode(cam.getPos());
+                NodeManager.get().setSelected(n.id);
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Delete Node"), b-> NodeManager.get().removeSelected())
+                .dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Add Area"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null) {
+                Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+                if (cam != null) NodeManager.get().addAreaTo(sel, cam.getPos());
+                this.init(client, this.width, this.height);
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Set LookAt"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+            if (sel != null && cam != null) NodeManager.get().setLookAt(sel, cam.getPos());
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Unset LookAt"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null) NodeManager.get().unsetLookAt(sel);
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        // Node type and DroneShot controls for selected node
+        CameraNode selType = NodeManager.get().getSelected();
+        if (selType != null) {
+            addDrawableChild(ButtonWidget.builder(Text.literal("Type: "+selType.type), b-> {
+                selType.type = (selType.type == ninja.trek.nodes.model.NodeType.CAMERA_CONTROL)
+                        ? ninja.trek.nodes.model.NodeType.DRONE_SHOT
+                        : ninja.trek.nodes.model.NodeType.CAMERA_CONTROL;
+                NodeManager.get().save();
+                this.init(client, this.width, this.height);
+            }).dimensions(rightX, y, w, h).build());
+            y += h + sp;
+
+            if (selType.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
+                // Radius controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("Radius -"), b-> {
+                    selType.droneRadius = Math.max(0.5, selType.droneRadius - 0.5);
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.droneRadius = selType.droneRadius + 0.5;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+
+                // Speed controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("Speed -"), b-> {
+                    selType.droneSpeedDegPerSec = Math.max(0.0, selType.droneSpeedDegPerSec - 5.0);
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.droneSpeedDegPerSec = selType.droneSpeedDegPerSec + 5.0;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+
+                // Start angle controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("Angle -"), b-> {
+                    selType.droneStartAngleDeg = (selType.droneStartAngleDeg - 5.0 + 360.0) % 360.0;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.droneStartAngleDeg = (selType.droneStartAngleDeg + 5.0) % 360.0;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+            }
+        }
+
+        // Build area list buttons for selected node
+        CameraNode sel = NodeManager.get().getSelected();
+        if (sel != null) {
+            int listX = this.width - 240;
+            int listY = 10;
+            int idx = 0;
+            for (Area a : sel.areas) {
+                final int areaIndex = idx++;
+                addDrawableChild(ButtonWidget.builder(Text.literal("Edit Area "+areaIndex), b-> {
+                    client.setScreen(new AreaSettingsModal(a, updated -> {
+                        NodeManager.get().save();
+                        client.setScreen(this);
+                    }));
+                }).dimensions(listX, listY, 100, 18).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("-"), b-> {
+                    NodeManager.get().removeArea(sel, a);
+                    this.init(client, this.width, this.height);
+                }).dimensions(listX+105, listY, 18, 18).build());
+                listY += 22;
+            }
+        }
+    }
+
+    @Override public boolean shouldPause() { return false; }
+
+    @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        this.renderBackground(context);
+        super.render(context, mouseX, mouseY, delta);
+
+        // Render area list for selected node
+        int rightX = this.width - 240;
+        int y = 10;
+        CameraNode sel = NodeManager.get().getSelected();
+        if (sel != null) {
+            List<Area> areas = sel.areas;
+            int i=0;
+            for (Area a : areas) {
+                context.drawText(textRenderer, Text.literal("Area "+i+" ("+a.shape+") min:"+(int)a.minRadius+" max:"+(int)a.maxRadius), rightX, y, 0xFFFFFF, true);
+                y+=12;
+            }
+        } else {
+            context.drawText(textRenderer, Text.literal("No node selected"), rightX, y, 0xAAAAAA, true);
+        }
+    }
+
+    @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            dragging = true;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            // Select nearest node on click
+            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+            if (cam != null) {
+                NodeManager.get().selectNearestToScreen(mouseX, mouseY, this.width, this.height, cam);
+                // Rebuild area list for new selection
+                this.init(client, this.width, this.height);
+            }
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0) dragging = false;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (dragging) {
+            // Rotate camera while dragging
+            double sens = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
+            double calc = 0.6 * sens * sens * sens + 0.2;
+            CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55D, -deltaY * calc * 0.55D, 1.0);
+            lastMouseX = mouseX; lastMouseY = mouseY;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+}

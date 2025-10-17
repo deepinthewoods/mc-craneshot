@@ -105,8 +105,10 @@ public class CraneshotClient implements ClientModInitializer {
                         KB_CAT_CAMERA
                 ))
         };
-		CameraMovementRegistry.initialize();
-		GeneralSettingsIO.loadSettings();
+        CameraMovementRegistry.initialize();
+        // Load camera nodes from client config
+        ninja.trek.nodes.NodeManager.get().load();
+        GeneralSettingsIO.loadSettings();
 
 		List<List<ICameraMovement>> savedSlots = SlotSettingsIO.loadSlots();
 		MOVEMENT_MANAGER.setAllSlots(savedSlots);

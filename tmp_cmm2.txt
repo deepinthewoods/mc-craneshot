@@ -1,0 +1,200 @@
+                if (originalMovement instanceof AbstractMovementSettings) {
+                    AbstractMovementSettings originalSettings = (AbstractMovementSettings) originalMovement;
+                    freeCamReturnMovement.endTarget = originalSettings.getEndTarget();
+                }
+                
+                // Check if we have a current target and preserve its orthographic state
+                if (baseTarget != null) {
+                    // Get the orthographic state from the base target
+                    float orthoFactor = baseTarget.getOrthoFactor();
+                    boolean shouldBeOrtho = orthoFactor > 0.5f;
+                    
+                    ninja.trek.Craneshot.LOGGER.info("Preserving ortho factor {} during FreeCamReturn", 
+                                                     orthoFactor);
+                    
+                    // Set the orthographic state for the return movement
+                    freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
+                }
+                
+                freeCamReturnMovement.start(client, camera);
+                
+                // Set the FreeCamReturnMovement as the active movement
+                activeMovement = freeCamReturnMovement;
+                inFreeCamReturnPhase = true;
+                
+                // Reset the keyboard movement flag
+                CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
+                
+                // We'll keep track of the original movement to queue its reset after FreeCamReturnMovement completes
+                return;
+            } else if (inFreeCameraMode) {
+                // If we're in free camera mode but haven't moved with keyboard, log this information
+                ninja.trek.Craneshot.LOGGER.info("In free camera mode but no keyboard movement detected - using regular camera return");
+                
+                // Log the current camera modes for debugging
+                AbstractMovementSettings.POST_MOVE_KEYS keyMode = CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode;
+                AbstractMovementSettings.POST_MOVE_MOUSE mouseMode = CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode;
+                ninja.trek.Craneshot.LOGGER.info("Current modes - Key: {}, Mouse: {}", keyMode, mouseMode);
+            }
+            
+            // Normal case - queue reset directly
+            // This will trigger return to the player's head position and rotation
+            activeMovement.queueReset(client, camera);
+            
+            // Reset the keyboard movement flag
+            CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
+        }
+    }
+
+    public void handleKeyStateChange(int keyIndex, boolean pressed, MinecraftClient client, Camera camera, boolean isToggleMode) {
+        if (pressed) {
+            // Key press logic
+            keyPressStartTimes.put(keyIndex, System.currentTimeMillis());
+            hasScrolledDuringPress.put(keyIndex, false);
+
+            // Initialize scroll selection to current type
+            scrollSelectedTypes.put(keyIndex, currentTypes.get(keyIndex));
+
+            // Show current movement name
+            List<ICameraMovement> movements = slots.get(keyIndex);
+            if (!movements.isEmpty()) {
+                ICameraMovement movement = movements.get(scrollSelectedTypes.get(keyIndex));
+                CraneshotClient.CAMERA_CONTROLLER.showMessage(
+                        "Camera " + (keyIndex + 1) + ": " + movement.getName()
+                );
+            }
+        } else {
+            // Key release logic
+            if (keyPressStartTimes.containsKey(keyIndex)) {
+                keyPressStartTimes.remove(keyIndex);
+
+                if (activeMovementSlot != null && !activeMovementSlot.equals(keyIndex)) {
+                    toggledStates.put(activeMovementSlot, false);
+                    finishTransition(client, camera);
+                }
+
+                if (!isToggleMode || (isToggleMode && !toggledStates.getOrDefault(keyIndex, false))) {
+                    // Determine which movement to use
+                    int selectedType = scrollSelectedTypes.get(keyIndex);
+                    boolean hasScrolled = hasScrolledDuringPress.getOrDefault(keyIndex, false);
+
+                    if (!hasScrolled && GeneralMenuSettings.isAutoAdvance()) {
+                        // Auto advance to next movement if no scrolling occurred
+                        List<ICameraMovement> movements = slots.get(keyIndex);
+                        selectedType = (currentTypes.get(keyIndex) + 1) % movements.size();
+                    }
+
+                    // Update current type and start transition
+                    currentTypes.set(keyIndex, selectedType);
+                    startTransition(client, camera, keyIndex);
+
+                    if (isToggleMode) {
+                        toggledStates.put(keyIndex, true);
+                    }
+                } else if (isToggleMode && toggledStates.getOrDefault(keyIndex, false)) {
+                    toggledStates.put(keyIndex, false);
+                    finishTransition(client, camera);
+                }
+
+                // Clear scroll state
+                hasScrolledDuringPress.remove(keyIndex);
+            }
+        }
+    }
+
+    public MovementState calculateState(MinecraftClient client, Camera camera) {
+        if (activeMovement == null || client.player == null) {
+            return null;
+        }
+        
+        // Check if we're in FreeCamReturn phase
+        if (inFreeCamReturnPhase) {
+            FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
+            if (activeMovement == freeCamReturnMovement) {
+                MovementState state = freeCamReturnMovement.calculateState(client, camera);
+                baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                
+                // Check if FreeCamReturnMovement has completed
+                if (state.isComplete() || freeCamReturnMovement.isComplete()) {
+                    ninja.trek.Craneshot.LOGGER.info("FreeCamReturnMovement completed, returning to normal camera");
+                    
+                    // Get the final ortho factor from the state
+                    float finalOrthoFactor = state.getCameraTarget().getOrthoFactor();
+                    ninja.trek.Craneshot.LOGGER.info("Final ortho factor: {}", finalOrthoFactor);
+                    
+                    // Log the final orthographic factor for debugging
+                    boolean shouldBeInOrthoMode = finalOrthoFactor > 0.5f;
+                    ninja.trek.Craneshot.LOGGER.info("Final orthographic state: {}", shouldBeInOrthoMode ? "enabled" : "disabled");
+                    
+                    // Reset the FreeCamReturnMovement phase
+                    inFreeCamReturnPhase = false;
+                    
+                    // Switch back to normal camera movement - normal state
+                    activeMovementSlot = null;
+                    activeMovement = null;
+                    isOut = false;
+                    
+                    // Make sure to fully deactivate the camera system to restore default camera behavior
+                    CameraSystem cameraSystem = CameraSystem.getInstance();
+                    cameraSystem.deactivateCamera();
+                    
+                    // Explicitly reset camera state in controller - this prevents camera lock
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePos();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYaw();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getPitch();
+                    
+                    // Clear any post-move states to ensure default behavior
+                    CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+
+                    // Defensive: ensure mouse interception is disabled when return completes
+                    // This guarantees vanilla mouse look is restored even if other callbacks change.
+                    ninja.trek.MouseInterceptor.setIntercepting(false);
+                    
+                    // Notify controller of completion
+                    CraneshotClient.CAMERA_CONTROLLER.onComplete();
+                    
+                    // CRITICAL FIX: Set baseTarget to null to force default camera behavior
+                    // This fixes the issue with orthographic projections persisting
+                    baseTarget = null;
+                    
+                    // Log the reset for debugging
+                    ninja.trek.Craneshot.LOGGER.info("Camera reset complete - base target nullified, ortho factor reset");
+                    
+                    return null;
+                }
+                
+                return state;
+            }
+        }
+        
+        // Normal movement state calculation
+        MovementState state = activeMovement.calculateState(client, camera);
+        if (!isOut) {
+            isOut = activeMovement.hasCompletedOutPhase();
+            if (isOut) {
+                // CRITICAL FIX: Get the exact current target position from the movement
+                CameraTarget currentTarget = state.getCameraTarget();
+                
+                // Apply raycast adjustment for collision
+                currentTarget = currentTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                
+                // Set the base target for reference
+                baseTarget = currentTarget;
+                
+                // Store the exact position in static controller variables
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentTarget.getPosition();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentTarget.getYaw();
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentTarget.getPitch();
+                
+                // Note the FOV multiplier is already being properly interpolated in the movement's
+                // calculateState method, we're just capturing it here for post-move phase
+                // The value in currentTarget already has the correct FOV multiplier
+                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Current FOV multiplier: {}", currentTarget.getFovMultiplier());
+                
+                // Set the camera directly to this position before applying post-move settings
+                if (camera != null) {
+                    ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
+                    ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
+                    
+                    // Log position for debugging
+                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}", 

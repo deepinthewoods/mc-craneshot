@@ -1,0 +1,156 @@
+        Vec3d targetVelocity = calculateTargetVelocity(mc, baseSpeed);
+        boolean isMoved = false;
+
+        if (targetVelocity.lengthSquared() > 0.0001) {
+            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).multiply(acceleration));
+            isMoved = true;
+        } else {
+            cameraVelocity = cameraVelocity.multiply(1.0 - deceleration);
+            if (cameraVelocity.lengthSquared() < 0.0001) {
+                cameraVelocity = Vec3d.ZERO;
+            } else {
+                isMoved = true;
+            }
+        }
+
+        cameraPosition = cameraPosition.add(cameraVelocity);
+
+        Camera camera = mc.gameRenderer.getCamera();
+        if (camera != null) {
+            updateCamera(camera);
+        }
+        return isMoved;
+    }
+
+    /**
+     * Calculates the target velocity from input.
+     */
+    private Vec3d calculateTargetVelocity(MinecraftClient mc, float baseSpeed) {
+        boolean isFreeMode = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+
+        double x = 0, y = 0, z = 0;
+        if (mc.options.forwardKey.isPressed()) z += 1.0;
+        if (mc.options.backKey.isPressed()) z -= 1.0;
+        if (mc.options.leftKey.isPressed()) x += 1.0;
+        if (mc.options.rightKey.isPressed()) x -= 1.0;
+        if (mc.options.jumpKey.isPressed()) y += 1.0;
+        if (mc.options.sneakKey.isPressed()) y -= 1.0;
+
+        if (x == 0 && y == 0 && z == 0) return Vec3d.ZERO;
+
+        if (mc.options.sprintKey.isPressed()) baseSpeed *= 3.0f;
+
+        if ((x != 0 && z != 0) || (x != 0 && y != 0) || (z != 0 && y != 0)) {
+            double len = Math.sqrt(x * x + y * y + z * z);
+            x /= len; y /= len; z /= len;
+        }
+
+        Vec3d velocity;
+        if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
+            double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
+            double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
+            double moveX = (x * zFactor - z * xFactor);
+            double moveZ = (z * zFactor + x * xFactor);
+            velocity = new Vec3d(moveX, y, moveZ);
+        } else if (isFreeMode) {
+            double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
+            double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
+            double pitchFactor = Math.sin(cameraPitch * Math.PI / 180.0);
+            double moveX = (x * zFactor - z * xFactor);
+            double moveY = y;
+            double moveZ = (z * zFactor + x * xFactor);
+            if (Math.abs(cameraPitch) > 30) {
+                moveY -= z * pitchFactor * 0.5;
+            }
+            velocity = new Vec3d(moveX, moveY, moveZ);
+        } else {
+            velocity = new Vec3d(x, y, z);
+        }
+
+        return velocity.lengthSquared() > 0.0001 ? velocity.normalize().multiply(baseSpeed) : Vec3d.ZERO;
+    }
+
+    /**
+     * Mouse rotation update.
+     */
+    public void updateRotation(double deltaX, double deltaY, double sensitivity) {
+        if (!cameraActive) return;
+        cameraYaw += deltaX * sensitivity;
+        while (cameraYaw > 360.0f) cameraYaw -= 360.0f;
+        while (cameraYaw < 0.0f) cameraYaw += 360.0f;
+        cameraPitch = (float) MathHelper.clamp(cameraPitch - deltaY * sensitivity, -90.0f, 90.0f);
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc != null) {
+            Camera camera = mc.gameRenderer.getCamera();
+            if (camera != null) updateCamera(camera);
+        }
+    }
+
+    public void setCameraPosition(Vec3d position) {
+        if (position == null) return;
+        this.cameraPosition = position;
+        if (cameraActive) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc != null) {
+                Camera camera = mc.gameRenderer.getCamera();
+                if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
+            }
+        }
+    }
+
+    public void setCameraRotation(float yaw, float pitch) {
+        this.cameraYaw = yaw;
+        this.cameraPitch = pitch;
+        if (cameraActive) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc != null) {
+                Camera camera = mc.gameRenderer.getCamera();
+                if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+            }
+        }
+    }
+
+    public Vec3d getCameraPosition() { return cameraPosition; }
+    public float getCameraYaw() { return cameraYaw; }
+    public float getCameraPitch() { return cameraPitch; }
+    public boolean isCameraActive() { return cameraActive; }
+
+    public boolean shouldRenderHands() {
+        if (!shouldRenderHands) return false;
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && cameraActive) {
+            double d = cameraPosition.distanceTo(mc.player.getEyePos());
+            return d < PLAYER_RENDER_THRESHOLD;
+        }
+        return shouldRenderHands;
+    }
+
+    public boolean shouldRenderPlayerModel() {
+        if (!shouldRenderPlayerModel) return false;
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null && cameraActive) {
+            double d = cameraPosition.distanceTo(mc.player.getEyePos());
+            return d >= PLAYER_RENDER_THRESHOLD;
+        }
+        return shouldRenderPlayerModel;
+    }
+
+    public void setShouldRenderHands(boolean renderHands) {
+        this.shouldRenderHands = renderHands;
+    }
+
+    public static class CameraMode {
+        public final boolean hideHands;
+        public final boolean showPlayerModel;
+        public final boolean disableChunkCulling;
+        public CameraMode(boolean hideHands, boolean showPlayerModel, boolean disableChunkCulling) {
+            this.hideHands = hideHands;
+            this.showPlayerModel = showPlayerModel;
+            this.disableChunkCulling = disableChunkCulling;
+        }
+        public static final CameraMode THIRD_PERSON = new CameraMode(true, true, true);
+        public static final CameraMode FREE_CAMERA = new CameraMode(true, false, true);
+        public static final CameraMode FIRST_PERSON = new CameraMode(false, false, false);
+    }
+
+}

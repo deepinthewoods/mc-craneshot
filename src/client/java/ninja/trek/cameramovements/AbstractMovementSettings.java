@@ -32,7 +32,8 @@ public abstract class AbstractMovementSettings {
     public enum END_TARGET {HEAD_BACK, HEAD_FRONT, VELOCITY_BACK, VELOCITY_FRONT, FIXED_BACK, FIXED_FRONT}
     public enum POST_MOVE_MOUSE {
         NONE,       // Default behavior
-        ROTATE_CAMERA // Allow free mouse control after movement
+        ROTATE_CAMERA, // Allow free mouse control after movement
+        NODE_EDIT // Enable camera nodes edit overlay (requires MOVE_CAMERA_* keys)
            // Allow WASD movement after movement
     }
 

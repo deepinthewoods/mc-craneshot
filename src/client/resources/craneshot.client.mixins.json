@@ -11,7 +11,8 @@
 		"KeyboardInputMixin",
 		"MouseAccessor",
 		"MouseMixin",
-		"EntityRenderDispatcherMixin"
+		"EntityRenderDispatcherMixin",
+		"WorldRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

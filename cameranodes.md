@@ -25,6 +25,6 @@ Actual nodes will render as a solid square with the node's colour, with animated
 We'll use the areas to calculate an interpolation factor for the camera based on player position. Area maximum is where it will start to influence the camera, area minimum is where the node will have 100% influence on the camera. Overlapping areas will add together and normalize if total is more than 100%. So as the player moves towards the min area the camera will move towards the node. 
 Each node will also optionally have a LookAt point associated with it. We will interpolate the camera rotation to in a similar way to the position but we'll calculated the camera position first, then calculate direction of LookAt point from there and interpolate towards that angle. LookAt points will render as 2 small concentric circles, connected to the node with chevrons >>. .
 
-
+I would like this to be able to work if the server doesn't have it installed, so it could save the nodes client-side, but also if the server has it installed it should save nodes server-side and send them to all players.
 
 

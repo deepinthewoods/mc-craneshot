@@ -1,0 +1,80 @@
+            
+            // Reset keyboard input handling
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(false);
+            }
+            
+            // Disable camera system
+            CameraSystem.getInstance().deactivateCamera();
+            // Close node editor if open
+            net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (_mc != null && _mc.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                _mc.setScreen(null);
+            }
+            ninja.trek.nodes.NodeManager.get().setEditing(false);
+        } else {
+            // Set new movement modes
+            currentMouseMoveMode = m.getPostMoveMouse();
+            currentKeyMoveMode = m.getPostMoveKeys();
+
+            MinecraftClient client = MinecraftClient.getInstance();
+            Camera camera = client.gameRenderer.getCamera();
+            
+            // Reset the keyboard movement tracking flag when entering a new camera mode
+            hasMovedWithKeyboard = false;
+            
+            // This is where the position must be preserved
+            // freeCamPosition, freeCamYaw, and freeCamPitch should already be set by CameraMovementManager
+            // before this method is called, so we don't need to capture them again here
+            
+            // Handle input disabling
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                boolean shouldDisable = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                        currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+                ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
+            }
+
+            // Enable mouse interception for camera rotation
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
+                MouseInterceptor.setIntercepting(true);
+            }
+            // Handle node edit overlay activation
+            if (currentMouseMoveMode == POST_MOVE_MOUSE.NODE_EDIT) {
+                boolean keysOk = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT || currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+                if (keysOk) {
+                    ninja.trek.nodes.NodeManager.get().setEditing(true);
+                    if (!(client.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen)) {
+                        client.setScreen(new ninja.trek.nodes.ui.NodeEditorScreen());
+                    }
+                } else {
+                    currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+                    ninja.trek.nodes.NodeManager.get().setEditing(false);
+                }
+            } else {
+                // Ensure editor closed if not in node edit mode
+                if (client.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                    client.setScreen(null);
+                }
+                ninja.trek.nodes.NodeManager.get().setEditing(false);
+            }
+            
+            // Determine if we should activate custom camera mode
+            boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                                    currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA);
+            
+            boolean isOutPosition = (currentEndTarget == AbstractMovementSettings.END_TARGET.HEAD_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.FIXED_BACK ||
+                                    currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK);
+            
+            // Capture existing camera position before activating any new camera mode
+            Vec3d existingCameraPos = camera.getPos();
+            float existingYaw = camera.getYaw();
+            float existingPitch = camera.getPitch();
+            
+            // Activate the appropriate camera mode
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            if (isFreeCamMode) {
+                // Set the position first, so it's available during activation
+                cameraSystem.setCameraPosition(freeCamPosition);

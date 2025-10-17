@@ -1,0 +1,164 @@
+                        currentTarget.getPosition().getX(), 
+                        currentTarget.getPosition().getY(), 
+                        currentTarget.getPosition().getZ());
+                }
+                
+                // Apply post-move settings AFTER we've captured and set the position
+                AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
+            }
+        }
+        if (state.isComplete()) {
+            // Store final camera position before ending movement
+            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+            baseTarget = finalTarget;
+            
+            // Clean up movement state
+            Integer previousSlot = activeMovementSlot;
+            ICameraMovement previousMovement = activeMovement;
+            
+            // Reset movement tracking variables
+            activeMovement = null;
+            activeMovementSlot = null;
+            if (previousSlot != null) {
+                toggledStates.put(previousSlot, false);
+            }
+            
+            // Only clear post-move states if we don't have an active post-movement setting
+            if (previousMovement instanceof AbstractMovementSettings) {
+                AbstractMovementSettings settings = (AbstractMovementSettings) previousMovement;
+                boolean hasPostSettings = settings.getPostMoveMouse() != AbstractMovementSettings.POST_MOVE_MOUSE.NONE || 
+                                          settings.getPostMoveKeys() != AbstractMovementSettings.POST_MOVE_KEYS.NONE;
+                                          
+                if (!hasPostSettings) {
+                    CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                }
+            } else {
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+            }
+            
+            // Notify controller of completion, but maintain final camera position
+            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            
+            // Return the final state to ensure one last smooth frame
+            return new MovementState(finalTarget, true);
+        }
+
+        baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+        return state;
+    }
+
+    public CameraTarget update(MinecraftClient client, Camera camera) {
+        // When no active movement, stop driving the camera explicitly.
+        // Returning null prevents Controller from pinning camera to a stale target.
+        if (activeMovement == null || client.player == null) {
+            return null;
+        }
+        
+        MovementState state = calculateState(client, camera);
+        if (state == null) {
+            // If we have no state but had a previous target, return it
+            return baseTarget;
+        }
+        
+        // Get the raycast type safely with a null check
+        RaycastType raycastType = RaycastType.NONE; // Default to NONE
+        if (activeMovement != null) { // Explicit null check before calling getRaycastType
+            raycastType = activeMovement.getRaycastType();
+        }
+        
+        // At this point we have a valid state and raycast type
+        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, raycastType);
+        ninja.trek.Craneshot.LOGGER.debug("CameraMovementManager.update - orthoFactor={}", 
+                                         adjustedTarget != null ? adjustedTarget.getOrthoFactor() : "null");
+        return adjustedTarget;
+    }
+
+    public Integer getActiveMovementSlot() {
+        return activeMovementSlot;
+    }
+
+    public ICameraMovement getActiveMovement() {
+        return activeMovement;
+    }
+
+    public List<List<ICameraMovement>> getSlots() {
+        return slots;
+    }
+
+    // Add this method to CameraMovementManager class
+    public int getCurrentTypeForSlot(int slotIndex) {
+        if (slotIndex >= 0 && slotIndex < currentTypes.size()) {
+            return currentTypes.get(slotIndex);
+        }
+        return 0;
+    }
+
+    /**
+     * Cycles the current movement type in the given slot.
+     * @param forward if true, cycles forward; if false, cycles backward.
+     * @param wrap whether to wrap around the list.
+     */
+    public void cycleMovementType(boolean forward, int slotIndex, boolean wrap) {
+        if (slotIndex < 0 || slotIndex >= slots.size()) return;
+        List<ICameraMovement> slotMovements = slots.get(slotIndex);
+        if (slotMovements.isEmpty()) return;
+
+        int currentType = currentTypes.get(slotIndex);
+        int newType;
+        if (forward) {
+            newType = wrap ? (currentType + 1) % slotMovements.size() : Math.min(currentType + 1, slotMovements.size() - 1);
+        } else {
+            newType = wrap ? (currentType - 1 + slotMovements.size()) % slotMovements.size() : Math.max(currentType - 1, 0);
+        }
+        currentTypes.set(slotIndex, newType);
+    }
+
+    public boolean hasActiveMovement() {
+        return activeMovement != null;
+    }
+
+    public AbstractMovementSettings.SCROLL_WHEEL getActiveMouseWheelMode() {
+        if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
+            return ((AbstractMovementSettings) activeMovement).mouseWheel;
+        }
+        return AbstractMovementSettings.SCROLL_WHEEL.NONE;
+    }
+    
+    /**
+     * Gets the current camera target, which is used for rendering and projection calculations.
+     * @return The current camera target, or null if no active movement.
+     */
+    public CameraTarget getCurrentTarget() {
+        // Only return a target if we have an active movement
+        if (activeMovement != null && baseTarget != null) {
+            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning baseTarget with orthoFactor={}", baseTarget.getOrthoFactor());
+            return baseTarget;
+        } else if (baseTarget != null && activeMovement == null) {
+            // If we have a baseTarget but no active movement, log this inconsistency and return null
+            ninja.trek.Craneshot.LOGGER.warn("Inconsistent state: baseTarget exists but no active movement - returning null");
+            // Force clear the stale base target
+            baseTarget = null;
+            return null;
+        } else {
+            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning null (no active movement)");
+            return null;
+        }
+    }
+    
+    /**
+     * Checks if orthographic mode should currently be active based on the active movement's settings
+     * @return true if orthographic mode should be active, false otherwise
+     */
+    public boolean isOrthographicMode() {
+        return false;
+    }
+    
+    /**
+     * Gets the current orthographic scale factor based on active movement settings
+     * @return The ortho scale value, or a default value if no active settings
+     */
+    public float getOrthoScale() {
+        return 20.0f;
+    }
+}
