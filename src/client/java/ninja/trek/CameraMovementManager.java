@@ -112,7 +112,6 @@ public class CameraMovementManager {
     public void handleMouseScroll(int slotIndex, boolean scrollUp) {
 
         if (slotIndex < 0 || slotIndex >= slots.size()) return;
-        Craneshot.LOGGER.info("scroll up:{}", scrollUp);
 
         List<ICameraMovement> slotMovements = slots.get(slotIndex);
         if (slotMovements.isEmpty()) return;
@@ -185,7 +184,6 @@ public class CameraMovementManager {
 
             // Only use FreeCamReturnMovement if we've actually moved with keyboard
             if (inFreeCameraMode && CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard) {
-                ninja.trek.Craneshot.LOGGER.info("Starting FreeCamReturnMovement to handle return from free camera (keyboard moved)");
                 
                 // Store the original active movement to return to after FreeCamReturnMovement completes
                 ICameraMovement originalMovement = activeMovement;
@@ -209,8 +207,7 @@ public class CameraMovementManager {
                     float orthoFactor = baseTarget.getOrthoFactor();
                     boolean shouldBeOrtho = orthoFactor > 0.5f;
                     
-                    ninja.trek.Craneshot.LOGGER.info("Preserving ortho factor {} during FreeCamReturn", 
-                                                     orthoFactor);
+                    // logging removed
                     
                     // Set the orthographic state for the return movement
                     freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
@@ -228,13 +225,7 @@ public class CameraMovementManager {
                 // We'll keep track of the original movement to queue its reset after FreeCamReturnMovement completes
                 return;
             } else if (inFreeCameraMode) {
-                // If we're in free camera mode but haven't moved with keyboard, log this information
-                ninja.trek.Craneshot.LOGGER.info("In free camera mode but no keyboard movement detected - using regular camera return");
-                
-                // Log the current camera modes for debugging
-                AbstractMovementSettings.POST_MOVE_KEYS keyMode = CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode;
-                AbstractMovementSettings.POST_MOVE_MOUSE mouseMode = CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode;
-                ninja.trek.Craneshot.LOGGER.info("Current modes - Key: {}, Mouse: {}", keyMode, mouseMode);
+                // No keyboard movement detected - using regular camera return
             }
             
             // Normal case - queue reset directly
@@ -302,7 +293,7 @@ public class CameraMovementManager {
         }
     }
 
-    public MovementState calculateState(MinecraftClient client, Camera camera) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
         if (activeMovement == null || client.player == null) {
             return null;
         }
@@ -311,20 +302,20 @@ public class CameraMovementManager {
         if (inFreeCamReturnPhase) {
             FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
             if (activeMovement == freeCamReturnMovement) {
-                MovementState state = freeCamReturnMovement.calculateState(client, camera);
+                MovementState state = freeCamReturnMovement.calculateState(client, camera, tickDelta);
                 baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
                 
                 // Check if FreeCamReturnMovement has completed
                 if (state.isComplete() || freeCamReturnMovement.isComplete()) {
-                    ninja.trek.Craneshot.LOGGER.info("FreeCamReturnMovement completed, returning to normal camera");
+                    // logging removed
                     
                     // Get the final ortho factor from the state
                     float finalOrthoFactor = state.getCameraTarget().getOrthoFactor();
-                    ninja.trek.Craneshot.LOGGER.info("Final ortho factor: {}", finalOrthoFactor);
+                    // logging removed
                     
                     // Log the final orthographic factor for debugging
                     boolean shouldBeInOrthoMode = finalOrthoFactor > 0.5f;
-                    ninja.trek.Craneshot.LOGGER.info("Final orthographic state: {}", shouldBeInOrthoMode ? "enabled" : "disabled");
+                    // logging removed
                     
                     // Reset the FreeCamReturnMovement phase
                     inFreeCamReturnPhase = false;
@@ -358,7 +349,7 @@ public class CameraMovementManager {
                     baseTarget = null;
                     
                     // Log the reset for debugging
-                    ninja.trek.Craneshot.LOGGER.info("Camera reset complete - base target nullified, ortho factor reset");
+                    // logging removed
                     
                     return null;
                 }
@@ -368,7 +359,7 @@ public class CameraMovementManager {
         }
         
         // Normal movement state calculation
-        MovementState state = activeMovement.calculateState(client, camera);
+        MovementState state = activeMovement.calculateState(client, camera, tickDelta);
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
             if (isOut) {
@@ -389,22 +380,17 @@ public class CameraMovementManager {
                 // Note the FOV multiplier is already being properly interpolated in the movement's
                 // calculateState method, we're just capturing it here for post-move phase
                 // The value in currentTarget already has the correct FOV multiplier
-                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Current FOV multiplier: {}", currentTarget.getFovMultiplier());
+                // logging removed
                 
                 // Log post-move settings and apply snap
                 AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
-                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - postMoveMouse={} postMoveKeys={}",
-                        settings != null ? settings.getPostMoveMouse() : null,
-                        settings != null ? settings.getPostMoveKeys() : null);
+                // logging removed
                 if (camera != null) {
                     ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
                     ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
-                    ninja.trek.Craneshot.LOGGER.info("OUT PHASE - Setting exact camera position: {} {} {}",
-                            currentTarget.getPosition().getX(),
-                            currentTarget.getPosition().getY(),
-                            currentTarget.getPosition().getZ());
+                    // logging removed
                 }
-                ninja.trek.Craneshot.LOGGER.info("OUT PHASE - calling setPostMoveStates");
+                // logging removed
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
             }
         }
@@ -448,14 +434,14 @@ public class CameraMovementManager {
         return state;
     }
 
-    public CameraTarget update(MinecraftClient client, Camera camera) {
+    public CameraTarget update(MinecraftClient client, Camera camera, float tickDelta) {
         // When no active movement, stop driving the camera explicitly.
         // Returning null prevents Controller from pinning camera to a stale target.
         if (activeMovement == null || client.player == null) {
             return null;
         }
         
-        MovementState state = calculateState(client, camera);
+        MovementState state = calculateState(client, camera, tickDelta);
         if (state == null) {
             // If we have no state but had a previous target, return it
             return baseTarget;
@@ -469,8 +455,6 @@ public class CameraMovementManager {
         
         // At this point we have a valid state and raycast type
         CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, raycastType);
-        ninja.trek.Craneshot.LOGGER.debug("CameraMovementManager.update - orthoFactor={}", 
-                                         adjustedTarget != null ? adjustedTarget.getOrthoFactor() : "null");
         return adjustedTarget;
     }
 
@@ -532,16 +516,12 @@ public class CameraMovementManager {
     public CameraTarget getCurrentTarget() {
         // Only return a target if we have an active movement
         if (activeMovement != null && baseTarget != null) {
-            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning baseTarget with orthoFactor={}", baseTarget.getOrthoFactor());
             return baseTarget;
         } else if (baseTarget != null && activeMovement == null) {
-            // If we have a baseTarget but no active movement, log this inconsistency and return null
-            ninja.trek.Craneshot.LOGGER.warn("Inconsistent state: baseTarget exists but no active movement - returning null");
             // Force clear the stale base target
             baseTarget = null;
             return null;
         } else {
-            ninja.trek.Craneshot.LOGGER.debug("getCurrentTarget returning null (no active movement)");
             return null;
         }
     }

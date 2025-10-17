@@ -56,7 +56,7 @@ public class CameraSystem {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null) return;
         
-        ninja.trek.Craneshot.LOGGER.info("Activating camera in mode: {}", mode);
+        // logging removed
         
         // Get the current camera if available
         Camera currentCamera = mc.gameRenderer.getCamera();
@@ -69,8 +69,7 @@ public class CameraSystem {
             currentCameraPos = currentCamera.getPos();
             currentYaw = currentCamera.getYaw();
             currentPitch = currentCamera.getPitch();
-            ninja.trek.Craneshot.LOGGER.info("Current camera position: {} {} {}",
-                currentCameraPos.getX(), currentCameraPos.getY(), currentCameraPos.getZ());
+            // logging removed
         }
         
         // Only activate if not already active
@@ -79,7 +78,7 @@ public class CameraSystem {
             originalCameraEntity = mc.getCameraEntity();
             originalChunkCulling = mc.chunkCullingEnabled;
             
-            ninja.trek.Craneshot.LOGGER.info("Original camera entity: {}", originalCameraEntity);
+            // logging removed
             
             // Initialize camera position and rotation from either current camera (if available)
             // or from the player position
@@ -95,9 +94,7 @@ public class CameraSystem {
                 cameraPitch = originalCameraEntity.getPitch();
             }
             
-            ninja.trek.Craneshot.LOGGER.info("Initial camera position: {} {} {}", 
-                cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ());
-            ninja.trek.Craneshot.LOGGER.info("Initial camera rotation: {} {}", cameraYaw, cameraPitch);
+            // logging removed
             
             // Set camera flags based on mode
             shouldRenderHands = !mode.hideHands;
@@ -111,7 +108,7 @@ public class CameraSystem {
             if (mode == CameraMode.FREE_CAMERA) {
                 ninja.trek.util.CameraEntity.setCameraState(true);
             } else {
-                ninja.trek.Craneshot.LOGGER.info("Detaching camera from player (no entity override)");
+                // logging removed
                 mc.setCameraEntity(null);
             }
             
@@ -119,13 +116,13 @@ public class CameraSystem {
             
             // Explicitly apply position/rotation only if not using the dedicated camera entity
             if (currentCamera != null && mode != CameraMode.FREE_CAMERA) {
-                ninja.trek.Craneshot.LOGGER.info("Initial camera update");
+                // logging removed
                 ((CameraAccessor) currentCamera).invokesetPos(cameraPosition);
                 ((CameraAccessor) currentCamera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         } else {
             // Update settings if camera is already active
-            ninja.trek.Craneshot.LOGGER.info("Camera already active, updating settings");
+            // logging removed
             shouldRenderHands = !mode.hideHands;
             shouldRenderPlayerModel = mode.showPlayerModel;
             
@@ -144,7 +141,7 @@ public class CameraSystem {
 
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        ninja.trek.Craneshot.LOGGER.info("Deactivating camera system");
+        // logging removed
 
         // If using dedicated camera entity, disable it (restores chunk culling/camera entity)
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
@@ -152,10 +149,10 @@ public class CameraSystem {
         } else if (mc != null) {
             // Restore original settings
             if (originalCameraEntity != null) {
-                ninja.trek.Craneshot.LOGGER.info("Restoring original camera entity: {}", originalCameraEntity);
+                // logging removed
                 mc.setCameraEntity(originalCameraEntity);
             } else if (mc.player != null) {
-                ninja.trek.Craneshot.LOGGER.info("Setting camera entity to player");
+                // logging removed
                 mc.setCameraEntity(mc.player);
             }
             mc.chunkCullingEnabled = originalChunkCulling;
@@ -183,9 +180,7 @@ public class CameraSystem {
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
             return;
         }
-        ninja.trek.Craneshot.LOGGER.info("CameraSystem.updateCamera write (editing={}) pos={} yaw={} pitch={}",
-                ninja.trek.nodes.NodeManager.get().isEditing(),
-                cameraPosition, cameraYaw, cameraPitch);
+        // logging removed
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
     }
@@ -300,8 +295,7 @@ public class CameraSystem {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
-                ninja.trek.Craneshot.LOGGER.info("CameraSystem.setCameraPosition write (editing={}) pos={}",
-                        ninja.trek.nodes.NodeManager.get().isEditing(), cameraPosition);
+                // logging removed
                 if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
@@ -319,8 +313,7 @@ public class CameraSystem {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
-                ninja.trek.Craneshot.LOGGER.info("CameraSystem.setCameraRotation write (editing={}) yaw={} pitch={}",
-                        ninja.trek.nodes.NodeManager.get().isEditing(), cameraYaw, cameraPitch);
+                // logging removed
                 if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }

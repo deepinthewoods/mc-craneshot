@@ -4,7 +4,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
@@ -82,16 +81,15 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         isComplete = false;
         isStarted = true;
         
-        Craneshot.LOGGER.info("FreeCamReturnMovement started: {} -> {}, Original Target: {}", 
-            start.getPosition(), end.getPosition(), originalEndTarget);
+        // logging removed
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
         if (!isStarted || client.player == null) {
             return new MovementState(current, true);
         }
-        Craneshot.LOGGER.info("FreeCamReturnMovement processing");
+        // logging removed
         // Ensure the keyboard movement flag is reset when in the return phase
         // This prevents any issues if we resume normal movement during return
         ninja.trek.CameraController.hasMovedWithKeyboard = false;
@@ -110,10 +108,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             end = new CameraTarget(end.getPosition(), targetYaw, targetPitch, end.getFovMultiplier(), orthoFactor);
             
             // Log significant rotation changes (when greater than 1 degree)
-            if (Math.abs(targetYaw - oldYaw) > 1.0f || Math.abs(targetPitch - oldPitch) > 1.0f) {
-                Craneshot.LOGGER.debug("Updating HEAD_FRONT target rotation: yaw {} -> {}, pitch {} -> {}", 
-                    oldYaw, targetYaw, oldPitch, targetPitch);
-            }
+            // logging removed
         } else if (originalEndTarget == END_TARGET.HEAD_BACK) {
             // For HEAD_BACK target type, use the player's current orientation
             float targetYaw = client.player.getYaw();
@@ -126,10 +121,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             end = new CameraTarget(end.getPosition(), targetYaw, targetPitch, end.getFovMultiplier(), orthoFactor);
             
             // Log significant rotation changes (when greater than 1 degree)
-            if (Math.abs(targetYaw - oldYaw) > 1.0f || Math.abs(targetPitch - oldPitch) > 1.0f) {
-                Craneshot.LOGGER.debug("Updating HEAD_BACK target rotation: yaw {} -> {}, pitch {} -> {}", 
-                    oldYaw, targetYaw, oldPitch, targetPitch);
-            }
+            // logging removed
         } 
         // For VELOCITY and FIXED types, we keep the original end rotation since they're not
         // directly tied to the player's head orientation
@@ -140,7 +132,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         double moveDistance = moveVector.length();
         
         if (moveDistance > 0.01) {
-            double maxMove = positionSpeedLimit * (1.0/20.0); // Convert blocks/second to blocks/tick
+            double maxMove = positionSpeedLimit * (tickDelta/20.0);
             if (moveDistance > maxMove) {
                 Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
                 desired = current.getPosition().add(limitedMove);
@@ -162,7 +154,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
 
         // Apply rotation speed limit
-        float maxRotation = (float)(rotationSpeedLimit * (1.0/20.0));
+        float maxRotation = (float)(rotationSpeedLimit * (tickDelta/20.0));
         if (Math.abs(desiredYawSpeed) > maxRotation) {
             desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
         }
@@ -230,12 +222,6 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         if (Math.abs(newOrthoFactor - currentOrthoFactor) > 0.001f) {
             // Update the current ortho factor
             current.setOrthoFactor(newOrthoFactor);
-            
-            // Log significant changes
-            if (Math.abs(newOrthoFactor - currentOrthoFactor) > 0.05f) {
-                Craneshot.LOGGER.debug("Ortho transition using movement progress: {} -> {}, progress: {}", 
-                    currentOrthoFactor, newOrthoFactor, normalizedProgress);
-            }
         }
 
         // Update FOV in game renderer
@@ -259,17 +245,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         isComplete = positionComplete && rotationComplete && fovComplete;
         
         // Log the current target rotation and actual rotation values
-        if (Craneshot.LOGGER.isDebugEnabled()) {
-            Craneshot.LOGGER.debug("FreeCamReturnMovement progress - Position: {} / {} blocks, Rotation: {},{} -> {},{}, FOV: {} -> {}",
-                String.format("%.2f", remainingDistance),
-                String.format("%.2f", completionThreshold),
-                String.format("%.1f", current.getYaw()),
-                String.format("%.1f", current.getPitch()),
-                String.format("%.1f", end.getYaw()),
-                String.format("%.1f", end.getPitch()),
-                String.format("%.2f", current.getFovMultiplier()),
-                String.format("%.2f", end.getFovMultiplier()));
-        }
+        // logging removed
         
         return new MovementState(current, isComplete);
     }

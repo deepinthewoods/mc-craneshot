@@ -59,7 +59,7 @@ public class CraneShotEventHandler {
                 return mouseMixin.getLastScrollValue();
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error accessing mouse mixin: " + e.getMessage());
+            // logging removed
         }
         return 0;
     }
@@ -74,7 +74,7 @@ public class CraneShotEventHandler {
                 mouseMixin.setLastScrollValue(0);
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error resetting scroll value: " + e.getMessage());
+            // logging removed
         }
     }
 

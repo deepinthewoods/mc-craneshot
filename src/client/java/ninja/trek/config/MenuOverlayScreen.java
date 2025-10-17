@@ -344,9 +344,9 @@ public class MenuOverlayScreen extends Screen {
                 java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionEasing");
                 field.setAccessible(true);
                 positionEasing = (double)field.get(freeCamReturn);
-            } catch (Exception e) {
-                Craneshot.LOGGER.error("Failed to get positionEasing", e);
-            }
+        } catch (Exception e) {
+            // logging removed
+        }
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
@@ -373,9 +373,9 @@ public class MenuOverlayScreen extends Screen {
                 java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionSpeedLimit");
                 field.setAccessible(true);
                 positionSpeedLimit = (double)field.get(freeCamReturn);
-            } catch (Exception e) {
-                Craneshot.LOGGER.error("Failed to get positionSpeedLimit", e);
-            }
+        } catch (Exception e) {
+            // logging removed
+        }
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
@@ -402,9 +402,9 @@ public class MenuOverlayScreen extends Screen {
                 java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationEasing");
                 field.setAccessible(true);
                 rotationEasing = (double)field.get(freeCamReturn);
-            } catch (Exception e) {
-                Craneshot.LOGGER.error("Failed to get rotationEasing", e);
-            }
+        } catch (Exception e) {
+            // logging removed
+        }
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
@@ -431,9 +431,9 @@ public class MenuOverlayScreen extends Screen {
                 java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationSpeedLimit");
                 field.setAccessible(true);
                 rotationSpeedLimit = (double)field.get(freeCamReturn);
-            } catch (Exception e) {
-                Craneshot.LOGGER.error("Failed to get rotationSpeedLimit", e);
-            }
+        } catch (Exception e) {
+            // logging removed
+        }
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
@@ -560,9 +560,9 @@ public class MenuOverlayScreen extends Screen {
 
                         addDrawableChild(warningButton);
                     }
-                } catch (Exception e) {
-                    Craneshot.LOGGER.error("Error checking warning conditions", e);
-                }
+                    } catch (Exception e) {
+                        // logging removed
+                    }
             }
         } else {
             // For non-enum settings, keep the original label + control layout
@@ -802,7 +802,7 @@ public class MenuOverlayScreen extends Screen {
                 reinitialize();
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to paste movement", e);
+            // logging removed
         }
     }
 

@@ -101,8 +101,7 @@ public class RaycastUtil {
             BlockPos blockPos = BlockPos.ofFloored(pos);
             return client.world.getBlockState(blockPos).isAir();
         } catch (Exception e) {
-            // Log and fallback in case of any error
-            ninja.trek.Craneshot.LOGGER.error("Error checking if position is in air: {}", e.getMessage());
+            // Fallback in case of any error
             return true; // Assume air in case of error
         }
     }

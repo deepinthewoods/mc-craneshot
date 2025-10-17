@@ -53,7 +53,7 @@ public class SettingWidget {
                 }
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error checking warning conditions", e);
+            // logging removed
         }
 
         if (showWarning) {
@@ -117,14 +117,14 @@ public class SettingWidget {
                                 }
                             }
                         } catch (IllegalAccessException e) {
-                            Craneshot.LOGGER.error("Failed to update enum setting", e);
+                            // logging removed
                         }
                     }
             ).dimensions(x, y, width, height).build();
 
             return button;
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error creating enum button", e);
+            // logging removed
             return null;
         }
     }

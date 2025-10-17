@@ -150,9 +150,6 @@ public class CameraController {
 
     public void setPostMoveStates(AbstractMovementSettings m) {
         // If node edit is active, ignore requests to clear post-move state so freecam persists
-        ninja.trek.Craneshot.LOGGER.info("setPostMoveStates called with {} (editing={})",
-                (m == null ? "<null>" : m.getClass().getSimpleName()),
-                ninja.trek.nodes.NodeManager.get().isEditing());
         if (m == null) {
             // Reset state when movement ends
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -252,10 +249,6 @@ public class CameraController {
                 
                 // Update the camera immediately to apply our position
                 cameraSystem.updateCamera(camera);
-                
-                // Add debug logging
-                ninja.trek.Craneshot.LOGGER.info("Activating free camera at position: {} {} {}", 
-                    freeCamPosition.getX(), freeCamPosition.getY(), freeCamPosition.getZ());
             } else if (isOutPosition) {
                 cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
             }
@@ -400,7 +393,6 @@ public class CameraController {
             // Mark as moved with keyboard if acceleration is happening
             if (!hasMovedWithKeyboard) {
                 hasMovedWithKeyboard = true;
-                ninja.trek.Craneshot.LOGGER.info("Camera movement detected - enabling smooth return");
             }
         } else {
             // Decelerating
@@ -420,7 +412,7 @@ public class CameraController {
         updateControlStick(client);
 
         // Get the base camera state from movement manager - always update to track state
-        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera);
+        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, delta);
         // Blend camera nodes influence unless in node edit mode
         baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, ninja.trek.nodes.NodeManager.get().isEditing());
 
@@ -433,10 +425,6 @@ public class CameraController {
             if (client.gameRenderer instanceof FovAccessor) {
                 float fovMultiplier = (float) baseTarget.getFovMultiplier();
                 ((FovAccessor) client.gameRenderer).setFovModifier(fovMultiplier);
-                // Only log significant FOV changes to reduce console spam
-                if (Math.abs(fovMultiplier - 1.0) > 0.001) {
-                    Craneshot.LOGGER.debug("set fov {}", fovMultiplier);
-                }
             }
             
             if (cameraSystemActive) {
@@ -513,8 +501,6 @@ public class CameraController {
                 }
 
                 // Apply the camera position and rotation
-                ninja.trek.Craneshot.LOGGER.info("CameraController legacy write (editing={}) pos={} yaw={} pitch={}",
-                        ninja.trek.nodes.NodeManager.get().isEditing(), freeCamPosition, freeCamYaw, freeCamPitch);
                 ((CameraAccessor) camera).invokesetPos(freeCamPosition);
                 ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
@@ -617,7 +603,6 @@ public class CameraController {
             CameraSystem cameraSystem = CameraSystem.getInstance();
             if (cameraSystem.isCameraActive()) {
                 cameraSystem.deactivateCamera();
-                ninja.trek.Craneshot.LOGGER.info("Deactivated camera system during onComplete");
             }
 
         // Reset the camera position to follow the player
@@ -625,7 +610,6 @@ public class CameraController {
             freeCamPosition = client.player.getEyePos();
             freeCamYaw = client.player.getYaw();
             freeCamPitch = client.player.getPitch();
-            ninja.trek.Craneshot.LOGGER.info("Reset camera position to player position");
         }
 
         // Reset FOV to default

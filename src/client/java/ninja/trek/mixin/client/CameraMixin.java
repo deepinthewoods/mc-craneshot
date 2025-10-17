@@ -27,8 +27,6 @@ public class CameraMixin {
         // Detect transitions between active and inactive camera
         if (wasCustomCameraActive && !isCustomCameraActive) {
             // The camera just became inactive - force an update to restore default behavior
-            ninja.trek.Craneshot.LOGGER.info("Detected camera mode change: custom -> default");
-            
             MinecraftClient client = MinecraftClient.getInstance();
             if (client != null && client.player != null) {
                 // Force set camera entity to player
@@ -36,7 +34,6 @@ public class CameraMixin {
             }
         } else if (!wasCustomCameraActive && isCustomCameraActive) {
             // The camera just became active
-            ninja.trek.Craneshot.LOGGER.info("Detected camera mode change: default -> custom");
         }
         
         // Remember the current state for next time

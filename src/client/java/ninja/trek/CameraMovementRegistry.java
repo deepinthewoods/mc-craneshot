@@ -22,7 +22,7 @@ public class CameraMovementRegistry {
         try {
             scanPackage(BASE_PACKAGE);
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to scan for camera movements", e);
+            // logging removed
         }
     }
 
@@ -43,7 +43,7 @@ public class CameraMovementRegistry {
                 }
             }
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Error scanning package: " + packageName, e);
+            // logging removed
         }
     }
 
@@ -74,7 +74,7 @@ public class CameraMovementRegistry {
                 }
             }
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Error scanning JAR file: " + jarPath, e);
+            // logging removed
         }
     }
 
@@ -92,12 +92,11 @@ public class CameraMovementRegistry {
                 }
             }
         } catch (ClassNotFoundException e) {
-            Craneshot.LOGGER.error("Error loading class: " + className, e);
+            // logging removed
         }
     }
 
     public static void registerMovement(Class<? extends ICameraMovement> movementClass) {
-        Craneshot.LOGGER.info("found movement type: " + movementClass);
         if (!movementTypes.contains(movementClass)) {
             movementTypes.add(movementClass);
 
@@ -109,7 +108,7 @@ public class CameraMovementRegistry {
             Constructor<? extends ICameraMovement> constructor = movementTypes.get(currentTypeIndex).getDeclaredConstructor();
             return constructor.newInstance();
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to create movement instance", e);
+            // logging removed
             return null;
         }
     }

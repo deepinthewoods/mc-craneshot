@@ -157,10 +157,7 @@ public class NodeEditorScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        // Logging only; no key forwarding hacks
-        if (client != null && client.getWindow() != null) {
-            ninja.trek.Craneshot.LOGGER.debug("NodeEditorScreen.tick (window={}, editing=true)", client.getWindow());
-        }
+        // no-op for logging
     }
 
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {

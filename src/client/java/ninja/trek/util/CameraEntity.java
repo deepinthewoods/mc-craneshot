@@ -288,10 +288,7 @@ public class CameraEntity extends ClientPlayerEntity {
         originalCameraWasPlayer = originalCameraEntity == mc.player;
         cullChunksOriginal = mc.chunkCullingEnabled;
 
-        // Logging: creation of camera entity
-        ninja.trek.Craneshot.LOGGER.info("CameraEntity createAndSetCamera originalEntity={} pos={}, yaw={}, pitch={}",
-                originalCameraEntity,
-                new Vec3d(camera.getX(), camera.getY(), camera.getZ()), camera.getYaw(), camera.getPitch());
+        // logging removed
 
         mc.setCameraEntity(camera);
         mc.chunkCullingEnabled = false; // Disable chunk culling

@@ -53,9 +53,8 @@ public class SlotSettingsIO {
             }
 
             GSON.toJson(slotsArray, writer);
-            Craneshot.LOGGER.info("Saved camera movement slots configuration");
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Failed to save camera movement slots", e);
+            // logging removed
         }
     }
 
@@ -78,7 +77,7 @@ public class SlotSettingsIO {
 
             return movement;
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to load movement: " + type, e);
+            // logging removed
             // Return default movement if loading fails
             return new LinearMovement();
         }
@@ -114,9 +113,8 @@ public class SlotSettingsIO {
                 slots.add(slot);
             }
 
-            Craneshot.LOGGER.info("Loaded camera movement slots configuration");
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Failed to load camera movement slots", e);
+            // logging removed
             // Return default configuration on error: first 3 initialized, up to 10 total
             for (int i = 0; i < 10; i++) {
                 List<ICameraMovement> slot = new ArrayList<>();
@@ -137,9 +135,8 @@ public class SlotSettingsIO {
 
             // Use Minecraft's clipboard handling
             MinecraftClient.getInstance().keyboard.setClipboard(jsonStr);
-            Craneshot.LOGGER.info("Copied movement settings to clipboard");
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to copy movement settings", e);
+            // logging removed
         }
     }
 
@@ -150,7 +147,7 @@ public class SlotSettingsIO {
             JsonObject movementObj = JsonParser.parseString(clipboardText).getAsJsonObject();
             return jsonToMovement(movementObj);
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to create movement from clipboard", e);
+            // logging removed
             return new LinearMovement(); // Return default movement if parsing fails
         }
     }

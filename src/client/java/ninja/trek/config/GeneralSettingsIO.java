@@ -68,16 +68,14 @@ public class GeneralSettingsIO {
                 settingsObj.add("expandedSettings", expandedSettingsArray);
 
                 GSON.toJson(settingsObj, writer);
-                Craneshot.LOGGER.info("Saved general settings configuration");
             }
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Failed to save general settings", e);
+            // logging removed
         }
     }
 
     public static void loadSettings() {
         if (!CONFIG_FILE.exists()) {
-            Craneshot.LOGGER.info("No general settings file found, using defaults");
             return;
         }
 
@@ -151,7 +149,7 @@ public class GeneralSettingsIO {
                             }
                         }
                     } catch (Exception e) {
-                        Craneshot.LOGGER.error("Error loading FreeCamReturn setting: " + key, e);
+                        // logging removed
                     }
                 }
             }
@@ -172,9 +170,8 @@ public class GeneralSettingsIO {
                 }
             }
 
-            Craneshot.LOGGER.info("Loaded general settings configuration");
         } catch (IOException e) {
-            Craneshot.LOGGER.error("Failed to load general settings", e);
+            // logging removed
         }
     }
 }

@@ -32,7 +32,7 @@ public class NodeStorage {
             List<CameraNode> list = GSON.fromJson(r, type);
             return list != null ? list : new ArrayList<>();
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to load nodes: {}", e.getMessage());
+            // logging removed
             return new ArrayList<>();
         }
     }
@@ -42,7 +42,7 @@ public class NodeStorage {
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
             GSON.toJson(nodes, w);
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Failed to save nodes: {}", e.getMessage());
+            // logging removed
         }
     }
 
@@ -58,4 +58,3 @@ public class NodeStorage {
         }
     }
 }
-

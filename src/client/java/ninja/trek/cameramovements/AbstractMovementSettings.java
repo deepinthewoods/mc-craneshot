@@ -1,7 +1,6 @@
 package ninja.trek.cameramovements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
-import ninja.trek.Craneshot;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
 
@@ -163,8 +162,7 @@ public abstract class AbstractMovementSettings {
         fovMultiplier = newFov / basefov;
         
         // Do NOT set the FOV directly here
-        // Instead, log the new target FOV multiplier which will be used in gradual easing
-        ninja.trek.Craneshot.LOGGER.debug("FOV target adjusted to: {}", fovMultiplier);
+        // Instead, record the new target FOV multiplier which will be used in gradual easing
         
         // The actual FOV change will happen gradually through the movement's calculateState method
         // which applies easing and speed limits defined in fovEasing and fovSpeedLimit
@@ -214,7 +212,7 @@ public abstract class AbstractMovementSettings {
                             settings.put(field.getName(), value);
                         }
                     } catch (IllegalAccessException e) {
-                        Craneshot.LOGGER.error("Error accessing field: " + field.getName(), e);
+                        // logging removed
                     }
                 });
         return settings;
@@ -277,7 +275,7 @@ public abstract class AbstractMovementSettings {
                 }
             }
         } catch (Exception e) {
-            Craneshot.LOGGER.error("Error updating setting {} with value {}: {}", key, value, e.getMessage());
+            // logging removed
         }
     }
 
@@ -288,7 +286,7 @@ public abstract class AbstractMovementSettings {
             try {
                 return AbstractMovementSettings.class.getDeclaredField(key);
             } catch (NoSuchFieldException ex) {
-                Craneshot.LOGGER.error("Field not found: {}", key);
+                // logging removed
                 return null;
             }
         }

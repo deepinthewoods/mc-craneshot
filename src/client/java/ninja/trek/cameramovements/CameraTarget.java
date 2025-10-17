@@ -47,7 +47,7 @@ public class CameraTarget {
             if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
         }
         CameraTarget target = new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), currentFovMultiplier);
-        ninja.trek.Craneshot.LOGGER.debug("Created CameraTarget from camera");
+        // logging removed
         return target;
     }
 
@@ -85,7 +85,7 @@ public class CameraTarget {
         
         Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
         CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier);
-        ninja.trek.Craneshot.LOGGER.debug("Applying collision adjustment");
+        // logging removed
         return adjusted;
     }
 

@@ -4,7 +4,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
@@ -118,7 +117,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -171,7 +170,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         }
 
         if (finalInterpActive) {
-            double step = 1.0 / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
+            double step = tickDelta / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
             finalInterpT = Math.min(1.0, finalInterpT + step);
             desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
         } else if (!linearMode) {
@@ -182,20 +181,14 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 // When returning and progress is high (near completion), accelerate to ensure we reach the end
                 // This helps avoid stopping short of the target position
                 potentialDelta = (1.0 - progress) * positionEasing * 1.5; // Use higher multiplier
-                
-                // Log this acceleration occasionally
-                if (Math.random() < 0.01) {
-                    ninja.trek.Craneshot.LOGGER.info("BezierMovement accelerating final approach - progress: {}, delta: {}",
-                        String.format("%.4f", progress),
-                        String.format("%.4f", potentialDelta));
-                }
+                // logging removed
             } else {
                 // Standard easing for normal progress
                 potentialDelta = (1.0 - progress) * positionEasing;
             }
             
             double totalDistance = a.getPosition().distanceTo(b.getPosition());
-            double maxMove = positionSpeedLimit * (1.0 / 20.0);
+            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
             double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
             double progressDelta = Math.min(potentialDelta, allowedDelta);
             
@@ -216,7 +209,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // Linear movement mode
             Vec3d delta = b.getPosition().subtract(current.getPosition());
             double deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (1.0 / 20.0);
+            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
             Vec3d move;
             if (deltaLength > 0) {
                 move = delta.multiply(positionEasing);
@@ -321,10 +314,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             } else {
                 // During the beginning of the transition, keep our existing ortho factor
                 // Note: This is important to prevent the initial jump to perspective
-                if (Math.random() < 0.01) { // Log occasionally
-                    ninja.trek.Craneshot.LOGGER.debug("Initial return phase - preserving original orthoFactor={}", 
-                        current.getOrthoFactor());
-                }
+                // logging removed
             }
         } else {
             // During out phase, use the projection setting to determine target
@@ -350,20 +340,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             }
         }
         
-        // Log significant ortho factor changes
-        if (Math.random() < 0.01) { // Log occasionally
-            ninja.trek.Craneshot.LOGGER.debug("BezierMovement - Ortho transition: current={}, target={}, progress={}, alpha={}, resetting={}",
-                current.getOrthoFactor(), calculatedOrthoTarget, progress, alpha, resetting);
-        }
+        // logging removed
         
-        // Log significant ortho factor changes
-        if (Math.abs(current.getOrthoFactor() - calculatedOrthoTarget) > 0.05f && Math.random() < 0.01) {
-            ninja.trek.Craneshot.LOGGER.debug("Ortho factor using movement progress: {}, target: {}, progress: {}, alpha: {}",
-                current.getOrthoFactor(), calculatedOrthoTarget, progress, alpha);
-        }
+        // logging removed
 
         // Apply speed limits
-        float maxRotation = (float)(rotationSpeedLimit * (1.0 / 20.0));
+        float maxRotation = (float)(rotationSpeedLimit * (tickDelta / 20.0));
         float maxFovChange = (float)(fovSpeedLimit * (1.0 / 20.0));
 
         if (Math.abs(desiredYawSpeed) > maxRotation) {
@@ -400,13 +382,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             linearMode = true;
         }
 
-        // Log final approach distances during return phase
-        if (resetting && remaining < 0.05) {
-            ninja.trek.Craneshot.LOGGER.info("BezierMovement final approach - distance: {}, progress: {}, alpha: {}",
-                String.format("%.5f", remaining),
-                String.format("%.5f", progress),
-                String.format("%.5f", alpha));
-        }
+        // logging removed
 
         // Track last target/errors for next frame (after we compute current)
         lastTargetYaw = targetYaw;
@@ -491,12 +467,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                     current.getOrthoFactor()
                 );
                 
-                // Log the transition at ERROR level for better visibility during debugging
-                ninja.trek.Craneshot.LOGGER.error("BezierMovement RESET transition - orthoFactor={}, preserving in target", 
-                    currentOrthoFactor);
-                
-                ninja.trek.Craneshot.LOGGER.info("BezierMovement return to player head rotation: pos={}, yaw={}, pitch={}, fov=1.0", 
-                    playerPos, playerYaw, playerPitch);
+                // logging removed
             }
             
             // Update current camera position
@@ -506,9 +477,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // We're always returning to player position now
             if (client.player != null) {
                 controlPoint = generateControlPoint(current.getPosition(), client.player.getEyePos());
-                
-                ninja.trek.Craneshot.LOGGER.info("Returning with control point: {} {} {}", 
-                    controlPoint.getX(), controlPoint.getY(), controlPoint.getZ());
+                // logging removed
             }
             
             // Reset FOV delta when movement ends
@@ -538,8 +507,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Only update the end target's FOV as the goal to transition toward
         end.setFovMultiplier(fovMultiplier);
         
-        ninja.trek.Craneshot.LOGGER.debug("BezierMovement - Target FOV updated to: {}, current: {}", 
-            fovMultiplier, current.getFovMultiplier());
+        // logging removed
     }
 
     @Override
@@ -564,14 +532,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
             float orthoDifference = current.getOrthoFactor(); // Distance to 0.0
             
-            // Log completion progress for debugging
-            if (Math.random() < 0.01) { // Only log occasionally
-                ninja.trek.Craneshot.LOGGER.info("BezierMovement completion check - distance: {}, progress: {}, fov: {}, ortho: {}",
-                    String.format("%.3f", positionDistance),
-                    String.format("%.3f", progress),
-                    String.format("%.3f", fovDifference),
-                    String.format("%.3f", orthoDifference));
-            }
+            // logging removed
             
             // Much stricter position requirement to ensure full movement completion
             // For bezier, we allow completion either by distance OR by progress
