@@ -225,9 +225,20 @@ public class CameraEntity extends ClientPlayerEntity {
             throw new RuntimeException("Cannot create CameraEntity from null player!");
         }
 
-        Vec3d entityPos = new Vec3d(player.getX(), player.getY(), player.getZ());
-        float yaw = player.getYaw();
-        float pitch = player.getPitch();
+        // Seed from current camera transform if available (prevents snap to player)
+        Vec3d entityPos;
+        float yaw;
+        float pitch;
+        net.minecraft.client.render.Camera current = mc.gameRenderer != null ? mc.gameRenderer.getCamera() : null;
+        if (current != null) {
+            entityPos = current.getPos();
+            yaw = current.getYaw();
+            pitch = current.getPitch();
+        } else {
+            entityPos = new Vec3d(player.getX(), player.getY(), player.getZ());
+            yaw = player.getYaw();
+            pitch = player.getPitch();
+        }
 
         mc.player.setVelocity(Vec3d.ZERO);
 
@@ -240,7 +251,7 @@ public class CameraEntity extends ClientPlayerEntity {
         );
         camera.noClip = true;
 
-        camera.setPos(entityPos.getX(), entityPos.getY() + 0.125f, entityPos.getZ());
+        camera.setPos(entityPos.getX(), entityPos.getY(), entityPos.getZ());
         camera.setYaw(yaw);
         camera.setPitch(pitch);
         camera.setVelocity(Vec3d.ZERO);
