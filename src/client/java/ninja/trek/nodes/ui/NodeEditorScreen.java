@@ -5,6 +5,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.render.Camera;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
@@ -201,6 +202,40 @@ public class NodeEditorScreen extends Screen {
     @Override
     protected void applyBlur(DrawContext context) {
         // no-op
+    }
+
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        // Close and start return on ESC
+        if (input.getKeycode() == GLFW.GLFW_KEY_ESCAPE) {
+            closeAndStartReturn();
+            return true;
+        }
+
+        // If user hits the active slot hotkey again while editing, close and start return
+        if (this.client != null) {
+            Integer activeSlot = ninja.trek.CraneshotClient.MOVEMENT_MANAGER.getActiveMovementSlot();
+            if (activeSlot != null && activeSlot >= 0 && activeSlot < ninja.trek.CraneshotClient.cameraKeyBinds.length) {
+                net.minecraft.client.option.KeyBinding kb = ninja.trek.CraneshotClient.cameraKeyBinds[activeSlot];
+                if (kb != null && kb.matchesKey(input)) {
+                    closeAndStartReturn();
+                    return true;
+                }
+            }
+        }
+
+        // For movement keys (WASD, jump, sneak, sprint) don't consume; camera controller polls states
+        // Let super handle other UI keys
+        return super.keyPressed(input);
+    }
+
+    private void closeAndStartReturn() {
+        // Mark node editing off and start camera return
+        ninja.trek.nodes.NodeManager.get().setEditing(false);
+        if (this.client != null) {
+            ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.client, this.client.gameRenderer.getCamera());
+            this.client.setScreen(null);
+        }
     }
 
     @Override
