@@ -189,29 +189,27 @@ public class CameraMovementManager {
                 ICameraMovement originalMovement = activeMovement;
                 Integer originalSlot = activeMovementSlot;
                 
+                // Capture the latest freecam transform before disabling the camera system
+                // so the return movement starts exactly from the current freecam state
+                try {
+                    ninja.trek.camera.CameraSystem camSys = ninja.trek.camera.CameraSystem.getInstance();
+                    if (camSys.isCameraActive()) {
+                        ninja.trek.CameraController.freeCamPosition = camSys.getCameraPosition();
+                        ninja.trek.CameraController.freeCamYaw = camSys.getCameraYaw();
+                        ninja.trek.CameraController.freeCamPitch = camSys.getCameraPitch();
+                    } else if (camera != null) {
+                        ninja.trek.CameraController.freeCamPosition = camera.getPos();
+                        ninja.trek.CameraController.freeCamYaw = camera.getYaw();
+                        ninja.trek.CameraController.freeCamPitch = camera.getPitch();
+                    }
+                } catch (Throwable ignore) { }
+
                 // Clear post-move settings to disable free camera mode
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                 
                 // Start the FreeCamReturnMovement to handle the transition back to normal camera
                 FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
-                
-                // Set the FreeCamReturnMovement's endTarget to match the original movement
-                if (originalMovement instanceof AbstractMovementSettings) {
-                    AbstractMovementSettings originalSettings = (AbstractMovementSettings) originalMovement;
-                    freeCamReturnMovement.endTarget = originalSettings.getEndTarget();
-                }
-                
-                // Check if we have a current target and preserve its orthographic state
-                if (baseTarget != null) {
-                    // Get the orthographic state from the base target
-                    float orthoFactor = baseTarget.getOrthoFactor();
-                    boolean shouldBeOrtho = orthoFactor > 0.5f;
-                    
-                    // logging removed
-                    
-                    // Set the orthographic state for the return movement
-                    freeCamReturnMovement.setForcedOrthoState(shouldBeOrtho);
-                }
+
                 
                 freeCamReturnMovement.start(client, camera);
                 
@@ -226,10 +224,15 @@ public class CameraMovementManager {
                 return;
             } else if (inFreeCameraMode) {
                 // No keyboard movement detected - using regular camera return
+                Craneshot.LOGGER.info("return nomove");
             }
             
             // Normal case - queue reset directly
             // This will trigger return to the player's head position and rotation
+            // Ensure we exit free camera modes so the movement can drive the return
+            if (inFreeCameraMode) {
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+            }
             activeMovement.queueReset(client, camera);
             
             // Reset the keyboard movement flag
@@ -320,38 +323,33 @@ public class CameraMovementManager {
                     // Reset the FreeCamReturnMovement phase
                     inFreeCamReturnPhase = false;
                     
+                    // Smooth finalize: provide one last frame at the final target
+                    // Use the FreeCamReturnMovement's raycast type before clearing activeMovement
+                    RaycastType finalRaycastType = freeCamReturnMovement.getRaycastType();
+                    CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, finalRaycastType);
+                    baseTarget = finalTarget;
+
                     // Switch back to normal camera movement - normal state
                     activeMovementSlot = null;
                     activeMovement = null;
                     isOut = false;
-                    
-                    // Make sure to fully deactivate the camera system to restore default camera behavior
-                    CameraSystem cameraSystem = CameraSystem.getInstance();
-                    cameraSystem.deactivateCamera();
-                    
-                    // Explicitly reset camera state in controller - this prevents camera lock
+
+                    // Restore default camera behavior
+                    try {
+                        CameraSystem cameraSystem = CameraSystem.getInstance();
+                        cameraSystem.deactivateCamera();
+                    } catch (Throwable ignore) { }
+
+                    // Explicitly reset controller state
                     CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePos();
                     CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYaw();
                     CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getPitch();
-                    
-                    // Clear any post-move states to ensure default behavior
                     CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
-
-                    // Defensive: ensure mouse interception is disabled when return completes
-                    // This guarantees vanilla mouse look is restored even if other callbacks change.
                     ninja.trek.MouseInterceptor.setIntercepting(false);
-                    
-                    // Notify controller of completion
                     CraneshotClient.CAMERA_CONTROLLER.onComplete();
-                    
-                    // CRITICAL FIX: Set baseTarget to null to force default camera behavior
-                    // This fixes the issue with orthographic projections persisting
-                    baseTarget = null;
-                    
-                    // Log the reset for debugging
-                    // logging removed
-                    
-                    return null;
+
+                    // Return a completed state so the controller applies this final frame cleanly
+                    return new MovementState(finalTarget, true);
                 }
                 
                 return state;

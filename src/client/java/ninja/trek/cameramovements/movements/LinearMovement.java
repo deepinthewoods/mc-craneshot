@@ -245,6 +245,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             finalInterpActive = false;
             finalInterpT = 0.0;
             finalInterpStart = null;
+            current = CameraTarget.fromCamera(camera);
 
             if (client.player != null) {
                 float playerYaw = client.player.getYaw();
@@ -263,7 +264,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 );
             }
 
-            current = CameraTarget.fromCamera(camera);
+
 
             // Reset FOV delta when movement ends
             end.setFovMultiplier(1.0f);
