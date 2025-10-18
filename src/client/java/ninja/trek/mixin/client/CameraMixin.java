@@ -7,6 +7,7 @@ import net.minecraft.client.MinecraftClient;
 import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;
+import ninja.trek.Craneshot;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,11 +29,16 @@ public class CameraMixin {
             // The camera just became inactive - force an update to restore default behavior
             MinecraftClient client = MinecraftClient.getInstance();
             if (client != null && client.player != null) {
+                Craneshot.LOGGER.info("CameraMixin: custom->vanilla transition detected; forcing camera entity to player. current={} focused={}",
+                        client.getCameraEntity(), focusedEntity);
                 // Force set camera entity to player
                 client.setCameraEntity(client.player);
             }
         } else if (!wasCustomCameraActive && isCustomCameraActive) {
             // The camera just became active
+            MinecraftClient client = MinecraftClient.getInstance();
+            Craneshot.LOGGER.info("CameraMixin: vanilla->custom transition detected; currentCamEnt={}",
+                    client != null ? client.getCameraEntity() : null);
         }
         
         // Remember the current state for next time

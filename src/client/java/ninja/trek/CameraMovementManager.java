@@ -10,6 +10,7 @@ import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.Craneshot;
 
 import java.util.*;
 
@@ -25,10 +26,14 @@ public class CameraMovementManager {
     // For handling free camera return
     private boolean inFreeCamReturnPhase = false;
 
+
     // New fields for managing scroll selection
     private Map<Integer, Integer> scrollSelectedTypes;
     private Map<Integer, Boolean> hasScrolledDuringPress;
     private Map<Integer, Long> keyPressStartTimes;
+
+    // Throttled logging when a movement is active
+    private long lastMovementLogTimeMs = 0L;
 
     public CameraMovementManager() {
         int numSlots = 10;
@@ -184,6 +189,7 @@ public class CameraMovementManager {
 
             // Only use FreeCamReturnMovement if we've actually moved with keyboard
             if (inFreeCameraMode && CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard) {
+                Craneshot.LOGGER.info("CameraMovementManager.finishTransition: entering FreeCamReturnMovement (keyboard moved)");
                 
                 // Store the original active movement to return to after FreeCamReturnMovement completes
                 ICameraMovement originalMovement = activeMovement;
@@ -224,7 +230,7 @@ public class CameraMovementManager {
                 return;
             } else if (inFreeCameraMode) {
                 // No keyboard movement detected - using regular camera return
-                Craneshot.LOGGER.info("return nomove");
+                Craneshot.LOGGER.info("CameraMovementManager.finishTransition: freecam active but no keyboard move; using normal return");
             }
             
             // Normal case - queue reset directly
@@ -337,6 +343,7 @@ public class CameraMovementManager {
                     // Restore default camera behavior
                     try {
                         CameraSystem cameraSystem = CameraSystem.getInstance();
+                        Craneshot.LOGGER.info("FreeCamReturn complete: deactivating CameraSystem and restoring vanilla");
                         cameraSystem.deactivateCamera();
                     } catch (Throwable ignore) { }
 
@@ -461,7 +468,51 @@ public class CameraMovementManager {
         // At this point we have a valid state and raycast type
         CameraTarget rawTarget = state.getCameraTarget();
         CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType);
-        // Temporary diagnostics: only log adjustments for Linear during return
+
+        // Third-person display switching (hands/body) centralized here
+        // Only when not in freecam/key-rotation modes
+        boolean freeCamKeys = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                              CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+        boolean freeCamMouse = CameraController.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA ||
+                               CameraController.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.NODE_EDIT;
+        if (!freeCamKeys && !freeCamMouse) {
+            double dist = adjustedTarget.getPosition().distanceTo(client.player.getEyePos());
+            CameraSystem cs = CameraSystem.getInstance();
+            try {
+                if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
+                    cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
+                } else {
+                    cs.activateCamera(CameraSystem.CameraMode.FIRST_PERSON);
+                }
+                Craneshot.LOGGER.debug("CameraMovementManager.update: ensured CameraSystem active in {} (dist={})",
+                        (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD ? "THIRD_PERSON" : "FIRST_PERSON"),
+                        String.format("%.2f", dist));
+            } catch (Throwable ignore) { }
+        }
+
+        // Throttled debug logging of current camera state and target when a movement is active
+        long now = System.currentTimeMillis();
+        if (true) {
+            try {
+                Vec3d camPos = camera != null ? camera.getPos() : Vec3d.ZERO;
+                float camYaw = camera != null ? camera.getYaw() : 0f;
+                float camPitch = camera != null ? camera.getPitch() : 0f;
+                String movementName = activeMovement != null ? activeMovement.getName() : "<none>";
+
+                Craneshot.LOGGER.info(
+                    "active={} cam=({}, {}, {}) yaw={} pitch={} target=({}, {}, {}) tyaw={} tpitch={}",
+                    movementName,
+                    String.format("%.3f", camPos.x), String.format("%.3f", camPos.y), String.format("%.3f", camPos.z),
+                    String.format("%.2f", camYaw), String.format("%.2f", camPitch),
+                    String.format("%.3f", adjustedTarget.getPosition().x),
+                    String.format("%.3f", adjustedTarget.getPosition().y),
+                    String.format("%.3f", adjustedTarget.getPosition().z),
+                    String.format("%.2f", adjustedTarget.getYaw()),
+                    String.format("%.2f", adjustedTarget.getPitch())
+                );
+            } catch (Throwable ignore) { }
+            lastMovementLogTimeMs = now;
+        }
 
         return adjustedTarget;
     }

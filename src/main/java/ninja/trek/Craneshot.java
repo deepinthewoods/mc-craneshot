@@ -11,6 +11,7 @@ public class Craneshot implements ModInitializer {
     @Override
     public void onInitialize() {
         // Initialization logic
+
         LOGGER.debug("{} initialized", MOD_ID);
     }
 }

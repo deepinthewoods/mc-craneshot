@@ -7,6 +7,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
+import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import org.jetbrains.annotations.Nullable;
@@ -56,7 +57,7 @@ public class CameraSystem {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null) return;
         
-        // logging removed
+        Craneshot.LOGGER.debug("CameraSystem.activateCamera: begin mode={} active={}", mode, cameraActive);
         
         // Get the current camera if available
         Camera currentCamera = mc.gameRenderer.getCamera();
@@ -77,8 +78,8 @@ public class CameraSystem {
             // Store original state
             originalCameraEntity = mc.getCameraEntity();
             originalChunkCulling = mc.chunkCullingEnabled;
-            
-            // logging removed
+            Craneshot.LOGGER.debug("CameraSystem.activateCamera: capturing original entity={} chunkCulling={}",
+                    originalCameraEntity, originalChunkCulling);
             
             // Initialize camera position and rotation from either current camera (if available)
             // or from the player position
@@ -94,8 +95,6 @@ public class CameraSystem {
                 cameraPitch = originalCameraEntity.getPitch();
             }
             
-            // logging removed
-            
             // Set camera flags based on mode
             shouldRenderHands = !mode.hideHands;
             shouldRenderPlayerModel = mode.showPlayerModel;
@@ -106,29 +105,33 @@ public class CameraSystem {
 
             // Use a dedicated camera entity for free camera, otherwise detach
             if (mode == CameraMode.FREE_CAMERA) {
+                Craneshot.LOGGER.info("CameraSystem.activateCamera: enabling dedicated CameraEntity (free camera)");
                 ninja.trek.util.CameraEntity.setCameraState(true);
             } else {
-                // logging removed
+                Craneshot.LOGGER.debug("CameraSystem.activateCamera: detaching camera entity (non-free mode)");
                 mc.setCameraEntity(null);
             }
             
             cameraActive = true;
+            Craneshot.LOGGER.debug("CameraSystem.activateCamera: active=true pos={} yaw={} pitch={} cull={} hands={} model={}",
+                    cameraPosition, cameraYaw, cameraPitch, !disableChunkCulling, shouldRenderHands, shouldRenderPlayerModel);
             
             // Explicitly apply position/rotation only if not using the dedicated camera entity
             if (currentCamera != null && mode != CameraMode.FREE_CAMERA) {
-                // logging removed
+                Craneshot.LOGGER.debug("CameraSystem.activateCamera: applying initial transform to currentCamera");
                 ((CameraAccessor) currentCamera).invokesetPos(cameraPosition);
                 ((CameraAccessor) currentCamera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         } else {
             // Update settings if camera is already active
-            // logging removed
+            Craneshot.LOGGER.debug("CameraSystem.activateCamera: updating active settings mode={}", mode);
             shouldRenderHands = !mode.hideHands;
             shouldRenderPlayerModel = mode.showPlayerModel;
             
             if (disableChunkCulling != mode.disableChunkCulling) {
                 disableChunkCulling = mode.disableChunkCulling;
                 mc.chunkCullingEnabled = !disableChunkCulling;
+                Craneshot.LOGGER.debug("CameraSystem.activateCamera: chunkCulling now {}", mc.chunkCullingEnabled);
             }
         }
     }
@@ -141,23 +144,28 @@ public class CameraSystem {
 
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        // logging removed
+        Craneshot.LOGGER.info("CameraSystem.deactivateCamera: begin active=true currentCamEnt={} dedicatedEntityPresent={}",
+                mc != null ? mc.getCameraEntity() : null,
+                ninja.trek.util.CameraEntity.getCamera() != null);
 
         // If using dedicated camera entity, disable it (restores chunk culling/camera entity)
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            Craneshot.LOGGER.info("CameraSystem.deactivateCamera: disabling dedicated CameraEntity");
             ninja.trek.util.CameraEntity.setCameraState(false);
         } else if (mc != null) {
             // Restore original settings
             if (originalCameraEntity != null) {
-                // logging removed
+                Craneshot.LOGGER.info("CameraSystem.deactivateCamera: restoring original camera entity={}", originalCameraEntity);
                 mc.setCameraEntity(originalCameraEntity);
             } else if (mc.player != null) {
-                // logging removed
+                Craneshot.LOGGER.info("CameraSystem.deactivateCamera: restoring camera entity to player");
                 mc.setCameraEntity(mc.player);
             }
             mc.chunkCullingEnabled = originalChunkCulling;
+            Craneshot.LOGGER.debug("CameraSystem.deactivateCamera: chunkCulling restored to {}", originalChunkCulling);
             if (mc.gameRenderer instanceof ninja.trek.mixin.client.FovAccessor) {
                 ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer).setFovModifier(1.0f);
+                Craneshot.LOGGER.debug("CameraSystem.deactivateCamera: FOV modifier reset to 1.0");
             }
         }
 
@@ -168,6 +176,7 @@ public class CameraSystem {
         shouldRenderPlayerModel = true;
         disableChunkCulling = false;
         originalCameraEntity = null;
+        Craneshot.LOGGER.info("CameraSystem.deactivateCamera: complete active=false");
     }
 
     /**
@@ -178,9 +187,10 @@ public class CameraSystem {
 
         // When using the dedicated camera entity, vanilla handles transform; skip manual override
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
+            // Avoid spam; this path means vanilla entity drives the pose
             return;
         }
-        // logging removed
+        // Apply immediate transform when actively controlling Camera
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
     }
@@ -347,6 +357,8 @@ public class CameraSystem {
     public void setShouldRenderHands(boolean renderHands) {
         this.shouldRenderHands = renderHands;
     }
+
+    
 
     public static class CameraMode {
         public final boolean hideHands;

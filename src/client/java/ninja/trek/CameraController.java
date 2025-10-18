@@ -14,6 +14,7 @@ import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.Craneshot;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -164,15 +165,13 @@ public class CameraController {
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 ((IKeyboardInputMixin) client.player.input).setDisabled(false);
             }
-            
-            // Disable camera system
-            CameraSystem.getInstance().deactivateCamera();
             // Close node editor if open
             net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
             if (_mc != null && _mc.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
                 _mc.setScreen(null);
             }
             ninja.trek.nodes.NodeManager.get().setEditing(false);
+            Craneshot.LOGGER.info("CameraController.setPostMoveStates: cleared post-move modes; expecting vanilla to control camera");
         } else {
             // Set new movement modes
             currentMouseMoveMode = m.getPostMoveMouse();
@@ -220,7 +219,6 @@ public class CameraController {
                 }
                 ninja.trek.nodes.NodeManager.get().setEditing(false);
             }
-            
             // Determine if we should activate custom camera mode (include NODE_EDIT)
             boolean isFreeCamMode = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                                     currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
@@ -248,8 +246,9 @@ public class CameraController {
                 
                 // Update the camera immediately to apply our position
                 cameraSystem.updateCamera(camera);
-            } else if (isOutPosition) {
-                cameraSystem.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
+                Craneshot.LOGGER.info("CameraController.setPostMoveStates: activated FREE_CAMERA (mouse={}, keys={}) pos={} yaw={} pitch={} entityFreecam={}"
+                        , currentMouseMoveMode, currentKeyMoveMode, freeCamPosition, freeCamYaw, freeCamPitch,
+                        ninja.trek.util.CameraEntity.getCamera() != null);
             }
         }
     }
@@ -598,17 +597,19 @@ public class CameraController {
         // Disable mouse interception
         MouseInterceptor.setIntercepting(false);
 
-            // Make sure to restore default camera behavior by deactivating the camera system
-            CameraSystem cameraSystem = CameraSystem.getInstance();
-            if (cameraSystem.isCameraActive()) {
-                cameraSystem.deactivateCamera();
-            }
+        // Make sure to restore default camera behavior by deactivating the camera system
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (cameraSystem.isCameraActive()) {
+            Craneshot.LOGGER.info("CameraController.onComplete: deactivating CameraSystem and returning to vanilla");
+            cameraSystem.deactivateCamera();
+        }
 
         // Reset the camera position to follow the player
         if (client != null && client.player != null) {
             freeCamPosition = client.player.getEyePos();
             freeCamYaw = client.player.getYaw();
             freeCamPitch = client.player.getPitch();
+            Craneshot.LOGGER.debug("CameraController.onComplete: reset tracking vars to player pos/yaw/pitch");
         }
 
         // Reset FOV to default
