@@ -188,9 +188,14 @@ public class CameraSystem {
         // When using the dedicated camera entity, vanilla handles transform; skip manual override
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
             // Avoid spam; this path means vanilla entity drives the pose
+            try {
+                Craneshot.LOGGER.info("CameraSystem.updateCamera: skipping manual write (dedicated CameraEntity)");
+            } catch (Throwable ignore) { }
             return;
         }
         // Apply immediate transform when actively controlling Camera
+        Craneshot.LOGGER.info("CameraSystem.updateCamera: write pos={} yaw={} pitch={}",
+                cameraPosition, String.format("%.2f", cameraYaw), String.format("%.2f", cameraPitch));
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
     }
@@ -306,6 +311,7 @@ public class CameraSystem {
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
                 // logging removed
+                Craneshot.LOGGER.info("CameraSystem.setCameraPosition: pos={} (active={})", cameraPosition, cameraActive);
                 if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
@@ -324,6 +330,8 @@ public class CameraSystem {
             if (mc != null) {
                 Camera camera = mc.gameRenderer.getCamera();
                 // logging removed
+                Craneshot.LOGGER.info("CameraSystem.setCameraRotation: yaw={} pitch={} (active={})",
+                        String.format("%.2f", cameraYaw), String.format("%.2f", cameraPitch), cameraActive);
                 if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }

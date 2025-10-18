@@ -45,7 +45,14 @@ public class RaycastUtil {
         if (hit.getType() == HitResult.Type.BLOCK) {
             Vec3d hitPos = hit.getPos();
             Vec3d directionVector = hitPos.subtract(playerPos).normalize();
-            return hitPos.subtract(directionVector.multiply(CAMERA_OFFSET));
+            Vec3d adjusted = hitPos.subtract(directionVector.multiply(CAMERA_OFFSET));
+            try {
+                ninja.trek.Craneshot.LOGGER.info(
+                    "RaycastUtil.NEAR: playerPos={} targetPos={} hitPos={} adjustedPos={}",
+                    playerPos, targetPos, hitPos, adjusted
+                );
+            } catch (Throwable ignore) { }
+            return adjusted;
         }
         return targetPos;
     }
@@ -58,7 +65,14 @@ public class RaycastUtil {
         Vec3d currentPos = targetPos;
 
         if (isPositionInAir(client, currentPos)) {
-            return refinePosition(client, currentPos, direction);
+            Vec3d refined = refinePosition(client, currentPos, direction);
+            try {
+                ninja.trek.Craneshot.LOGGER.info(
+                    "RaycastUtil.FAR startInAir: playerPos={} targetPos={} refinedPos={}",
+                    playerPos, targetPos, refined
+                );
+            } catch (Throwable ignore) { }
+            return refined;
         }
 
         // Coarse search
@@ -66,7 +80,14 @@ public class RaycastUtil {
             Vec3d checkPos = targetPos.subtract(direction.multiply(distance));
 
             if (isPositionInAir(client, checkPos)) {
-                return refinePosition(client, checkPos, direction.multiply(-1));
+                Vec3d refined = refinePosition(client, checkPos, direction.multiply(-1));
+                try {
+                    ninja.trek.Craneshot.LOGGER.info(
+                        "RaycastUtil.FAR coarseRefine: playerPos={} targetPos={} candidate={} refinedPos={}",
+                        playerPos, targetPos, checkPos, refined
+                    );
+                } catch (Throwable ignore) { }
+                return refined;
             }
         }
 
@@ -85,7 +106,14 @@ public class RaycastUtil {
 
         if (hit.getType() == HitResult.Type.BLOCK) {
             Vec3d hitPos = hit.getPos();
-            return hitPos.subtract(direction.multiply(CAMERA_OFFSET));
+            Vec3d adjusted = hitPos.subtract(direction.multiply(CAMERA_OFFSET));
+            try {
+                ninja.trek.Craneshot.LOGGER.info(
+                    "RaycastUtil.refinePosition: startPos={} direction={} hitPos={} adjustedPos={}",
+                    startPos, direction, hitPos, adjusted
+                );
+            } catch (Throwable ignore) { }
+            return adjusted;
         }
 
         return startPos;

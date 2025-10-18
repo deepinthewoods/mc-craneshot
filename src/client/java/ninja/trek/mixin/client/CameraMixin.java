@@ -41,6 +41,22 @@ public class CameraMixin {
                     client != null ? client.getCameraEntity() : null);
         }
         
+        // Extra per-frame debug context (lightweight)
+        try {
+            Camera cam = (Camera)(Object)this;
+            Craneshot.LOGGER.debug(
+                "CameraMixin.update tail: customActive={} camPos=({}, {}, {}) yaw={} pitch={} focused={} tickDelta={}",
+                isCustomCameraActive,
+                String.format("%.3f", cam.getPos().x),
+                String.format("%.3f", cam.getPos().y),
+                String.format("%.3f", cam.getPos().z),
+                String.format("%.2f", cam.getYaw()),
+                String.format("%.2f", cam.getPitch()),
+                focusedEntity,
+                String.format("%.3f", tickDelta)
+            );
+        } catch (Throwable ignore) { }
+
         // Remember the current state for next time
         wasCustomCameraActive = isCustomCameraActive;
         
