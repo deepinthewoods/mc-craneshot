@@ -38,6 +38,9 @@ public class GeneralSettingsIO {
                 freeCamObj.addProperty("deceleration", freeCam.getDeceleration());
                 freeCamObj.addProperty("movementMode", freeCam.getMovementMode().name());
                 settingsObj.add("freeCam", freeCamObj);
+
+                // Save Node Editor sensitivity
+                settingsObj.addProperty("nodeEditSensitivity", GeneralMenuSettings.getNodeEditSensitivityMultiplier());
                 
                 // Save FreeCamReturnMovement settings
                 JsonObject freeCamReturnObj = new JsonObject();
@@ -152,6 +155,14 @@ public class GeneralSettingsIO {
                         // logging removed
                     }
                 }
+            }
+
+            // Load Node Editor sensitivity
+            if (settingsObj.has("nodeEditSensitivity")) {
+                try {
+                    GeneralMenuSettings.setNodeEditSensitivityMultiplier(
+                            settingsObj.get("nodeEditSensitivity").getAsDouble());
+                } catch (Exception ignored) {}
             }
 
             // Load autoAdvance

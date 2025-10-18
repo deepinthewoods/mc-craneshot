@@ -7,7 +7,6 @@
 		"CameraMixin",
 		"FovAccessor",
 		"GameRendererFovAccessor",
-		"GameRendererMixin",
 		"KeyboardInputMixin",
 		"MouseAccessor",
 		"MouseMixin",

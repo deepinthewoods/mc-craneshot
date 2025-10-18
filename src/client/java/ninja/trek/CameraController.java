@@ -2,7 +2,6 @@ package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;

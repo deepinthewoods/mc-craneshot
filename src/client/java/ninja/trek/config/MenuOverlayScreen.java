@@ -203,6 +203,34 @@ public class MenuOverlayScreen extends Screen {
                 .build());
 
         yOffset += spacing;
+
+        // Node Editor sensitivity slider
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Node Edit Sensitivity"), button -> {})
+                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                centerY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Node Edit Sensitivity"),
+                0.5f,
+                20.0f,
+                GeneralMenuSettings.getNodeEditSensitivityMultiplier(),
+                "nodeEditSensitivity",
+                new ninja.trek.cameramovements.AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("nodeEditSensitivity") && value instanceof Number) {
+                            GeneralMenuSettings.setNodeEditSensitivityMultiplier(((Number) value).doubleValue());
+                            // Persist
+                            GeneralSettingsIO.saveSettings();
+                        }
+                    }
+                }
+        ));
+
+        yOffset += spacing;
         
         // Add collapsible Free Camera section header
         String freeCamKey = "freeCamSection";

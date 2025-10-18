@@ -363,34 +363,41 @@ public class CameraMovementManager {
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
             if (isOut) {
-                // CRITICAL FIX: Get the exact current target position from the movement
-                CameraTarget currentTarget = state.getCameraTarget();
-                
-                // Apply raycast adjustment for collision
-                currentTarget = currentTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
-                
+                // Get the current target from movement and apply collision
+                CameraTarget preAdjust = state.getCameraTarget();
+                CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType());
+
+                // Log out-phase completion snapshot: raw vs adjusted, and post-move modes
+                try {
+                    ninja.trek.Craneshot.LOGGER.info(
+                        "Linear out complete: raw=({},{},{}), adj=({},{},{}), yaw/pitch=({}/{}), mouseMode={}, keyMode={}",
+                        String.format("%.2f", preAdjust.getPosition().x),
+                        String.format("%.2f", preAdjust.getPosition().y),
+                        String.format("%.2f", preAdjust.getPosition().z),
+                        String.format("%.2f", currentTarget.getPosition().x),
+                        String.format("%.2f", currentTarget.getPosition().y),
+                        String.format("%.2f", currentTarget.getPosition().z),
+                        String.format("%.1f", currentTarget.getYaw()),
+                        String.format("%.1f", currentTarget.getPitch()),
+                        CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
+                        CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode
+                    );
+                } catch (Throwable ignore) { }
+
                 // Set the base target for reference
                 baseTarget = currentTarget;
-                
-                // Store the exact position in static controller variables
+
+                // Store exact position for camera system
                 CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = currentTarget.getPosition();
                 CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = currentTarget.getYaw();
                 CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = currentTarget.getPitch();
-                
-                // Note the FOV multiplier is already being properly interpolated in the movement's
-                // calculateState method, we're just capturing it here for post-move phase
-                // The value in currentTarget already has the correct FOV multiplier
-                // logging removed
-                
-                // Log post-move settings and apply snap
+
+                // Apply snap and set post-move states
                 AbstractMovementSettings settings = (AbstractMovementSettings) activeMovement;
-                // logging removed
                 if (camera != null) {
                     ((CameraAccessor) camera).invokesetPos(currentTarget.getPosition());
                     ((CameraAccessor) camera).invokeSetRotation(currentTarget.getYaw(), currentTarget.getPitch());
-                    // logging removed
                 }
-                // logging removed
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(settings);
             }
         }
@@ -454,7 +461,10 @@ public class CameraMovementManager {
         }
         
         // At this point we have a valid state and raycast type
-        CameraTarget adjustedTarget = state.getCameraTarget().withAdjustedPosition(client.player, raycastType);
+        CameraTarget rawTarget = state.getCameraTarget();
+        CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType);
+        // Temporary diagnostics: only log adjustments for Linear during return
+
         return adjustedTarget;
     }
 

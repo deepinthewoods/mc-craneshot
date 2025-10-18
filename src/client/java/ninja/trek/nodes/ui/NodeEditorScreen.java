@@ -236,12 +236,16 @@ public class NodeEditorScreen extends Screen {
         if (dragging) {
             double sens = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             double calc = 0.6 * sens * sens * sens + 0.2;
+            // Apply Node Editor sensitivity multiplier (default 6x) and invert X direction
+            double mult = ninja.trek.config.GeneralMenuSettings.getNodeEditSensitivityMultiplier();
+            double scaleEntity = calc * mult;
+            double scaleSystem = calc * 0.55D * mult;
             // Rotate using regular freecam pipeline: entity if present, otherwise CameraSystem
             ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
             if (camEnt != null) {
-                camEnt.updateCameraRotations((float)(deltaX * calc), (float)(-deltaY * calc));
+                camEnt.updateCameraRotations((float)(-deltaX * scaleEntity), (float)(-deltaY * scaleEntity));
             } else {
-                ninja.trek.camera.CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55D, -deltaY * calc * 0.55D, 1.0);
+                ninja.trek.camera.CameraSystem.getInstance().updateRotation(-deltaX * scaleSystem, -deltaY * scaleSystem, 1.0);
             }
         }
         return super.mouseDragged(click, deltaX, deltaY);

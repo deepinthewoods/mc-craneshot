@@ -4,7 +4,6 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.BlockView;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.Perspective;
 import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
 import ninja.trek.camera.CameraSystem;

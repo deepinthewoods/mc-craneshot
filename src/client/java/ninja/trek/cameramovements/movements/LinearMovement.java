@@ -4,27 +4,26 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
         name = "Linear",
-        description = "Moves the camera along a line"
+        description = "Moves the camera in a straight line"
 )
 public class LinearMovement extends AbstractMovementSettings implements ICameraMovement {
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
 
     @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
-    private double positionSpeedLimit = 2.0;
+    private double positionSpeedLimit = 10;
 
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
     private double rotationEasing = 0.1;
 
-    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 3600.0)
-    private double rotationSpeedLimit = 45.0;
+    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 1000)
+    private double rotationSpeedLimit = 500;
 
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
@@ -36,81 +35,54 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private double maxDistance = 20.0;
 
     public CameraTarget start = new CameraTarget();
-    public CameraTarget end = new CameraTarget();
+    private CameraTarget end = new CameraTarget();
     public CameraTarget current = new CameraTarget();
+
     private boolean resetting = false;
+    private boolean distanceChanged = false;
     private float weight = 1.0f;
-    private double baseFov;
-    // Final interpolation state
+
+    // Final interpolation state to guarantee arrival
     private boolean finalInterpActive = false;
     private double finalInterpT = 0.0;
     private Vec3d finalInterpStart = null;
 
-    // Jitter suppression state
+    // Jitter suppression state (for tiny oscillations when fully out)
     private float lastTargetYaw = 0f;
     private float lastTargetPitch = 0f;
     private float lastYawError = 0f;
     private float lastPitchError = 0f;
     private Vec3d lastPlayerEyePos = null;
-    private boolean jitterStateInit = false;
-    // Track last render partial tick to compute true frame dt in seconds
-    private float lastTickDelta = Float.NaN;
 
-    private double dtSeconds(float tickDelta) {
-        if (Float.isNaN(lastTickDelta)) {
-            lastTickDelta = tickDelta;
-            // Fallback to a reasonable frame time to avoid a huge first step
-            return 1.0 / 60.0;
-        }
-        float frac;
-        if (tickDelta >= lastTickDelta) {
-            frac = tickDelta - lastTickDelta;
-        } else {
-            // Wrapped to next tick
-            frac = (1.0f - lastTickDelta) + tickDelta;
-        }
-        lastTickDelta = tickDelta;
-        // Convert tick fraction to seconds (20 ticks per second)
-        return frac / 20.0;
-    }
-
+    @Override
     public void start(MinecraftClient client, Camera camera) {
-        // Initialize with camera's current state
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
-        // Store base FOV and set initial FOV delta to 0
-        baseFov = client.options.getFov().getValue().doubleValue();
-        start.setFovMultiplier(1.0f);  // Start at normal FOV
-        current.setFovMultiplier(1.0f); // Start at normal FOV
-        // Orthographic projection removed
-        // Calculate end target based on controlStick
+
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-        // Use the FOV multiplier from settings for the end target
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
-        // Orthographic factor removed
+                CameraController.controlStick.getPitch(), fovMultiplier);
+
         resetting = false;
+        distanceChanged = false;
         weight = 1.0f;
-        // Reset final interpolation state
+        alpha = 1;
+
         finalInterpActive = false;
         finalInterpT = 0.0;
         finalInterpStart = null;
 
         // Reset jitter suppression tracking
-        jitterStateInit = false;
         lastPlayerEyePos = null;
         lastTargetYaw = current.getYaw();
         lastTargetPitch = current.getPitch();
         lastYawError = 0f;
         lastPitchError = 0f;
-        lastTickDelta = Float.NaN;
     }
-
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
-        double pitch = Math.toRadians(stick.getPitch() + pitchOffset);
-        // Calculate offset based on target distance
+        double pitch = Math.toRadians(stick.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
         double yOffset = Math.sin(pitch) * targetDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
@@ -120,294 +92,182 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
         if (client.player == null) return new MovementState(current, true);
-        final double dt = dtSeconds(tickDelta);
 
-        // During OUT phase, update start/end from the control stick. While resetting,
-        // preserve return targets set in queueReset() so completion checks remain valid.
-        if (!resetting) {
-            // Update start target with controlStick's current state
-            start = new CameraTarget(
+        // Update start target with controlStick's current state
+        start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset,
+                CameraController.controlStick.getPitch(),
                 start.getFovMultiplier()
-            );
+        );
 
-            // Update end target based on controlStick and target distance
+        // Update end target based on controlStick and target distance
+        if (!resetting) {
             Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
-            end = new CameraTarget(
-                targetPos,
-                CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch() + pitchOffset,
-                end.getFovMultiplier()
-            );
+            end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
+                    CameraController.controlStick.getPitch(), end.getFovMultiplier());
         }
 
-        // Determine goal target for this frame
-        CameraTarget goal;
-        if (resetting && client.player != null) {
-            // Return to the player's current head position/rotation with normal FOV
-            goal = new CameraTarget(
-                client.player.getEyePos(),
-                client.player.getYaw(),
-                client.player.getPitch(),
-                1.0f
-            );
-            // Keep the end target in sync with the player so completion checks remain valid
-            end = goal;
-        } else {
-            goal = end;
+        CameraTarget a = resetting ? end : start;
+        CameraTarget b = resetting ? start : end;
+
+        // During return, track the player head position and rotation continuously
+        if (resetting) {
+            Vec3d playerPos = client.player.getEyePos();
+            float playerYaw = client.player.getYaw();
+            float playerPitch = client.player.getPitch();
+            b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
-        // Position interpolation
-        // If within final threshold, perform time-based linear interpolation directly to the target
-        double distanceToTarget = current.getPosition().distanceTo(goal.getPosition());
-        if (resetting && !finalInterpActive && distanceToTarget <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
+        Vec3d desiredPos;
+
+        // Switch to fixed-time interpolation when very close to target while returning
+        double remainingDistanceForFinal = current.getPosition().distanceTo(b.getPosition());
+        if (resetting && !finalInterpActive && remainingDistanceForFinal <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
             finalInterpActive = true;
             finalInterpT = 0.0;
             finalInterpStart = current.getPosition();
         }
 
-        Vec3d desired;
         if (finalInterpActive) {
-            double step = dt / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS);
+            double step = tickDelta / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
             finalInterpT = Math.min(1.0, finalInterpT + step);
-            desired = finalInterpStart.lerp(goal.getPosition(), finalInterpT);
+            desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
         } else {
-            // Use a distance-based adaptive easing that increases as we get closer to the target
-            // This helps ensure the camera actually reaches the target position
-            double adaptiveEasing;
-            if (resetting) {
-                if (distanceToTarget < 1.0) {
-                    adaptiveEasing = Math.max(positionEasing, positionEasing * (2.0 - distanceToTarget));
-                } else {
-                    adaptiveEasing = positionEasing;
+            // Straight-line eased movement towards target with speed cap
+            Vec3d delta = b.getPosition().subtract(current.getPosition());
+            double deltaLength = delta.length();
+            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
+            Vec3d move;
+            if (deltaLength > 0) {
+                move = delta.multiply(positionEasing);
+                if (move.length() > maxMove) {
+                    move = move.normalize().multiply(maxMove);
                 }
-                // logging removed
             } else {
-                adaptiveEasing = positionEasing;
+                move = Vec3d.ZERO;
             }
-
-            // Calculate the desired position using adaptive easing with speed limit
-            desired = current.getPosition().lerp(goal.getPosition(), adaptiveEasing);
-            Vec3d moveVector = desired.subtract(current.getPosition());
-            double moveDistance = moveVector.length();
-            if (moveDistance > 0.01) {
-                // Use a higher effective speed on return to match Bezier feel
-                double effectiveSpeed = resetting ? Math.max(positionSpeedLimit, 10.0) : positionSpeedLimit;
-                double maxMove = effectiveSpeed * dt;
-                if (moveDistance > maxMove) {
-                    Vec3d limitedMove = moveVector.normalize().multiply(maxMove);
-                    desired = current.getPosition().add(limitedMove);
-                }
-            }
+            desiredPos = current.getPosition().add(move);
         }
 
-        // Rotation interpolation with speed limit
-        float targetYaw = goal.getYaw();
-        float targetPitch = goal.getPitch();
-        float yawDiff = targetYaw - current.getYaw();
-        float pitchDiff = targetPitch - current.getPitch();
+        // Target rotation and FOV
+        float targetYaw = b.getYaw();
+        float targetPitch = b.getPitch();
+        float targetFovDelta = (float) b.getFovMultiplier();
 
-        // Normalize angles to [-180, 180]
-        while (yawDiff > 180) yawDiff -= 360;
-        while (yawDiff < -180) yawDiff += 360;
+        // Rotation easing
+        float yawError = targetYaw - current.getYaw();
+        float pitchError = targetPitch - current.getPitch();
+        while (yawError > 180) yawError -= 360;
+        while (yawError < -180) yawError += 360;
 
-        // Apply easing to get desired rotation speed
-        float desiredYawSpeed = (float)(yawDiff * rotationEasing);
-        float desiredPitchSpeed = (float)(pitchDiff * rotationEasing);
+        float desiredYawSpeed = (float)(yawError * rotationEasing);
+        float desiredPitchSpeed = (float)(pitchError * rotationEasing);
 
-        // Jitter suppression when camera is effectively at the out position and player is moving
-        // Suppress single-frame micro adjustments while keeping overall easing behavior.
+        // Jitter suppression when fully out (near target) while player moves
         if (!resetting && client.player != null) {
-            // Consider "fully out" when close to target; allow some slack for running
-            boolean fullyOut = distanceToTarget < 0.5; // blocks
-            if (fullyOut) {
-                Vec3d eye = client.player.getEyePos();
-                double playerMove = 0.0;
-                if (lastPlayerEyePos != null) {
-                    playerMove = eye.distanceTo(lastPlayerEyePos);
-                }
-                final float ANGLE_EPS = 0.7f;      // degrees
-                final float TARGET_EPS = 0.7f;     // degrees
-                final double MOVE_EPS = 0.03;      // blocks per tick
+            Vec3d eye = client.player.getEyePos();
+            double playerMove = lastPlayerEyePos == null ? 0.0 : eye.distanceTo(lastPlayerEyePos);
+            final float ANGLE_EPS = 0.7f;
+            final float TARGET_EPS = 0.7f;
+            final double MOVE_EPS = 0.03;
 
-                float targetYawDelta = targetYaw - lastTargetYaw;
-                while (targetYawDelta > 180) targetYawDelta -= 360;
-                while (targetYawDelta < -180) targetYawDelta += 360;
-                float targetPitchDelta = targetPitch - lastTargetPitch;
-                while (targetPitchDelta > 180) targetPitchDelta -= 360;
-                while (targetPitchDelta < -180) targetPitchDelta += 360;
+            float targetYawDelta = targetYaw - lastTargetYaw;
+            while (targetYawDelta > 180) targetYawDelta -= 360;
+            while (targetYawDelta < -180) targetYawDelta += 360;
+            float targetPitchDelta = targetPitch - lastTargetPitch;
+            while (targetPitchDelta > 180) targetPitchDelta -= 360;
+            while (targetPitchDelta < -180) targetPitchDelta += 360;
 
-                boolean smallYawJitter = Math.abs(yawDiff) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
-                boolean smallPitchJitter = Math.abs(pitchDiff) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
-                boolean playerMoving = playerMove > MOVE_EPS;
+            boolean smallYawJitter = Math.abs(yawError) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
+            boolean smallPitchJitter = Math.abs(pitchError) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
+            boolean playerMoving = playerMove > MOVE_EPS;
 
-                if (playerMoving && (smallYawJitter || (lastYawError * yawDiff < 0 && Math.abs(yawDiff) < ANGLE_EPS))) {
-                    desiredYawSpeed = 0f;
-                }
-                if (playerMoving && (smallPitchJitter || (lastPitchError * pitchDiff < 0 && Math.abs(pitchDiff) < ANGLE_EPS))) {
-                    desiredPitchSpeed = 0f;
-                }
+            // Consider near-complete when remaining alpha is small
+            double totalDistance = a.getPosition().distanceTo(b.getPosition());
+            double remaining = current.getPosition().distanceTo(b.getPosition());
+            boolean fullyOut = totalDistance > 0 && (remaining / totalDistance) <= 0.01;
 
-                // Update jitter tracking state for next frame
-                lastPlayerEyePos = eye;
-                jitterStateInit = true;
+            if (fullyOut && playerMoving && (smallYawJitter || (lastYawError * yawError < 0 && Math.abs(yawError) < ANGLE_EPS))) {
+                desiredYawSpeed = 0f;
             }
+            if (fullyOut && playerMoving && (smallPitchJitter || (lastPitchError * pitchError < 0 && Math.abs(pitchError) < ANGLE_EPS))) {
+                desiredPitchSpeed = 0f;
+            }
+
+            lastPlayerEyePos = eye;
         }
 
-        // Apply rotation speed limit
-        float maxRotation = (float)(rotationSpeedLimit * dt);
-        if (Math.abs(desiredYawSpeed) > maxRotation) {
-            desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
-        }
-        if (Math.abs(desiredPitchSpeed) > maxRotation) {
-            desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
-        }
-
-        // FOV interpolation with adaptive easing - slower as we approach the target
-        float targetFovDelta = goal.getFovMultiplier();
-        float fovDiff = targetFovDelta - current.getFovMultiplier();
-        float absFovDiff = Math.abs(fovDiff);
-        
-        // Calculate an adaptive easing that slows down as we get closer to the target
-        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovDiff / 0.1)));
+        // FOV easing with adaptive smoothness
+        float fovError = (float) (targetFovDelta - current.getFovMultiplier());
+        float absFovError = Math.abs(fovError);
+        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
-        
-        float desiredFovSpeed = fovDiff * adaptiveFovEasing;
-        float maxFovChange = (float) (fovSpeedLimit * dt);
+        float desiredFovSpeed = fovError * adaptiveFovEasing;
 
-        if (Math.abs(desiredFovSpeed) > maxFovChange) {
-            desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
-        }
-        
-        // Orthographic projection factor interpolation
-        float targetOrthoFactor = goal.getOrthoFactor();
-        float orthoDiff = targetOrthoFactor - current.getOrthoFactor();
-        
-        // Use similar easing for ortho projection transition
-        // We want projection changes to be fairly smooth
-        float orthoEasing = (float) fovEasing; // Reuse FOV easing value for consistency
-        float desiredOrthoSpeed; // Declare the variable here
-        
-        // Make the return transition (to perspective) as smooth as the out transition
-        // Apply special case if we're returning to player view
-        if (resetting) {
-            // During the initial phase of reset (first ~20% of movement), maintain the current ortho factor
-            // This prevents the immediate jump to perspective
-            float positionProgress = (float) (current.getPosition().distanceTo(start.getPosition()) / 
-                                             Math.max(0.1f, start.getPosition().distanceTo(end.getPosition())));
-                                             
-            // Normalize to 0.0-1.0 range where 1.0 means at start, 0.0 means at end
-            positionProgress = 1.0f - positionProgress;
-            
-            // Only begin transitioning ortho factor after we've moved a bit
-            if (positionProgress < 0.2f) {
-                // In the first 20% of movement, maintain the initial ortho factor
-                // This means setting desiredOrthoSpeed to 0
-                desiredOrthoSpeed = 0.0f;
-                
-                // logging removed
-            } else {
-                // After 20% movement, start a slow transition to perspective
-                // Remap progress to 0-1 range for the remaining 80% of movement
-                float transitionProgress = (positionProgress - 0.2f) / 0.8f;
-                
-                // Use a special returnEasing that's slower for more visual smoothness
-                float returnPhaseOrthoEasing = (float) (fovEasing * 0.5f * transitionProgress);
-                orthoDiff = -current.getOrthoFactor(); // Target 0.0 (perspective)
-                desiredOrthoSpeed = orthoDiff * returnPhaseOrthoEasing;
-                
-                // logging removed
-            }
-        } else {
-            // Regular ortho easing during out phase
-            desiredOrthoSpeed = orthoDiff * orthoEasing;
-        }
-        
-        // logging removed
-        
-        // Apply speed limit for ortho changes similar to FOV
-        if (Math.abs(desiredOrthoSpeed) > maxFovChange) {
-            desiredOrthoSpeed = Math.signum(desiredOrthoSpeed) * maxFovChange;
-        }
+        // Apply speed limits
+        float maxRotation = (float)(rotationSpeedLimit * (tickDelta / 20.0));
+        float maxFovChange = (float)(fovSpeedLimit * (1.0 / 20.0));
+        if (Math.abs(desiredYawSpeed) > maxRotation) desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
+        if (Math.abs(desiredPitchSpeed) > maxRotation) desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
+        if (Math.abs(desiredFovSpeed) > maxFovChange) desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
 
-        // Apply final changes
         float newYaw = current.getYaw() + desiredYawSpeed;
         float newPitch = current.getPitch() + desiredPitchSpeed;
-        float newFovDelta = current.getFovMultiplier() + desiredFovSpeed;
-        float newOrthoFactor = Math.max(0.0f, Math.min(1.0f, current.getOrthoFactor() + desiredOrthoSpeed));
+        float newFovDelta = (float) (current.getFovMultiplier() + desiredFovSpeed);
 
-        // Update current target with all new values
-        current = new CameraTarget(desired, newYaw, newPitch, newFovDelta);
+        current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
-        // Update FOV in game renderer
+        // Update FOV visibly
         if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
         }
 
-        // Calculate progress for blending
-        if (!resetting) {
-            // Out-phase progress based on initial out targets
-            double denom = start.getPosition().distanceTo(end.getPosition());
-            if (denom > 1e-6) {
-                alpha = current.getPosition().distanceTo(end.getPosition()) / denom;
-            }
-        }
-
-        // logging removed
+        // Update alpha based on distance progress
+        double remaining = current.getPosition().distanceTo(b.getPosition());
+        double totalDistance = a.getPosition().distanceTo(b.getPosition());
+        alpha = totalDistance != 0 ? remaining / totalDistance : 0.0;
 
         // Track last target/errors for next frame
         lastTargetYaw = targetYaw;
         lastTargetPitch = targetPitch;
-        lastYawError = yawDiff;
-        lastPitchError = pitchDiff;
+        lastYawError = yawError;
+        lastPitchError = pitchError;
 
-        // During return, complete when we're very close to the live player head goal
-        boolean complete = resetting && current.getPosition().distanceTo(end.getPosition()) < 0.03;
+        boolean complete = resetting && (remaining < 0.007 || finalInterpActive && finalInterpT >= 0.9999);
         return new MovementState(current, complete);
     }
 
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
-        if (client.player == null) return;
-        resetting = true;
-        // Reset final interpolation state when entering reset
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
-        lastTickDelta = Float.NaN;
-        
-        // Always target the player head position/rotation during return phase
-        if (client.player != null) {
-            // Always return to player's head rotation regardless of END_TARGET
-            float playerYaw = client.player.getYaw();
-            float playerPitch = client.player.getPitch();
-            
-            // Set the target position to player head and proper rotation for return
-            Vec3d playerPos = client.player.getEyePos();
-            
-            // Get the current orthographic factor
-            float currentOrtho = current.getOrthoFactor();
-            
-            // Create a new end/start point that matches current state exactly (no orthographic factor)
-            end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
-            
-            // Create a new temporary start point that matches current state exactly
-            // This ensures our interpolation starts from exactly where we are
-            start = new CameraTarget(
-                current.getPosition(),
-                current.getYaw(),
-                current.getPitch(),
-                current.getFovMultiplier()
-            );
+        if (!resetting) {
+            resetting = true;
+            finalInterpActive = false;
+            finalInterpT = 0.0;
+            finalInterpStart = null;
+
+            if (client.player != null) {
+                float playerYaw = client.player.getYaw();
+                float playerPitch = client.player.getPitch();
+                Vec3d playerPos = client.player.getEyePos();
+
+                // Target player view with normal FOV on return
+                end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+
+                // Snap start to current to ensure a clean interpolation beginning
+                start = new CameraTarget(
+                        current.getPosition(),
+                        current.getYaw(),
+                        current.getPitch(),
+                        current.getFovMultiplier()
+                );
+            }
+
+            current = CameraTarget.fromCamera(camera);
+
+            // Reset FOV delta when movement ends
+            end.setFovMultiplier(1.0f);
         }
-        
-        // Sync current to the exact camera state to ensure a seamless start to return
-        current = CameraTarget.fromCamera(camera);
-        
-        // Reset FOV delta when movement ends
-        end.setFovMultiplier(1.0f);
     }
 
     @Override
@@ -415,22 +275,17 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
             double multiplier = increase ? 1.1 : 0.9;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
+            distanceChanged = true;
         } else if (mouseWheel == SCROLL_WHEEL.FOV) {
             adjustFov(increase, client);
         }
     }
+
     @Override
     public void adjustFov(boolean increase, MinecraftClient client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
-        
-        // Call the parent implementation to update the target FOV multiplier
         super.adjustFov(increase, client);
-
-        // Don't immediately update the current FOV, let it transition smoothly using easing
-        // Only update the end target's FOV as the goal to transition toward
         end.setFovMultiplier(fovMultiplier);
-        
-        // logging removed
     }
 
     @Override
@@ -445,22 +300,11 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean isComplete() {
-        // Consider the movement complete when:
-        // 1. We're in the resetting phase
-        // 2. We're very close to the target position (player's head)
-        // 3. The FOV has nearly returned to normal
         if (resetting) {
-            // Using end position (player position) as the target
             double positionDistance = current.getPosition().distanceTo(end.getPosition());
             float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
-            // logging removed
-            
-            // Tightened thresholds to decisively finish return
-            boolean positionComplete = positionDistance < 0.01;
-            boolean fovComplete = fovDifference < 0.02f;
-            
-            // We don't require ortho to be complete for the movement to end
-            // as that will continue to blend after the movement
+            boolean positionComplete = positionDistance < 0.005;
+            boolean fovComplete = fovDifference < 0.01f;
             return positionComplete && fovComplete;
         }
         return false;
@@ -468,9 +312,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public boolean hasCompletedOutPhase() {
-        // Consider movement complete when the position has nearly reached its target
-        // The FOV will continue to transition smoothly using fovEasing even after
-        // the out phase is considered complete
-        return !resetting && alpha < .02;
+        if (resetting) return false;
+        return alpha < 0.1; // close enough to end of out phase
     }
 }
+
