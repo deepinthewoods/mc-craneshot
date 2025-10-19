@@ -406,11 +406,11 @@ public class CameraController {
         ((CameraAccessor) camera).invokesetPos(freeCamPosition);
     }
 
-    public void updateCamera(MinecraftClient client, Camera camera, float delta) {
+    public void updateCamera(MinecraftClient client, Camera camera, float deltaSeconds) {
         updateControlStick(client);
 
         // Get the base camera state from movement manager - always update to track state
-        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, delta);
+        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
         // Important: keep movement targets and the applied camera position in sync.
         // Do NOT apply node influence while a movement is active, otherwise the camera
         // will be driven toward a different position than the movement’s start/end,
@@ -556,7 +556,7 @@ public class CameraController {
      * processing any free keyboard/mouse input. It should be placed in CameraController.
      */
     public void handleCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson,
-                                   boolean inverseView, float tickDelta, Camera camera) {
+                                   boolean inverseView, float frameSeconds, Camera camera) {
         // Verify that both the camera and the focused entity exist.
         if (camera == null || focusedEntity == null) return;
 
@@ -564,7 +564,7 @@ public class CameraController {
         if (client == null || client.world == null) return;
 
         // Update the camera based on movement-manager and free control states.
-        updateCamera(client, camera, tickDelta);
+        updateCamera(client, camera, frameSeconds);
 
         // Optionally update keyboard input (e.g. disable it when free control is active)
         updateKeyboardInput(client);

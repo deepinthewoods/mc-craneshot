@@ -301,7 +301,7 @@ public class CameraMovementManager {
         }
     }
 
-    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
         if (activeMovement == null || client.player == null) {
             return null;
         }
@@ -310,7 +310,7 @@ public class CameraMovementManager {
         if (inFreeCamReturnPhase) {
             FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
             if (activeMovement == freeCamReturnMovement) {
-                MovementState state = freeCamReturnMovement.calculateState(client, camera, tickDelta);
+                MovementState state = freeCamReturnMovement.calculateState(client, camera, deltaSeconds);
                 baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
                 
                 // Check if FreeCamReturnMovement has completed
@@ -360,7 +360,7 @@ public class CameraMovementManager {
         }
         
         // Normal movement state calculation
-        MovementState state = activeMovement.calculateState(client, camera, tickDelta);
+        MovementState state = activeMovement.calculateState(client, camera, deltaSeconds);
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
             if (isOut) {
@@ -427,14 +427,14 @@ public class CameraMovementManager {
         return state;
     }
 
-    public CameraTarget update(MinecraftClient client, Camera camera, float tickDelta) {
+    public CameraTarget update(MinecraftClient client, Camera camera, float deltaSeconds) {
         // When no active movement, stop driving the camera explicitly.
         // Returning null prevents Controller from pinning camera to a stale target.
         if (activeMovement == null || client.player == null) {
             return null;
         }
         
-        MovementState state = calculateState(client, camera, tickDelta);
+        MovementState state = calculateState(client, camera, deltaSeconds);
         if (state == null) {
             // If we have no state but had a previous target, return it
             return baseTarget;

@@ -67,7 +67,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
         if (client == null || client.player == null) {
             return new MovementState(current, true);
         }
@@ -89,13 +89,13 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         }
 
         if (finalInterpActive) {
-            double step = tickDelta / (FINAL_INTERP_TIME_SECONDS * 20.0);
+            double step = deltaSeconds / (FINAL_INTERP_TIME_SECONDS);
             finalInterpT = Math.min(1.0, finalInterpT + step);
             desiredPos = finalInterpStart.lerp(end.getPosition(), finalInterpT);
         } else {
             Vec3d delta = end.getPosition().subtract(current.getPosition());
             double deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
+            double maxMove = positionSpeedLimit * (deltaSeconds);
             Vec3d move = deltaLength > 0 ? delta.multiply(positionEasing) : Vec3d.ZERO;
             if (move.length() > maxMove) move = move.normalize().multiply(maxMove);
             desiredPos = current.getPosition().add(move);
@@ -108,7 +108,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float pitchError = targetPitch - current.getPitch();
         float desiredYawSpeed = (float) (yawError * rotationEasing);
         float desiredPitchSpeed = (float) (pitchError * rotationEasing);
-        float maxRot = (float) (rotationSpeedLimit * (tickDelta / 20.0));
+        float maxRot = (float) (rotationSpeedLimit * (deltaSeconds));
         if (Math.abs(desiredYawSpeed) > maxRot) desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRot;
         if (Math.abs(desiredPitchSpeed) > maxRot) desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRot;
         float newYaw = current.getYaw() + desiredYawSpeed;
@@ -120,7 +120,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float) fovEasing;
         float desiredFovSpeed = fovError * adaptiveFovEasing;
-        float maxFovChange = (float) (fovSpeedLimit * (1.0 / 20.0));
+        float maxFovChange = (float) (fovSpeedLimit * (deltaSeconds));
         if (Math.abs(desiredFovSpeed) > maxFovChange) desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
         float newFov = (float) (current.getFovMultiplier() + desiredFovSpeed);
 

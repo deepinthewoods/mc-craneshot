@@ -117,7 +117,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -170,7 +170,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         }
 
         if (finalInterpActive) {
-            double step = tickDelta / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
+            double step = deltaSeconds / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS);
             finalInterpT = Math.min(1.0, finalInterpT + step);
             desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
         } else if (!linearMode) {
@@ -188,7 +188,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             }
             
             double totalDistance = a.getPosition().distanceTo(b.getPosition());
-            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
+            double maxMove = positionSpeedLimit * (deltaSeconds);
             double allowedDelta = totalDistance > 0 ? maxMove / totalDistance : potentialDelta;
             double progressDelta = Math.min(potentialDelta, allowedDelta);
             
@@ -209,7 +209,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // Linear movement mode
             Vec3d delta = b.getPosition().subtract(current.getPosition());
             double deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
+            double maxMove = positionSpeedLimit * (deltaSeconds);
             Vec3d move;
             if (deltaLength > 0) {
                 move = delta.multiply(positionEasing);
@@ -345,8 +345,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // logging removed
 
         // Apply speed limits
-        float maxRotation = (float)(rotationSpeedLimit * (tickDelta / 20.0));
-        float maxFovChange = (float)(fovSpeedLimit * (1.0 / 20.0));
+        float maxRotation = (float)(rotationSpeedLimit * (deltaSeconds));
+        float maxFovChange = (float)(fovSpeedLimit * (deltaSeconds));
 
         if (Math.abs(desiredYawSpeed) > maxRotation) {
             desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;

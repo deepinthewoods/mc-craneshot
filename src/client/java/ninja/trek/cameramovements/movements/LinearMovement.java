@@ -92,7 +92,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float tickDelta) {
+    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -135,7 +135,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         String stepBranch;
         double deltaLength = 0.0;
         if (finalInterpActive) {
-            double step = tickDelta / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS * 20.0);
+            double step = deltaSeconds / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS);
             finalInterpT = Math.min(1.0, finalInterpT + step);
             desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
             stepBranch = "finalInterp";
@@ -143,7 +143,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             // Straight-line eased movement towards target with speed cap
             Vec3d delta = b.getPosition().subtract(current.getPosition());
             deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (tickDelta / 20.0);
+            double maxMove = positionSpeedLimit * (deltaSeconds);
             Vec3d move;
             if (deltaLength > 0) {
                 move = delta.multiply(positionEasing);
@@ -213,8 +213,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float desiredFovSpeed = fovError * adaptiveFovEasing;
 
         // Apply speed limits
-        float maxRotation = (float)(rotationSpeedLimit * (tickDelta / 20.0));
-        float maxFovChange = (float)(fovSpeedLimit * (1.0 / 20.0));
+        float maxRotation = (float)(rotationSpeedLimit * (deltaSeconds));
+        float maxFovChange = (float)(fovSpeedLimit * (deltaSeconds));
         if (Math.abs(desiredYawSpeed) > maxRotation) desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRotation;
         if (Math.abs(desiredPitchSpeed) > maxRotation) desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRotation;
         if (Math.abs(desiredFovSpeed) > maxFovChange) desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;

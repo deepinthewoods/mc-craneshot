@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Camera.class)
 public class CameraMixin {
     private boolean wasCustomCameraActive = false;
+    private float previousTickDelta = 0.0f;
     
     @Inject(method = "update", at = @At("TAIL"))
     private void onCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson,
@@ -40,7 +41,15 @@ public class CameraMixin {
         // Remember the current state for next time
         wasCustomCameraActive = isCustomCameraActive;
         
-        // Pass to the controller to handle camera updates
-        CraneshotClient.CAMERA_CONTROLLER.handleCameraUpdate(area, focusedEntity, thirdPerson, inverseView, tickDelta, (Camera)(Object)this);
+        // Compute per-frame delta seconds using successive tickDelta values
+        // tickDelta ranges [0,1) within each tick; difference approximates frame time in ticks
+        float deltaTicks = tickDelta - previousTickDelta;
+        if (deltaTicks < 0.0f) {
+            // Tick boundary: wrap around
+            deltaTicks += 1.0f;
+        }
+        float frameSeconds = deltaTicks / 20.0f;
+        previousTickDelta = tickDelta;
+        CraneshotClient.CAMERA_CONTROLLER.handleCameraUpdate(area, focusedEntity, thirdPerson, inverseView, frameSeconds, (Camera)(Object)this);
     }
 }
