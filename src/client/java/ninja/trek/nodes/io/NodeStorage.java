@@ -19,6 +19,18 @@ public class NodeStorage {
             .setPrettyPrinting()
             .create();
     private static File getFile() {
+        // Prefer per-world save under saves/<world>/craneshot_nodes.json when possible (singleplayer)
+        try {
+            var mc = MinecraftClient.getInstance();
+            if (mc != null && mc.getServer() != null) {
+                java.nio.file.Path root = mc.getServer().getSavePath(net.minecraft.util.WorldSavePath.ROOT);
+                if (root != null) {
+                    File worldFile = root.toFile();
+                    return new File(worldFile, "craneshot_nodes.json");
+                }
+            }
+        } catch (Throwable ignored) {}
+        // Fallback to global config
         File cfgDir = new File(MinecraftClient.getInstance().runDirectory, "config");
         if (!cfgDir.exists()) cfgDir.mkdirs();
         return new File(cfgDir, "craneshot_nodes.json");
@@ -43,6 +55,32 @@ public class NodeStorage {
             GSON.toJson(nodes, w);
         } catch (Exception e) {
             // logging removed
+        }
+    }
+
+    public static File getExportFile() {
+        File cfgDir = new File(MinecraftClient.getInstance().runDirectory, "config");
+        if (!cfgDir.exists()) cfgDir.mkdirs();
+        return new File(cfgDir, "craneshot_nodes_export.json");
+    }
+
+    public static boolean exportNodes(java.util.List<CameraNode> nodes) {
+        File f = getExportFile();
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
+            GSON.toJson(nodes, w);
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    public static java.util.List<CameraNode> importNodes() {
+        File f = getExportFile();
+        if (!f.exists()) return java.util.Collections.emptyList();
+        try (Reader r = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) {
+            Type type = new TypeToken<java.util.List<CameraNode>>(){}.getType();
+            java.util.List<CameraNode> list = GSON.fromJson(r, type);
+            return list != null ? list : java.util.Collections.emptyList();
+        } catch (Exception e) {
+            return java.util.Collections.emptyList();
         }
     }
 

@@ -267,6 +267,18 @@ public class MenuOverlayScreen extends Screen {
 
         yOffset += spacing;
 
+        // Show/Hide Node Overlays outside edit mode
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Nodes Outside Edit"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isShowNodesOutsideEdit())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setShowNodesOutsideEdit(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
         // Use Default Movement When Idle Checkbox
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
                 .pos(buttonX, centerY + yOffset)

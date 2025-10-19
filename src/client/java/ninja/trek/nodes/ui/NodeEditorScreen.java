@@ -20,6 +20,7 @@ import java.util.List;
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
     private boolean dragging = false;
+    private static Integer lastColor = null;
 
     public NodeEditorScreen() {
         super(Text.literal("Node Edit"));
@@ -42,6 +43,101 @@ public class NodeEditorScreen extends Screen {
                 CameraNode sel = NodeManager.get().getSelected();
                 if (sel != null) { sel.colorARGB = col; NodeManager.get().save(); }
             }));
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        // Node edit utility buttons
+        addDrawableChild(ButtonWidget.builder(Text.literal("Rename"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null) {
+                client.setScreen(new ninja.trek.config.RenameModal(sel.name, newName -> {
+                    sel.name = newName;
+                    NodeManager.get().save();
+                    client.setScreen(this);
+                }));
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        addDrawableChild(ButtonWidget.builder(Text.literal("Duplicate"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null) {
+                CameraNode n = new CameraNode();
+                n.name = sel.name + " Copy";
+                n.type = sel.type;
+                n.position = sel.position.add(0.25, 0, 0.25);
+                n.colorARGB = sel.colorARGB;
+                n.lookAt = sel.lookAt;
+                for (Area a : sel.areas) {
+                    Area c = new Area();
+                    c.shape = a.shape;
+                    c.center = a.center;
+                    c.minRadius = a.minRadius;
+                    c.maxRadius = a.maxRadius;
+                    c.advanced = a.advanced;
+                    c.minRadii = a.minRadii;
+                    c.maxRadii = a.maxRadii;
+                    c.filterWalking = a.filterWalking;
+                    c.filterElytra = a.filterElytra;
+                    c.filterMinecart = a.filterMinecart;
+                    c.filterRidingGhast = a.filterRidingGhast;
+                    c.filterRidingOther = a.filterRidingOther;
+                    c.filterBoat = a.filterBoat;
+                    c.filterSwimming = a.filterSwimming;
+                    c.filterSneaking = a.filterSneaking;
+                    c.filterCrawling1Block = a.filterCrawling1Block;
+                    c.easing = a.easing;
+                    n.areas.add(c);
+                }
+                ninja.trek.nodes.NodeManager.get().getNodes();
+                // add and select
+                NodeManager.get().setSelected(NodeManager.get().addNode(n.position).id);
+                // replace new node fields
+                CameraNode added = NodeManager.get().getSelected();
+                if (added != null) {
+                    added.name = n.name;
+                    added.type = n.type;
+                    added.colorARGB = n.colorARGB;
+                    added.lookAt = n.lookAt;
+                    added.areas.addAll(n.areas);
+                    NodeManager.get().save();
+                }
+                this.init(client, this.width, this.height);
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        // Copy/Paste node color
+        addDrawableChild(ButtonWidget.builder(Text.literal("Copy Color"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null) lastColor = sel.colorARGB;
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        addDrawableChild(ButtonWidget.builder(Text.literal("Paste Color"), b-> {
+            CameraNode sel = NodeManager.get().getSelected();
+            if (sel != null && lastColor != null) { sel.colorARGB = lastColor; NodeManager.get().save(); }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
+        // Export/Import node sets
+        addDrawableChild(ButtonWidget.builder(Text.literal("Export"), b-> {
+            boolean ok = ninja.trek.nodes.io.NodeStorage.exportNodes(new java.util.ArrayList<>(NodeManager.get().getNodes()));
+            if (!ok) {
+                // no toast; silent
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        addDrawableChild(ButtonWidget.builder(Text.literal("Import"), b-> {
+            java.util.List<CameraNode> list = ninja.trek.nodes.io.NodeStorage.importNodes();
+            if (!list.isEmpty()) {
+                // Replace current set
+                // simple: clear + add all
+                // since NodeManager lacks clear API, we simulate by direct field replacement via reflection or rebuild
+                // fallback: remove selected id and overwrite underlying storage
+                try {
+                    java.lang.reflect.Field f = ninja.trek.nodes.NodeManager.class.getDeclaredField("nodes");
+                    f.setAccessible(true);
+                    java.util.List<CameraNode> nodes = (java.util.List<CameraNode>) f.get(ninja.trek.nodes.NodeManager.get());
+                    nodes.clear();
+                    nodes.addAll(list);
+                    ninja.trek.nodes.NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                } catch (Throwable ignored) {}
+            }
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Add Node"), b-> {
@@ -114,19 +210,6 @@ public class NodeEditorScreen extends Screen {
                     this.init(client, this.width, this.height);
                 }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
-
-                // Start angle controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("Angle -"), b-> {
-                    selType.droneStartAngleDeg = (selType.droneStartAngleDeg - 5.0 + 360.0) % 360.0;
-                    NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
-                    selType.droneStartAngleDeg = (selType.droneStartAngleDeg + 5.0) % 360.0;
-                    NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
-                y += h + sp;
             }
         }
 
@@ -178,7 +261,6 @@ public class NodeEditorScreen extends Screen {
             if (sel.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
                 context.drawText(textRenderer, Text.literal(String.format("Radius: %.1f", sel.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
                 context.drawText(textRenderer, Text.literal(String.format("Speed: %.0f deg/s", sel.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Start Angle: %.0f deg", sel.droneStartAngleDeg)), rightX, y, 0xFFFFFF, true); y+=12;
                 y+=4;
             }
             List<Area> areas = sel.areas;

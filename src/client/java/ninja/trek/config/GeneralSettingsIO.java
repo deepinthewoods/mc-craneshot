@@ -47,6 +47,8 @@ public class GeneralSettingsIO {
                 settingsObj.addProperty("showCameraCrosshair", GeneralMenuSettings.isShowCameraCrosshair());
                 settingsObj.addProperty("cameraCrosshairSize", GeneralMenuSettings.getCameraCrosshairSize());
                 settingsObj.addProperty("cameraCrosshairSquare", GeneralMenuSettings.isCameraCrosshairSquare());
+                // Save nodes overlay toggle
+                settingsObj.addProperty("showNodesOutsideEdit", GeneralMenuSettings.isShowNodesOutsideEdit());
                 
                 // Save FreeCamReturnMovement settings
                 JsonObject freeCamReturnObj = new JsonObject();
@@ -234,6 +236,9 @@ public class GeneralSettingsIO {
             }
             if (settingsObj.has("cameraCrosshairSquare")) {
                 try { GeneralMenuSettings.setCameraCrosshairSquare(settingsObj.get("cameraCrosshairSquare").getAsBoolean()); } catch (Exception ignored) {}
+            }
+            if (settingsObj.has("showNodesOutsideEdit")) {
+                try { GeneralMenuSettings.setShowNodesOutsideEdit(settingsObj.get("showNodesOutsideEdit").getAsBoolean()); } catch (Exception ignored) {}
             }
 
             // Load autoAdvance
