@@ -7,7 +7,7 @@ import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
-import ninja.trek.Craneshot;
+ 
 
 @CameraMovementType(
         name = "Linear",
@@ -79,15 +79,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         lastTargetPitch = current.getPitch();
         lastYawError = 0f;
         lastPitchError = 0f;
-        try {
-            Craneshot.LOGGER.info(
-                "LinearMovement.start: start(pos={}, yaw={}, pitch={}) controlStick(pos={}, yaw={}, pitch={}) end(pos={}, yaw={}, pitch={}) targetDistance={}",
-                start.getPosition(), String.format("%.2f", start.getYaw()), String.format("%.2f", start.getPitch()),
-                CameraController.controlStick.getPosition(), String.format("%.2f", CameraController.controlStick.getYaw()), String.format("%.2f", CameraController.controlStick.getPitch()),
-                end.getPosition(), String.format("%.2f", end.getYaw()), String.format("%.2f", end.getPitch()),
-                String.format("%.2f", targetDistance)
-            );
-        } catch (Throwable ignore) { }
+        // No startup log; keep movement logs minimal.
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
@@ -120,13 +112,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         CameraTarget a = resetting ? end : start;
         CameraTarget b = resetting ? start : end;
-        try {
-            Craneshot.LOGGER.info(
-                "LinearMovement.step: resetting={} alpha={} aPos={} bPos={} current(before)={}",
-                resetting, String.format("%.4f", alpha),
-                a.getPosition(), b.getPosition(), current.getPosition()
-            );
-        } catch (Throwable ignore) { }
 
         // During return, track the player head position and rotation continuously
         if (resetting) {
@@ -144,12 +129,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             finalInterpActive = true;
             finalInterpT = 0.0;
             finalInterpStart = current.getPosition();
-            try {
-                Craneshot.LOGGER.info(
-                    "LinearMovement.finalInterp: activated at remainingDistance={} startPos={} targetPos={}",
-                    String.format("%.4f", remainingDistanceForFinal), finalInterpStart, b.getPosition()
-                );
-            } catch (Throwable ignore) { }
+            // No log needed
         }
 
         String stepBranch;
@@ -244,16 +224,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float newFovDelta = (float) (current.getFovMultiplier() + desiredFovSpeed);
 
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
-        try {
-            Craneshot.LOGGER.info(
-                "LinearMovement.stepResult: branch={} deltaLen={} current(after)={} yaw/pitch={}/{} fov={}",
-                stepBranch,
-                String.format("%.4f", deltaLength),
-                current.getPosition(),
-                String.format("%.2f", newYaw), String.format("%.2f", newPitch),
-                String.format("%.3f", newFovDelta)
-            );
-        } catch (Throwable ignore) { }
+        // No per-frame logs
 
         // Update FOV visibly
         if (client.gameRenderer instanceof FovAccessor) {
@@ -272,16 +243,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         lastPitchError = pitchError;
 
         boolean complete = resetting && (remaining < 0.007 || finalInterpActive && finalInterpT >= 0.9999);
-        if (complete) {
-            try {
-                Craneshot.LOGGER.info(
-                    "LinearMovement.complete: current(pos={}, yaw={}, pitch={}) target(pos={}, yaw={}, pitch={}) remaining={} finalInterpT={}",
-                    current.getPosition(), String.format("%.2f", current.getYaw()), String.format("%.2f", current.getPitch()),
-                    b.getPosition(), String.format("%.2f", b.getYaw()), String.format("%.2f", b.getPitch()),
-                    String.format("%.5f", remaining), String.format("%.3f", finalInterpT)
-                );
-            } catch (Throwable ignore) { }
-        }
+        // No completion log; controller/diag will handle return phase logging
         return new MovementState(current, complete);
     }
 

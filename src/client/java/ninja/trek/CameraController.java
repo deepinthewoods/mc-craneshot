@@ -14,7 +14,7 @@ import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
-import ninja.trek.Craneshot;
+import ninja.trek.util.Diag;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -63,15 +63,7 @@ public class CameraController {
                 float finalPitch = calculateTargetPitch(pitch);
 
                 controlStick.set(eyePos, finalYaw, finalPitch);
-                try {
-                    Craneshot.LOGGER.debug(
-                        "CameraController.updateControlStick: endTarget={} eyePos={} finalYaw={} finalPitch={}",
-                        currentEndTarget,
-                        eyePos,
-                        String.format("%.2f", finalYaw),
-                        String.format("%.2f", finalPitch)
-                    );
-                } catch (Throwable ignore) { }
+                // No per-frame logging here; keep noise low.
             }
         }
     }
@@ -180,17 +172,13 @@ public class CameraController {
                 _mc.setScreen(null);
             }
             ninja.trek.nodes.NodeManager.get().setEditing(false);
-            try {
-                CameraSystem cs = CameraSystem.getInstance();
-                boolean wasActive = cs.isCameraActive();
-                Craneshot.LOGGER.info(
-                        "CameraController.setPostMoveStates: cleared; cameraSystemActive(before)={} freeCam(pos={}, yaw={}, pitch={})",
-                        wasActive,
-                        freeCamPosition,
-                        String.format("%.2f", freeCamYaw),
-                        String.format("%.2f", freeCamPitch)
-                );
-            } catch (Throwable ignore) { }
+            CameraSystem cs = CameraSystem.getInstance();
+            boolean wasActive = cs.isCameraActive();
+            Diag.trans("PostMoveStates cleared; camSysActive(before)={} freeCamPos/yaw/pitch=({}, {}, {})",
+                    wasActive,
+                    freeCamPosition,
+                    String.format("%.2f", freeCamYaw),
+                    String.format("%.2f", freeCamPitch));
         } else {
             // Set new movement modes
             currentMouseMoveMode = m.getPostMoveMouse();
@@ -265,8 +253,8 @@ public class CameraController {
                 
                 // Update the camera immediately to apply our position
                 cameraSystem.updateCamera(camera);
-                Craneshot.LOGGER.info(
-                        "CameraController.setPostMoveStates: activated FREE_CAMERA mouse={} keys={} preCam(pos={}, yaw={}, pitch={}) entityFreecam={} existingCam(pos={}, yaw={}, pitch={})",
+                Diag.trans(
+                        "Activated FREE_CAMERA mouse={} keys={} freeCamPos/yaw/pitch=({}, {}, {}) entityFreecam={} preExistingCam(pos={}, yaw={}, pitch={})",
                         currentMouseMoveMode, currentKeyMoveMode,
                         freeCamPosition,
                         String.format("%.2f", freeCamYaw),
@@ -461,11 +449,7 @@ public class CameraController {
                 // Let the camera system update its state
                 boolean rotating = (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) || ninja.trek.nodes.NodeManager.get().isEditing();
                 boolean entityFreecam = (ninja.trek.util.CameraEntity.getCamera() != null);
-                Craneshot.LOGGER.debug("CameraController.updateCamera: systemActive rotating={} entityFreecam={} baseTarget(pos={}, yaw={}, pitch={})",
-                        rotating, entityFreecam,
-                        baseTarget != null ? baseTarget.getPosition() : null,
-                        baseTarget != null ? String.format("%.2f", baseTarget.getYaw()) : "-",
-                        baseTarget != null ? String.format("%.2f", baseTarget.getPitch()) : "-");
+                // Avoid per-frame logs; rely on Diag guards inside CameraSystem
                 if (entityFreecam) {
                     // If using the dedicated camera entity: do not push manual camera pos/rot
                     if (rotating && client.mouse instanceof IMouseMixin) {
@@ -535,9 +519,7 @@ public class CameraController {
                     freeCamPitch = baseTarget.getPitch();
                 }
 
-                // Apply the camera position and rotation
-                Craneshot.LOGGER.debug("CameraController.updateCamera legacy write: pos={} yaw={} pitch={}",
-                        freeCamPosition, String.format("%.2f", freeCamYaw), String.format("%.2f", freeCamPitch));
+                // Apply the camera position and rotation (no log)
                 ((CameraAccessor) camera).invokesetPos(freeCamPosition);
                 ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
@@ -639,10 +621,10 @@ public class CameraController {
         // Make sure to restore default camera behavior by deactivating the camera system
         CameraSystem cameraSystem = CameraSystem.getInstance();
         if (cameraSystem.isCameraActive()) {
-            Craneshot.LOGGER.info(
-                    "CameraController.onComplete: deactivating CameraSystem and returning to vanilla (last freeCam pos={} yaw={} pitch={})",
-                    freeCamPosition, String.format("%.2f", freeCamYaw), String.format("%.2f", freeCamPitch)
-            );
+            Diag.trans("Controller.onComplete: deactivating camSys; last freeCam pos/yaw/pitch=({}, {}, {})",
+                    freeCamPosition,
+                    String.format("%.2f", freeCamYaw),
+                    String.format("%.2f", freeCamPitch));
             cameraSystem.deactivateCamera();
         }
 
@@ -651,8 +633,10 @@ public class CameraController {
             freeCamPosition = client.player.getEyePos();
             freeCamYaw = client.player.getYaw();
             freeCamPitch = client.player.getPitch();
-            Craneshot.LOGGER.debug("CameraController.onComplete: reset tracking to player pos={} yaw={} pitch={}",
-                    freeCamPosition, String.format("%.2f", freeCamYaw), String.format("%.2f", freeCamPitch));
+            Diag.ev("Controller.onComplete: reset tracking to player pos/yaw/pitch=({}, {}, {})",
+                    freeCamPosition,
+                    String.format("%.2f", freeCamYaw),
+                    String.format("%.2f", freeCamPitch));
         }
 
         // Reset FOV to default

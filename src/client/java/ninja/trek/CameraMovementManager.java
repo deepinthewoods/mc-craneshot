@@ -1,6 +1,7 @@
 package ninja.trek;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
@@ -10,7 +11,7 @@ import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
-import ninja.trek.Craneshot;
+import ninja.trek.util.Diag;
 
 import java.util.*;
 
@@ -171,20 +172,15 @@ public class CameraMovementManager {
 
         activeMovementSlot = slotIndex;
         activeMovement = movement;
-        try {
-            Craneshot.LOGGER.info(
-                "CameraMovementManager.startTransition: slot={} movement={} keyMode={} mouseMode={} cameraSystemActive={} camEnt={} cam(pos={}, yaw={}, pitch={})",
-                slotIndex,
-                movement.getName(),
-                CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-                CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
-                CameraSystem.getInstance().isCameraActive(),
-                MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null,
-                camera != null ? camera.getPos() : null,
-                camera != null ? String.format("%.2f", camera.getYaw()) : "-",
-                camera != null ? String.format("%.2f", camera.getPitch()) : "-"
-            );
-        } catch (Throwable ignore) { }
+        Diag.trans(
+            "startTransition slot={} movement={} key={} mouse={} camSysActive={} camEnt={}",
+            slotIndex,
+            movement.getName(),
+            CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
+            CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
+            CameraSystem.getInstance().isCameraActive(),
+            MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
+        );
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
@@ -203,15 +199,12 @@ public class CameraMovementManager {
 
             // Only use FreeCamReturnMovement if we've actually moved with keyboard
             if (inFreeCameraMode && CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard) {
-                Craneshot.LOGGER.info(
-                    "CameraMovementManager.finishTransition: entering FreeCamReturnMovement (keyboard moved) keyMode={} mouseMode={} camSysActive={} camEnt={} pos/yaw/pitch=({}, {}, {})",
+                Diag.trans(
+                    "finishTransition -> FreeCamReturn (keyboard moved) key={} mouse={} camSysActive={} camEnt={}",
                     CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
                     CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
                     CameraSystem.getInstance().isCameraActive(),
-                    MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null,
-                    camera != null ? String.format("%.3f", camera.getPos().x) : "-",
-                    camera != null ? String.format("%.2f", camera.getYaw()) : "-",
-                    camera != null ? String.format("%.2f", camera.getPitch()) : "-"
+                    MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
                 );
                 
                 // Store the original active movement to return to after FreeCamReturnMovement completes
@@ -253,8 +246,8 @@ public class CameraMovementManager {
                 return;
             } else if (inFreeCameraMode) {
                 // No keyboard movement detected - using regular camera return
-                Craneshot.LOGGER.info(
-                    "CameraMovementManager.finishTransition: freecam active but no keyboard move; using normal return keyMode={} mouseMode={}",
+                Diag.ev(
+                    "finishTransition: freecam active but no keyboard move; normal return key={} mouse={}",
                     CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
                     CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode
                 );
@@ -266,17 +259,12 @@ public class CameraMovementManager {
             if (inFreeCameraMode) {
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             }
-            try {
-                Vec3d prevBase = baseTarget != null ? baseTarget.getPosition() : null;
-                Craneshot.LOGGER.info(
-                    "CameraMovementManager.finishTransition: queueReset on movement={} prevBaseTargetPos={} cam(pos={}, yaw={}, pitch={})",
-                    activeMovement.getName(),
-                    prevBase,
-                    camera != null ? camera.getPos() : null,
-                    camera != null ? String.format("%.2f", camera.getYaw()) : "-",
-                    camera != null ? String.format("%.2f", camera.getPitch()) : "-"
-                );
-            } catch (Throwable ignore) { }
+            Vec3d prevBase = baseTarget != null ? baseTarget.getPosition() : null;
+            Diag.ev(
+                "finishTransition: queueReset movement={} prevBasePos={}",
+                activeMovement.getName(),
+                prevBase
+            );
             activeMovement.queueReset(client, camera);
             
             // Reset the keyboard movement flag
@@ -379,11 +367,9 @@ public class CameraMovementManager {
                     isOut = false;
 
                     // Restore default camera behavior
-                    try {
-                        CameraSystem cameraSystem = CameraSystem.getInstance();
-                        Craneshot.LOGGER.info("FreeCamReturn complete: deactivating CameraSystem and restoring vanilla");
-                        cameraSystem.deactivateCamera();
-                    } catch (Throwable ignore) { }
+                    CameraSystem cameraSystem = CameraSystem.getInstance();
+                    Diag.trans("FreeCamReturn complete: deactivating CameraSystem and restoring vanilla");
+                    cameraSystem.deactivateCamera();
 
                     // Explicitly reset controller state
                     CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePos();
@@ -411,24 +397,22 @@ public class CameraMovementManager {
                 CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType());
 
                 // Log out-phase completion snapshot: raw vs adjusted, and post-move modes
-                try {
-                    ninja.trek.Craneshot.LOGGER.info(
-                        "Linear out complete: raw=({},{},{}) adj=({},{},{}) yaw/pitch=({}/{}) mouseMode={} keyMode={} raycast={} camSysActive={} camEnt={}",
-                        String.format("%.2f", preAdjust.getPosition().x),
-                        String.format("%.2f", preAdjust.getPosition().y),
-                        String.format("%.2f", preAdjust.getPosition().z),
-                        String.format("%.2f", currentTarget.getPosition().x),
-                        String.format("%.2f", currentTarget.getPosition().y),
-                        String.format("%.2f", currentTarget.getPosition().z),
-                        String.format("%.1f", currentTarget.getYaw()),
-                        String.format("%.1f", currentTarget.getPitch()),
-                        CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
-                        CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-                        activeMovement.getRaycastType(),
-                        CameraSystem.getInstance().isCameraActive(),
-                        MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
-                    );
-                } catch (Throwable ignore) { }
+                Diag.ev(
+                    "Out-phase complete: raw=({},{},{}) adj=({},{},{}) yaw/pitch=({}/{}) mouse={} key={} raycast={} camSysActive={} camEnt={}",
+                    String.format("%.2f", preAdjust.getPosition().x),
+                    String.format("%.2f", preAdjust.getPosition().y),
+                    String.format("%.2f", preAdjust.getPosition().z),
+                    String.format("%.2f", currentTarget.getPosition().x),
+                    String.format("%.2f", currentTarget.getPosition().y),
+                    String.format("%.2f", currentTarget.getPosition().z),
+                    String.format("%.1f", currentTarget.getYaw()),
+                    String.format("%.1f", currentTarget.getPitch()),
+                    CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
+                    CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
+                    activeMovement.getRaycastType(),
+                    CameraSystem.getInstance().isCameraActive(),
+                    MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
+                );
 
                 // Set the base target for reference
                 baseTarget = currentTarget;
@@ -511,20 +495,18 @@ public class CameraMovementManager {
         CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType);
 
         // Log any large target jumps (raw or adjusted)
-        try {
-            final double JUMP_THRESH = 1.0; // blocks
-            if (baseTarget != null) {
-                double rawJump = rawTarget.getPosition().distanceTo(baseTarget.getPosition());
-                double adjJump = adjustedTarget.getPosition().distanceTo(baseTarget.getPosition());
-                if (rawJump > JUMP_THRESH || adjJump > JUMP_THRESH) {
-                    Craneshot.LOGGER.info(
-                        "CameraMovementManager.update: target jump rawDist={} adjDist={} raycast={} prevBase={} newRaw={} newAdj={}",
-                        String.format("%.2f", rawJump), String.format("%.2f", adjJump), raycastType,
-                        baseTarget.getPosition(), rawTarget.getPosition(), adjustedTarget.getPosition()
-                    );
-                }
+        final double JUMP_THRESH = 1.0; // blocks
+        if (baseTarget != null) {
+            double rawJump = rawTarget.getPosition().distanceTo(baseTarget.getPosition());
+            double adjJump = adjustedTarget.getPosition().distanceTo(baseTarget.getPosition());
+            if (rawJump > JUMP_THRESH || adjJump > JUMP_THRESH) {
+                Diag.ev(
+                    "target jump rawDist={} adjDist={} raycast={} prevBase={} newRaw={} newAdj={}",
+                    String.format("%.2f", rawJump), String.format("%.2f", adjJump), raycastType,
+                    baseTarget.getPosition(), rawTarget.getPosition(), adjustedTarget.getPosition()
+                );
             }
-        } catch (Throwable ignore) { }
+        }
 
         // Third-person display switching (hands/body) centralized here
         // Only when not in freecam/key-rotation modes
@@ -535,45 +517,17 @@ public class CameraMovementManager {
         if (!freeCamKeys && !freeCamMouse) {
             double dist = adjustedTarget.getPosition().distanceTo(client.player.getEyePos());
             CameraSystem cs = CameraSystem.getInstance();
-            try {
-                if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
-                    cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
-                } else {
-                    cs.activateCamera(CameraSystem.CameraMode.FIRST_PERSON);
-                }
-                Craneshot.LOGGER.debug("CameraMovementManager.update: ensured CameraSystem active in {} (dist={})",
-                        (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD ? "THIRD_PERSON" : "FIRST_PERSON"),
-                        String.format("%.2f", dist));
-            } catch (Throwable ignore) { }
+            if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
+                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+//                cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
+            } else {
+                client.options.setPerspective(Perspective.FIRST_PERSON);
+
+//                cs.activateCamera(CameraSystem.CameraMode.FIRST_PERSON);
+            }
         }
 
-        // Throttled debug logging of current camera state and target when a movement is active
-        long now = System.currentTimeMillis();
-        if (true) {
-            try {
-                Vec3d camPos = camera != null ? camera.getPos() : Vec3d.ZERO;
-                float camYaw = camera != null ? camera.getYaw() : 0f;
-                float camPitch = camera != null ? camera.getPitch() : 0f;
-                String movementName = activeMovement != null ? activeMovement.getName() : "<none>";
-
-                Craneshot.LOGGER.info(
-                    "active={} cam=({}, {}, {}) yaw={} pitch={} target=({}, {}, {}) tyaw={} tpitch={} raycast={} camSysActive={} keyMode={} mouseMode={}",
-                    movementName,
-                    String.format("%.3f", camPos.x), String.format("%.3f", camPos.y), String.format("%.3f", camPos.z),
-                    String.format("%.2f", camYaw), String.format("%.2f", camPitch),
-                    String.format("%.3f", adjustedTarget.getPosition().x),
-                    String.format("%.3f", adjustedTarget.getPosition().y),
-                    String.format("%.3f", adjustedTarget.getPosition().z),
-                    String.format("%.2f", adjustedTarget.getYaw()),
-                    String.format("%.2f", adjustedTarget.getPitch()),
-                    raycastType,
-                    CameraSystem.getInstance().isCameraActive(),
-                    CameraController.currentKeyMoveMode,
-                    CameraController.currentMouseMoveMode
-                );
-            } catch (Throwable ignore) { }
-            lastMovementLogTimeMs = now;
-        }
+        // Remove per-frame status logging to reduce noise; rely on targeted Diag logs.
 
         return adjustedTarget;
     }
@@ -639,9 +593,7 @@ public class CameraMovementManager {
             return baseTarget;
         } else if (baseTarget != null && activeMovement == null) {
             // Force clear the stale base target
-            try {
-                Craneshot.LOGGER.debug("CameraMovementManager.getCurrentTarget: clearing stale baseTarget={} (no active movement)", baseTarget.getPosition());
-            } catch (Throwable ignore) { }
+            Diag.ev("getCurrentTarget: clearing stale baseTarget={} (no active movement)", baseTarget.getPosition());
             baseTarget = null;
             return null;
         } else {

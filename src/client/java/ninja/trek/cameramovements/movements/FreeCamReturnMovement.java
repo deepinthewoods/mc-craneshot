@@ -4,7 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
-import ninja.trek.Craneshot;
+ 
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.mixin.client.FovAccessor;
@@ -58,13 +58,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         float targetYaw = CameraController.controlStick.getYaw();
         float targetPitch = CameraController.controlStick.getPitch();
         end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
-        try {
-            Craneshot.LOGGER.info(
-                "FreeCamReturn.start: start(pos={}, yaw={}, pitch={}) end(pos={}, yaw={}, pitch={})",
-                start.getPosition(), String.format("%.2f", start.getYaw()), String.format("%.2f", start.getPitch()),
-                end.getPosition(), String.format("%.2f", end.getYaw()), String.format("%.2f", end.getPitch())
-            );
-        } catch (Throwable ignore) { }
+        // No startup log
 
         finalInterpActive = false;
         finalInterpT = 0.0;
@@ -91,12 +85,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             finalInterpActive = true;
             finalInterpT = 0.0;
             finalInterpStart = current.getPosition();
-            try {
-                Craneshot.LOGGER.info(
-                    "FreeCamReturn.finalInterp: activated at remainingDistance={} startPos={} targetPos={}",
-                    String.format("%.4f", remainingForFinal), finalInterpStart, end.getPosition()
-                );
-            } catch (Throwable ignore) { }
+            // No log needed
         }
 
         if (finalInterpActive) {
@@ -147,16 +136,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         boolean positionComplete = posRemaining < 0.005 || (finalInterpActive && finalInterpT >= 0.9999);
         boolean fovComplete = Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
         isComplete = positionComplete && fovComplete;
-        if (isComplete) {
-            try {
-                Craneshot.LOGGER.info(
-                    "FreeCamReturn.complete: current(pos={}, yaw={}, pitch={}) target(pos={}, yaw={}, pitch={}) posRemaining={} finalInterpT={}",
-                    current.getPosition(), String.format("%.2f", current.getYaw()), String.format("%.2f", current.getPitch()),
-                    end.getPosition(), String.format("%.2f", end.getYaw()), String.format("%.2f", end.getPitch()),
-                    String.format("%.5f", posRemaining), String.format("%.3f", finalInterpT)
-                );
-            } catch (Throwable ignore) { }
-        }
+        // No completion log
 
         return new MovementState(current, isComplete);
     }
