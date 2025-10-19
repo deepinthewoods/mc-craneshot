@@ -92,20 +92,6 @@ public class NodeRenderer {
         });
     }
 
-    private static void submitTri(OrderedRenderCommandQueue queue, MatrixStack matrices,
-                                  float r, float g, float b, float a, int light,
-                                  double ax, double ay, double az,
-                                  double bx, double by, double bz,
-                                  double cx, double cy, double cz) {
-        RenderLayer layer = RenderLayer.getSolid();
-        var bq = queue.getBatchingQueue(1000);
-        bq.submitCustom(matrices, layer, (entry, vc) -> {
-            vc.vertex(entry, (float)ax, (float)ay, (float)az).color(r,g,b,a).normal(entry,0,1,0).light(light);
-            vc.vertex(entry, (float)bx, (float)by, (float)bz).color(r,g,b,a).normal(entry,0,1,0).light(light);
-            vc.vertex(entry, (float)cx, (float)cy, (float)cz).color(r,g,b,a).normal(entry,0,1,0).light(light);
-        });
-    }
-
     private static void drawBillboardQuad(OrderedRenderCommandQueue queue, MatrixStack matrices, Vec3d c,
                                           float size, float r, float g, float b, float a, int light) {
         var cam = MinecraftClient.getInstance().gameRenderer.getCamera();
@@ -118,9 +104,14 @@ public class NodeRenderer {
         Vec3d p1 = c.add(right).subtract(up);
         Vec3d p2 = c.add(right).add(up);
         Vec3d p3 = c.subtract(right).add(up);
-        // two triangles
-        submitTri(queue, matrices, r,g,b,a, light, p0.x,p0.y,p0.z, p1.x,p1.y,p1.z, p2.x,p2.y,p2.z);
-        submitTri(queue, matrices, r,g,b,a, light, p2.x,p2.y,p2.z, p3.x,p3.y,p3.z, p0.x,p0.y,p0.z);
+        // approximate filled look by drawing border and diagonals
+        submitLine(queue, matrices, r,g,b,a, light, p0.x,p0.y,p0.z, p1.x,p1.y,p1.z);
+        submitLine(queue, matrices, r,g,b,a, light, p1.x,p1.y,p1.z, p2.x,p2.y,p2.z);
+        submitLine(queue, matrices, r,g,b,a, light, p2.x,p2.y,p2.z, p3.x,p3.y,p3.z);
+        submitLine(queue, matrices, r,g,b,a, light, p3.x,p3.y,p3.z, p0.x,p0.y,p0.z);
+        // diagonals
+        submitLine(queue, matrices, r,g,b,a, light, p0.x,p0.y,p0.z, p2.x,p2.y,p2.z);
+        submitLine(queue, matrices, r,g,b,a, light, p1.x,p1.y,p1.z, p3.x,p3.y,p3.z);
     }
 
     private static void drawBillboardOutline(OrderedRenderCommandQueue queue, MatrixStack matrices, Vec3d c,

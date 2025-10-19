@@ -212,7 +212,14 @@ public class NodeManager {
         var mc = MinecraftClient.getInstance();
         if (mc == null || mc.player == null) return true;
         var pl = mc.player;
-        boolean isElytra = pl.isFallFlying();
+        boolean isElytra = false;
+        try {
+            Object pose = pl.getPose();
+            if (pose != null) {
+                String n = pose.toString();
+                isElytra = "FALL_FLYING".equals(n) || "GLIDING".equals(n);
+            }
+        } catch (Throwable ignored) {}
         boolean isSwimming = pl.isSwimming();
         boolean isSneaking = pl.isSneaking();
         var vehicle = pl.getVehicle();

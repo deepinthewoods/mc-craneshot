@@ -20,7 +20,7 @@ import java.util.List;
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
     private boolean dragging = false;
-    private static Integer lastColor = null;
+    
 
     public NodeEditorScreen() {
         super(Text.literal("Node Edit"));
@@ -49,7 +49,7 @@ public class NodeEditorScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Rename"), b-> {
             CameraNode sel = NodeManager.get().getSelected();
             if (sel != null) {
-                client.setScreen(new ninja.trek.config.RenameModal(sel.name, newName -> {
+                client.setScreen(new ninja.trek.nodes.ui.NodeRenameModal(sel.name, newName -> {
                     sel.name = newName;
                     NodeManager.get().save();
                     client.setScreen(this);
@@ -104,15 +104,7 @@ public class NodeEditorScreen extends Screen {
             }
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
 
-        // Copy/Paste node color
-        addDrawableChild(ButtonWidget.builder(Text.literal("Copy Color"), b-> {
-            CameraNode sel = NodeManager.get().getSelected();
-            if (sel != null) lastColor = sel.colorARGB;
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Paste Color"), b-> {
-            CameraNode sel = NodeManager.get().getSelected();
-            if (sel != null && lastColor != null) { sel.colorARGB = lastColor; NodeManager.get().save(); }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        
 
         // Export/Import node sets
         addDrawableChild(ButtonWidget.builder(Text.literal("Export"), b-> {

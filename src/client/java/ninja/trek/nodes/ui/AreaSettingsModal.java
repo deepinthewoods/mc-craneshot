@@ -130,8 +130,14 @@ public class AreaSettingsModal extends Screen {
     public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean fromInside) {
         // Handle position/radii label clicks for increments
         if (click != null) {
-            boolean ctrl = hasControlDown();
-            boolean shift = hasShiftDown();
+            boolean ctrl = false, shift = false;
+            try {
+                long win = net.minecraft.client.MinecraftClient.getInstance().getWindow().getHandle();
+                ctrl = org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS
+                        || org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+                shift = org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS
+                        || org.lwjgl.glfw.GLFW.glfwGetKey(win, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+            } catch (Throwable ignored) {}
             int inc = shift ? 100 : (ctrl ? 10 : 1);
             boolean right = click.button() == 1;
             int sign = right ? -1 : 1;
