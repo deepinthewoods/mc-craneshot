@@ -17,7 +17,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
 
-    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
+    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 200.0)
     private double positionSpeedLimit = 10;
 
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
@@ -26,7 +26,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 1000)
     private double rotationSpeedLimit = 500;
 
-    @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
+    @MovementSetting(label = "Target Distance", min = 0.0, max = 50.0)
     private double targetDistance = 10.0;
 
     @MovementSetting(label = "Min Distance", min = 1.0, max = 10.0)

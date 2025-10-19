@@ -16,7 +16,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
     private double positionEasing = 0.1;
 
-    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 100.0)
+    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 200.0)
     private double positionSpeedLimit = 10;
 
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
