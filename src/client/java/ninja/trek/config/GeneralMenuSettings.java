@@ -6,6 +6,10 @@ public class GeneralMenuSettings {
     private static boolean autoAdvance = false;
     private static final FreeCamSettings freeCamSettings = new FreeCamSettings();
     private static final FreeCamReturnMovement freeCamReturnMovement = new FreeCamReturnMovement();
+    // Default idle movement control
+    private static boolean useDefaultIdleMovement = false;
+    private static final ninja.trek.cameramovements.movements.LinearMovement defaultIdleMovement =
+            new ninja.trek.cameramovements.movements.LinearMovement();
     // Node Editor drag sensitivity multiplier (applies in Node Editor only)
     private static double nodeEditSensitivityMultiplier = 6.0; // default: 6x
 
@@ -24,6 +28,19 @@ public class GeneralMenuSettings {
     
     public static FreeCamReturnMovement getFreeCamReturnMovement() {
         return freeCamReturnMovement;
+    }
+
+    // Default idle movement settings
+    public static boolean isUseDefaultIdleMovement() {
+        return useDefaultIdleMovement;
+    }
+
+    public static void setUseDefaultIdleMovement(boolean value) {
+        useDefaultIdleMovement = value;
+    }
+
+    public static ninja.trek.cameramovements.movements.LinearMovement getDefaultIdleMovement() {
+        return defaultIdleMovement;
     }
 
     // Node Editor sensitivity controls

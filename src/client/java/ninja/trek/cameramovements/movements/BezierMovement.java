@@ -28,7 +28,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Target Distance", min = 1.0, max = 50.0)
     private double targetDistance = 10.0;
 
-    @MovementSetting(label = "Min Distance", min = 1.0, max = 10.0)
+    @MovementSetting(label = "Min Distance", min = 0.0, max = 10.0)
     private double minDistance = 2.0;
 
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)

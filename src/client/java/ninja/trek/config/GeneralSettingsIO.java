@@ -60,6 +60,26 @@ public class GeneralSettingsIO {
                 });
                 settingsObj.add("freeCamReturn", freeCamReturnObj);
 
+                // Save default idle movement usage flag
+                settingsObj.addProperty("useDefaultIdleMovement", GeneralMenuSettings.isUseDefaultIdleMovement());
+
+                // Save Default Idle LinearMovement settings
+                JsonObject defaultIdleObj = new JsonObject();
+                ninja.trek.cameramovements.movements.LinearMovement defaultIdle = GeneralMenuSettings.getDefaultIdleMovement();
+                java.util.Map<String, Object> defaultIdleSettings = ((ninja.trek.cameramovements.AbstractMovementSettings)defaultIdle).getSettings();
+                defaultIdleSettings.forEach((key, value) -> {
+                    if (value instanceof Float || value instanceof Double) {
+                        defaultIdleObj.addProperty(key, ((Number)value).doubleValue());
+                    } else if (value instanceof String) {
+                        defaultIdleObj.addProperty(key, (String)value);
+                    } else if (value instanceof Boolean) {
+                        defaultIdleObj.addProperty(key, (Boolean)value);
+                    } else if (value instanceof Enum) {
+                        defaultIdleObj.addProperty(key, ((Enum<?>)value).name());
+                    }
+                });
+                settingsObj.add("defaultIdleMovement", defaultIdleObj);
+
                 // Save autoAdvance
                 settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
                 
@@ -149,6 +169,37 @@ public class GeneralSettingsIO {
                             } else if (returnObj.get(key).getAsJsonPrimitive().isBoolean()) {
                                 ((ninja.trek.cameramovements.AbstractMovementSettings)freeCamReturn).updateSetting(
                                     key, returnObj.get(key).getAsBoolean());
+                            }
+                        }
+                    } catch (Exception e) {
+                        // logging removed
+                    }
+                }
+            }
+
+            // Load default idle movement usage flag
+            if (settingsObj.has("useDefaultIdleMovement")) {
+                try {
+                    GeneralMenuSettings.setUseDefaultIdleMovement(settingsObj.get("useDefaultIdleMovement").getAsBoolean());
+                } catch (Exception ignored) {}
+            }
+
+            // Load Default Idle LinearMovement settings
+            if (settingsObj.has("defaultIdleMovement")) {
+                JsonObject defaultIdleObj = settingsObj.getAsJsonObject("defaultIdleMovement");
+                ninja.trek.cameramovements.movements.LinearMovement defaultIdle = GeneralMenuSettings.getDefaultIdleMovement();
+                for (String key : defaultIdleObj.keySet()) {
+                    try {
+                        if (defaultIdleObj.get(key).isJsonPrimitive()) {
+                            if (defaultIdleObj.get(key).getAsJsonPrimitive().isString()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)defaultIdle).updateSetting(
+                                    key, defaultIdleObj.get(key).getAsString());
+                            } else if (defaultIdleObj.get(key).getAsJsonPrimitive().isNumber()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)defaultIdle).updateSetting(
+                                    key, defaultIdleObj.get(key).getAsDouble());
+                            } else if (defaultIdleObj.get(key).getAsJsonPrimitive().isBoolean()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)defaultIdle).updateSetting(
+                                    key, defaultIdleObj.get(key).getAsBoolean());
                             }
                         }
                     } catch (Exception e) {

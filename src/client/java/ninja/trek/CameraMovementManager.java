@@ -428,9 +428,24 @@ public class CameraMovementManager {
     }
 
     public CameraTarget update(MinecraftClient client, Camera camera, float deltaSeconds) {
-        // When no active movement, stop driving the camera explicitly.
-        // Returning null prevents Controller from pinning camera to a stale target.
-        if (activeMovement == null || client.player == null) {
+        // If no active movement and allowed, start default idle movement (Linear)
+        if ((activeMovement == null) && client.player != null) {
+            if (ninja.trek.config.GeneralMenuSettings.isUseDefaultIdleMovement()) {
+                ICameraMovement idle = ninja.trek.config.GeneralMenuSettings.getDefaultIdleMovement();
+                // Reset any post-move states before starting a fresh movement
+                CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+                idle.start(client, camera);
+                CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) idle);
+                activeMovement = idle;
+                activeMovementSlot = null;
+                isOut = false;
+            } else {
+                // When no active movement and feature disabled, release control
+                return null;
+            }
+        }
+
+        if (client.player == null) {
             return null;
         }
         

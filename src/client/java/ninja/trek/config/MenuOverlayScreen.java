@@ -204,6 +204,18 @@ public class MenuOverlayScreen extends Screen {
 
         yOffset += spacing;
 
+        // Use Default Movement When Idle Checkbox
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isUseDefaultIdleMovement())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setUseDefaultIdleMovement(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
         // Node Editor sensitivity slider
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Node Edit Sensitivity"), button -> {})
                 .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
@@ -343,6 +355,51 @@ public class MenuOverlayScreen extends Screen {
             );
         }
         
+        // Add collapsible Default Idle Movement Settings section
+        yOffset += spacing;
+        String defaultIdleKey = "defaultIdleSection";
+        boolean defaultIdleExpanded = isSettingsExpanded(defaultIdleKey);
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal((defaultIdleExpanded ? "â–¼ " : "â–¶ ") + "Default Idle Movement (Linear)").formatted(Formatting.YELLOW),
+                button -> {
+                    toggleSettingsExpanded(defaultIdleKey);
+                    reinitialize();
+                })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+
+        if (defaultIdleExpanded) {
+            yOffset += spacing;
+            ninja.trek.cameramovements.movements.LinearMovement defaultIdle = GeneralMenuSettings.getDefaultIdleMovement();
+
+            // Render settings using the same layout helper as movement lists
+            java.util.List<java.lang.reflect.Field> settingFields = new java.util.ArrayList<>();
+            collectSettingFields(defaultIdle, settingFields);
+
+            // Reuse totalWidth/labelWidth/controlWidth already defined earlier in this method
+            int settingWidth = labelWidth + controlWidth + 10;
+            int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+            int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+            for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                java.lang.reflect.Field field = settingFields.get(fieldIndex);
+                ninja.trek.config.MovementSetting annotation = field.getAnnotation(ninja.trek.config.MovementSetting.class);
+                field.setAccessible(true);
+                try {
+                    int column = fieldIndex / settingsPerColumn;
+                    int row = fieldIndex % settingsPerColumn;
+                    int settingX = centerX + 20 + column * (settingWidth + 20);
+                    int settingY = centerY + yOffset + (row * BUTTON_HEIGHT) - scrollOffset;
+
+                    createSettingControl(defaultIdle, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, BUTTON_HEIGHT);
+                } catch (IllegalAccessException ignored) {}
+            }
+
+            // Advance yOffset by the number of rows we used
+            yOffset += settingsPerColumn * BUTTON_HEIGHT;
+        }
+
         // Add collapsible Free Camera Return section header
         yOffset += spacing;
         String freeCamReturnKey = "freeCamReturnSection";
