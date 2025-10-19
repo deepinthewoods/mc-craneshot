@@ -14,7 +14,6 @@ import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
-import ninja.trek.util.Diag;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -174,11 +173,7 @@ public class CameraController {
             ninja.trek.nodes.NodeManager.get().setEditing(false);
             CameraSystem cs = CameraSystem.getInstance();
             boolean wasActive = cs.isCameraActive();
-            Diag.trans("PostMoveStates cleared; camSysActive(before)={} freeCamPos/yaw/pitch=({}, {}, {})",
-                    wasActive,
-                    freeCamPosition,
-                    String.format("%.2f", freeCamYaw),
-                    String.format("%.2f", freeCamPitch));
+            
         } else {
             // Set new movement modes
             currentMouseMoveMode = m.getPostMoveMouse();
@@ -253,17 +248,7 @@ public class CameraController {
                 
                 // Update the camera immediately to apply our position
                 cameraSystem.updateCamera(camera);
-                Diag.trans(
-                        "Activated FREE_CAMERA mouse={} keys={} freeCamPos/yaw/pitch=({}, {}, {}) entityFreecam={} preExistingCam(pos={}, yaw={}, pitch={})",
-                        currentMouseMoveMode, currentKeyMoveMode,
-                        freeCamPosition,
-                        String.format("%.2f", freeCamYaw),
-                        String.format("%.2f", freeCamPitch),
-                        ninja.trek.util.CameraEntity.getCamera() != null,
-                        existingCameraPos,
-                        String.format("%.2f", existingYaw),
-                        String.format("%.2f", existingPitch)
-                );
+                
             }
         }
     }
@@ -621,10 +606,6 @@ public class CameraController {
         // Make sure to restore default camera behavior by deactivating the camera system
         CameraSystem cameraSystem = CameraSystem.getInstance();
         if (cameraSystem.isCameraActive()) {
-            Diag.trans("Controller.onComplete: deactivating camSys; last freeCam pos/yaw/pitch=({}, {}, {})",
-                    freeCamPosition,
-                    String.format("%.2f", freeCamYaw),
-                    String.format("%.2f", freeCamPitch));
             cameraSystem.deactivateCamera();
         }
 
@@ -633,10 +614,7 @@ public class CameraController {
             freeCamPosition = client.player.getEyePos();
             freeCamYaw = client.player.getYaw();
             freeCamPitch = client.player.getPitch();
-            Diag.ev("Controller.onComplete: reset tracking to player pos/yaw/pitch=({}, {}, {})",
-                    freeCamPosition,
-                    String.format("%.2f", freeCamYaw),
-                    String.format("%.2f", freeCamPitch));
+            
         }
 
         // Reset FOV to default

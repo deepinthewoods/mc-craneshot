@@ -11,7 +11,6 @@ import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
-import ninja.trek.util.Diag;
 
 import java.util.*;
 
@@ -172,15 +171,6 @@ public class CameraMovementManager {
 
         activeMovementSlot = slotIndex;
         activeMovement = movement;
-        Diag.trans(
-            "startTransition slot={} movement={} key={} mouse={} camSysActive={} camEnt={}",
-            slotIndex,
-            movement.getName(),
-            CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-            CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
-            CameraSystem.getInstance().isCameraActive(),
-            MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
-        );
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
@@ -199,13 +189,6 @@ public class CameraMovementManager {
 
             // Only use FreeCamReturnMovement if we've actually moved with keyboard
             if (inFreeCameraMode && CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard) {
-                Diag.trans(
-                    "finishTransition -> FreeCamReturn (keyboard moved) key={} mouse={} camSysActive={} camEnt={}",
-                    CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-                    CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
-                    CameraSystem.getInstance().isCameraActive(),
-                    MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
-                );
                 
                 // Store the original active movement to return to after FreeCamReturnMovement completes
                 ICameraMovement originalMovement = activeMovement;
@@ -246,11 +229,6 @@ public class CameraMovementManager {
                 return;
             } else if (inFreeCameraMode) {
                 // No keyboard movement detected - using regular camera return
-                Diag.ev(
-                    "finishTransition: freecam active but no keyboard move; normal return key={} mouse={}",
-                    CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-                    CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode
-                );
             }
             
             // Normal case - queue reset directly
@@ -260,11 +238,6 @@ public class CameraMovementManager {
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             }
             Vec3d prevBase = baseTarget != null ? baseTarget.getPosition() : null;
-            Diag.ev(
-                "finishTransition: queueReset movement={} prevBasePos={}",
-                activeMovement.getName(),
-                prevBase
-            );
             activeMovement.queueReset(client, camera);
             
             // Reset the keyboard movement flag
@@ -368,7 +341,6 @@ public class CameraMovementManager {
 
                     // Restore default camera behavior
                     CameraSystem cameraSystem = CameraSystem.getInstance();
-                    Diag.trans("FreeCamReturn complete: deactivating CameraSystem and restoring vanilla");
                     cameraSystem.deactivateCamera();
 
                     // Explicitly reset controller state
@@ -396,23 +368,7 @@ public class CameraMovementManager {
                 CameraTarget preAdjust = state.getCameraTarget();
                 CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType());
 
-                // Log out-phase completion snapshot: raw vs adjusted, and post-move modes
-                Diag.ev(
-                    "Out-phase complete: raw=({},{},{}) adj=({},{},{}) yaw/pitch=({}/{}) mouse={} key={} raycast={} camSysActive={} camEnt={}",
-                    String.format("%.2f", preAdjust.getPosition().x),
-                    String.format("%.2f", preAdjust.getPosition().y),
-                    String.format("%.2f", preAdjust.getPosition().z),
-                    String.format("%.2f", currentTarget.getPosition().x),
-                    String.format("%.2f", currentTarget.getPosition().y),
-                    String.format("%.2f", currentTarget.getPosition().z),
-                    String.format("%.1f", currentTarget.getYaw()),
-                    String.format("%.1f", currentTarget.getPitch()),
-                    CraneshotClient.CAMERA_CONTROLLER.currentMouseMoveMode,
-                    CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode,
-                    activeMovement.getRaycastType(),
-                    CameraSystem.getInstance().isCameraActive(),
-                    MinecraftClient.getInstance() != null ? MinecraftClient.getInstance().getCameraEntity() : null
-                );
+                // logging removed
 
                 // Set the base target for reference
                 baseTarget = currentTarget;
@@ -500,11 +456,7 @@ public class CameraMovementManager {
             double rawJump = rawTarget.getPosition().distanceTo(baseTarget.getPosition());
             double adjJump = adjustedTarget.getPosition().distanceTo(baseTarget.getPosition());
             if (rawJump > JUMP_THRESH || adjJump > JUMP_THRESH) {
-                Diag.ev(
-                    "target jump rawDist={} adjDist={} raycast={} prevBase={} newRaw={} newAdj={}",
-                    String.format("%.2f", rawJump), String.format("%.2f", adjJump), raycastType,
-                    baseTarget.getPosition(), rawTarget.getPosition(), adjustedTarget.getPosition()
-                );
+                // logging removed
             }
         }
 
@@ -593,7 +545,6 @@ public class CameraMovementManager {
             return baseTarget;
         } else if (baseTarget != null && activeMovement == null) {
             // Force clear the stale base target
-            Diag.ev("getCurrentTarget: clearing stale baseTarget={} (no active movement)", baseTarget.getPosition());
             baseTarget = null;
             return null;
         } else {
