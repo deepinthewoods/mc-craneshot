@@ -9,6 +9,7 @@ import net.minecraft.util.Identifier;
 import ninja.trek.config.GeneralSettingsIO;
 import ninja.trek.config.MenuOverlayScreen;
 import ninja.trek.config.SlotSettingsIO;
+import ninja.trek.render.CrosshairHudRenderer;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
@@ -113,6 +114,8 @@ public class CraneshotClient implements ClientModInitializer {
 		List<List<ICameraMovement>> savedSlots = SlotSettingsIO.loadSlots();
 		MOVEMENT_MANAGER.setAllSlots(savedSlots);
 		CraneShotEventHandler.register();
+        // Draw second crosshair at camera look point
+        CrosshairHudRenderer.register();
 	}
 	public static void checkKeybinds() {
 		if (toggleMenuKey.wasPressed()) {
