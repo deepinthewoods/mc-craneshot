@@ -28,6 +28,9 @@ public class CrosshairHudRenderer {
         PlayerEntity player = client.player;
         if (player == null) return;
 
+        // Respect settings
+        if (!ninja.trek.config.GeneralMenuSettings.isShowCameraCrosshair()) return;
+
         // Raycast from the PLAYER HEAD orientation (decoupled from camera)
         float tickProgress = tickCounter.getTickProgress(false);
         Vec3d lerpedPos = player.getLerpedPos(tickProgress);
@@ -102,12 +105,23 @@ public class CrosshairHudRenderer {
         int sx = (int) Math.round(smoothedSx);
         int sy = (int) Math.round(smoothedSy);
 
-        // Draw a small cross aligned to screen (camera-facing)
+        // Draw crosshair per settings
         int color = 0xFFFFFFFF; // white, full alpha
-        int arm = 3; // arm half-length in pixels
-        // horizontal arm
-        ctx.fill(sx - arm, sy, sx + arm + 1, sy + 1, color);
-        // vertical arm
-        ctx.fill(sx, sy - arm, sx + 1, sy + arm + 1, color);
+        int size = Math.max(1, ninja.trek.config.GeneralMenuSettings.getCameraCrosshairSize());
+        boolean square = ninja.trek.config.GeneralMenuSettings.isCameraCrosshairSquare();
+        if (square) {
+            // Interpret size as full side length (diameter), not radius
+            int side = Math.max(1, size);
+            int halfFloor = side / 2; // integer division
+            int left = sx - halfFloor;
+            int top = sy - halfFloor;
+            int x2 = left + side;   // exclusive bound
+            int y2 = top + side;    // exclusive bound
+            ctx.fill(left, top, x2, y2, color);
+        } else {
+            // cross: 1px thick arms of length +/- size
+            ctx.fill(sx - size, sy, sx + size + 1, sy + 1, color);
+            ctx.fill(sx, sy - size, sx + 1, sy + size + 1, color);
+        }
     }
 }

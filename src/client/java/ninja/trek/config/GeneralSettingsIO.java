@@ -41,6 +41,12 @@ public class GeneralSettingsIO {
 
                 // Save Node Editor sensitivity
                 settingsObj.addProperty("nodeEditSensitivity", GeneralMenuSettings.getNodeEditSensitivityMultiplier());
+
+                // Save crosshair settings
+                settingsObj.addProperty("showVanillaCrosshair", GeneralMenuSettings.isShowVanillaCrosshair());
+                settingsObj.addProperty("showCameraCrosshair", GeneralMenuSettings.isShowCameraCrosshair());
+                settingsObj.addProperty("cameraCrosshairSize", GeneralMenuSettings.getCameraCrosshairSize());
+                settingsObj.addProperty("cameraCrosshairSquare", GeneralMenuSettings.isCameraCrosshairSquare());
                 
                 // Save FreeCamReturnMovement settings
                 JsonObject freeCamReturnObj = new JsonObject();
@@ -214,6 +220,20 @@ public class GeneralSettingsIO {
                     GeneralMenuSettings.setNodeEditSensitivityMultiplier(
                             settingsObj.get("nodeEditSensitivity").getAsDouble());
                 } catch (Exception ignored) {}
+            }
+
+            // Load crosshair settings
+            if (settingsObj.has("showVanillaCrosshair")) {
+                try { GeneralMenuSettings.setShowVanillaCrosshair(settingsObj.get("showVanillaCrosshair").getAsBoolean()); } catch (Exception ignored) {}
+            }
+            if (settingsObj.has("showCameraCrosshair")) {
+                try { GeneralMenuSettings.setShowCameraCrosshair(settingsObj.get("showCameraCrosshair").getAsBoolean()); } catch (Exception ignored) {}
+            }
+            if (settingsObj.has("cameraCrosshairSize")) {
+                try { GeneralMenuSettings.setCameraCrosshairSize(settingsObj.get("cameraCrosshairSize").getAsInt()); } catch (Exception ignored) {}
+            }
+            if (settingsObj.has("cameraCrosshairSquare")) {
+                try { GeneralMenuSettings.setCameraCrosshairSquare(settingsObj.get("cameraCrosshairSquare").getAsBoolean()); } catch (Exception ignored) {}
             }
 
             // Load autoAdvance

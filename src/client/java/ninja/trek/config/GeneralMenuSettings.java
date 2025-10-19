@@ -13,6 +13,13 @@ public class GeneralMenuSettings {
     // Node Editor drag sensitivity multiplier (applies in Node Editor only)
     private static double nodeEditSensitivityMultiplier = 6.0; // default: 6x
 
+    // Crosshair settings
+    private static boolean showVanillaCrosshair = true;
+    private static boolean showCameraCrosshair = true;
+    // Size interpreted as half-length in pixels for cross arms or half-side for square
+    private static int cameraCrosshairSize = 3;
+    private static boolean cameraCrosshairSquare = false;
+
 
     public static boolean isAutoAdvance() {
         return autoAdvance;
@@ -52,4 +59,19 @@ public class GeneralMenuSettings {
         // Clamp to reasonable range to avoid extreme values
         nodeEditSensitivityMultiplier = Math.max(0.1, Math.min(20.0, value));
     }
+
+    // Crosshair settings accessors
+    public static boolean isShowVanillaCrosshair() { return showVanillaCrosshair; }
+    public static void setShowVanillaCrosshair(boolean value) { showVanillaCrosshair = value; }
+
+    public static boolean isShowCameraCrosshair() { return showCameraCrosshair; }
+    public static void setShowCameraCrosshair(boolean value) { showCameraCrosshair = value; }
+
+    public static int getCameraCrosshairSize() { return cameraCrosshairSize; }
+    public static void setCameraCrosshairSize(int value) {
+        cameraCrosshairSize = Math.max(1, Math.min(20, value));
+    }
+
+    public static boolean isCameraCrosshairSquare() { return cameraCrosshairSquare; }
+    public static void setCameraCrosshairSquare(boolean value) { cameraCrosshairSquare = value; }
 }

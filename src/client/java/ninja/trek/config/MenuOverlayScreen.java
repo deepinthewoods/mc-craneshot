@@ -204,6 +204,69 @@ public class MenuOverlayScreen extends Screen {
 
         yOffset += spacing;
 
+        // Show/Hide Vanilla Crosshair
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Vanilla Crosshair"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isShowVanillaCrosshair())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setShowVanillaCrosshair(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
+        // Show/Hide Camera Crosshair
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Camera Crosshair"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isShowCameraCrosshair())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setShowCameraCrosshair(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
+        // Camera Crosshair Shape
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Camera Crosshair: Square"), this.textRenderer)
+                .pos(buttonX, centerY + yOffset)
+                .checked(GeneralMenuSettings.isCameraCrosshairSquare())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setCameraCrosshairSquare(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
+        // Camera Crosshair Size slider
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Camera Crosshair Size"), button -> {})
+                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                centerY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Camera Crosshair Size"),
+                1f,
+                20f,
+                GeneralMenuSettings.getCameraCrosshairSize(),
+                "cameraCrosshairSize",
+                new AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("cameraCrosshairSize") && value instanceof Number) {
+                            GeneralMenuSettings.setCameraCrosshairSize(((Number) value).intValue());
+                            GeneralSettingsIO.saveSettings();
+                        }
+                    }
+                }
+        ));
+
+        yOffset += spacing;
+
         // Use Default Movement When Idle Checkbox
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
                 .pos(buttonX, centerY + yOffset)
