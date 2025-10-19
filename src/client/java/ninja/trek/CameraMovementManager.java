@@ -211,11 +211,13 @@ public class CameraMovementManager {
 
                 // Clear post-move settings to disable free camera mode
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
-                
+
+                // Fully deactivate the camera system so return movement drives the camera
+                CameraSystem.getInstance().deactivateCamera();
+
                 // Start the FreeCamReturnMovement to handle the transition back to normal camera
                 FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
 
-                
                 freeCamReturnMovement.start(client, camera);
                 
                 // Set the FreeCamReturnMovement as the active movement
@@ -237,8 +239,16 @@ public class CameraMovementManager {
             if (inFreeCameraMode) {
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             }
+
+            // For movements that use queueReset(), capture current freecam pose first,
+            // then deactivate so subsequent frames apply movement transforms smoothly
             Vec3d prevBase = baseTarget != null ? baseTarget.getPosition() : null;
             activeMovement.queueReset(client, camera);
+
+            // Fully deactivate camera system after seeding queueReset() from the freecam entity
+            if (inFreeCameraMode) {
+                CameraSystem.getInstance().deactivateCamera();
+            }
             
             // Reset the keyboard movement flag
             CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
