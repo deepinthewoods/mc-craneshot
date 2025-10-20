@@ -25,7 +25,8 @@ public class NodeRenderer {
         int fullbright = 0x00F000F0;
 
         long nowMs = System.currentTimeMillis();
-        float dashPhase = (nowMs % 1000L) / 1000f; // 0..1
+        // Slow animated dash motion by 8x
+        float dashPhase = (nowMs % (1000L * 8)) / (1000f * 8); // 0..1 over 8 seconds
 
         for (var node : list) {
             int nCX = (int)Math.floor(node.position.x) >> 4;
@@ -48,22 +49,39 @@ public class NodeRenderer {
 
             // Lines to area centers
             for (var area : node.areas) {
+                // Make dash segments 8x smaller for animated link
                 submitDashedLine(queue, matrices, r, g, b, a, fullbright,
                         p.x - cam.x, p.y - cam.y, p.z - cam.z,
                         area.center.x - cam.x, area.center.y - cam.y, area.center.z - cam.z,
-                        0.5f, 0.3f, dashPhase);
+                        0.5f/8f, 0.3f/8f, dashPhase);
                 // Draw area outline (simple)
                 float rr = r * 0.6f, gg = g * 0.6f, bb = b * 0.6f;
                 if (area.shape == AreaShape.CUBE) {
-                    if (area.advanced && area.maxRadii != null) drawBoxOutline(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
-                    else drawCubeOutline(queue, matrices, area.center.subtract(cam), area.maxRadius, r, g, b, a, fullbright);
-                    if (area.advanced && area.minRadii != null) drawBoxOutline(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, false, dashPhase);
-                    else drawCubeOutline(queue, matrices, area.center.subtract(cam), area.minRadius, rr, gg, bb, a, fullbright);
+                    // Outer (max): keep existing style (advanced dashed animated, simple solid)
+                    if (area.advanced && area.maxRadii != null) {
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
+                    } else {
+                        drawCubeOutline(queue, matrices, area.center.subtract(cam), area.maxRadius, r, g, b, a, fullbright);
+                    }
+                    // Inner (min): dashed, non-animated
+                    if (area.advanced && area.minRadii != null) {
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, true, 0f);
+                    } else {
+                        // Approximate cube with dashed box using uniform radii
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), new Vec3d(area.minRadius, area.minRadius, area.minRadius), rr,gg,bb,a, fullbright, true, 0f);
+                    }
                 } else {
-                    if (area.advanced && area.maxRadii != null) drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
-                    else drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.maxRadius, area.maxRadius, r,g,b,a, fullbright, dashPhase);
-                    if (area.advanced && area.minRadii != null) drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, false, dashPhase);
-                    else drawSphereApprox(queue, matrices, area.center.subtract(cam), area.minRadius, rr, gg, bb, a, fullbright);
+                    // Ellipse/Sphere: Outer (max) remains dashed animated in XZ; inner (min) dashed non-animated in XZ
+                    if (area.advanced && area.maxRadii != null) {
+                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
+                    } else {
+                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.maxRadius, area.maxRadius, r,g,b,a, fullbright, dashPhase);
+                    }
+                    if (area.advanced && area.minRadii != null) {
+                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, true, 0f);
+                    } else {
+                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.minRadius, area.minRadius, rr,gg,bb,a, fullbright, 0f);
+                    }
                 }
             }
 
@@ -84,11 +102,29 @@ public class NodeRenderer {
     private static void submitLine(OrderedRenderCommandQueue queue, MatrixStack matrices,
                                    float r, float g, float b, float a, int light,
                                    double ax, double ay, double az, double bx, double by, double bz) {
-        RenderLayer layer = RenderLayer.getSecondaryBlockOutline();
+        // Use 1px line layer for consistent screen-space thickness
+        RenderLayer layer = RenderLayer.getLines();
         var bq = queue.getBatchingQueue(1000);
+        // Derive a stable normal from camera orientation so lines don't vanish when parallel to world up
+        var cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+        var rot = cam.getRotation();
+        org.joml.Vector3f fV = new org.joml.Vector3f(0f, 0f, -1f).rotate(rot);
+        org.joml.Vector3f uV = new org.joml.Vector3f(0f, 1f, 0f).rotate(rot);
+        Vec3d forward = new Vec3d(fV.x, fV.y, fV.z);
+        Vec3d up = new Vec3d(uV.x, uV.y, uV.z);
+        Vec3d dir = new Vec3d(bx-ax, by-ay, bz-az);
+        double dlen = dir.length();
+        if (dlen > 1e-6) dir = dir.multiply(1.0/dlen);
+        // Prefer normal = dir x forward; if too small (near-parallel), fall back to dir x up
+        Vec3d n = dir.crossProduct(forward);
+        if (n.lengthSquared() < 1e-6) n = dir.crossProduct(up);
+        double nlen = n.length();
+        if (nlen > 1e-6) n = n.multiply(1.0/nlen); else n = up;
+
+        final float nx = (float)n.x, ny = (float)n.y, nz = (float)n.z;
         bq.submitCustom(matrices, layer, (entry, vc) -> {
-            vc.vertex(entry, (float)ax, (float)ay, (float)az).color(r,g,b,a).normal(entry,0,1,0).light(light);
-            vc.vertex(entry, (float)bx, (float)by, (float)bz).color(r,g,b,a).normal(entry,0,1,0).light(light);
+            vc.vertex(entry, (float)ax, (float)ay, (float)az).color(r,g,b,a).normal(entry, nx, ny, nz);
+            vc.vertex(entry, (float)bx, (float)by, (float)bz).color(r,g,b,a).normal(entry, nx, ny, nz);
         });
     }
 
@@ -237,7 +273,7 @@ public class NodeRenderer {
             double ang = t * 2 * Math.PI;
             double x = c.x + Math.cos(ang) * rx;
             double z = c.z + Math.sin(ang) * rz;
-            if (isDashVisible(t, 0.5f, 0.3f, phase)) {
+            if (isDashVisible(t, 0.5f/8f, 0.3f/8f, phase)) {
                 submitLine(queue, matrices, cr,cg,cb,ca, light, prevx, prevy, prevz, x, c.y, z);
             }
             prevx = x; prevy = c.y; prevz = z;
@@ -301,19 +337,19 @@ public class NodeRenderer {
         double y0 = center.y - r.y, y1 = center.y + r.y;
         double z0 = center.z - r.z, z1 = center.z + r.z;
         // 12 edges
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x1,y0,z0, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x1,y0,z0);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y1,z0, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y1,z0);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y0,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y0,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x1,y0,z0, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x1,y0,z0);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y1,z0, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y1,z0);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y0,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z0, x0,y0,z1);
 
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x0,y1,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x0,y1,z1);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y0,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y0,z1);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y1,z0, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y1,z0);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x0,y1,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x0,y1,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y0,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y0,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y1,z0, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y1,z1, x1,y1,z0);
 
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y1,z0, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y1,z0);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y0,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y0,z1);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x1,y1,z0, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x1,y1,z0);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x0,y1,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x0,y1,z1);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x1,y0,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x1,y0,z1);
-        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x0,y1,z1, 0.5f,0.3f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x0,y1,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y1,z0, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y1,z0);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y0,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x1,y0,z0, x1,y0,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x1,y1,z0, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x1,y1,z0);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x0,y1,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y1,z0, x0,y1,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x1,y0,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x1,y0,z1);
+        if (dashed) submitDashedLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x0,y1,z1, 0.5f/8f,0.3f/8f, phase); else submitLine(queue, matrices, cr,cg,cb,ca, light, x0,y0,z1, x0,y1,z1);
     }
 }

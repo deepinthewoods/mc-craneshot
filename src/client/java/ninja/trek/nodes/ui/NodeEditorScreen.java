@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
@@ -233,7 +234,7 @@ public class NodeEditorScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        // no-op for logging
+        // Key forwarding is handled in keyPressed/keyReleased; no per-tick polling here.
     }
 
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
@@ -298,7 +299,18 @@ public class NodeEditorScreen extends Screen {
             }
         }
 
-        // For movement keys (WASD, jump, sneak, sprint) don't consume; camera controller polls states
+        // Forward movement keys by bound mapping so freecam can move while screen is open
+        if (this.client != null) {
+            var o = this.client.options;
+            if (o.forwardKey.matchesKey(input)) { o.forwardKey.setPressed(true); return true; }
+            if (o.backKey.matchesKey(input)) { o.backKey.setPressed(true); return true; }
+            if (o.leftKey.matchesKey(input)) { o.leftKey.setPressed(true); return true; }
+            if (o.rightKey.matchesKey(input)) { o.rightKey.setPressed(true); return true; }
+            if (o.jumpKey.matchesKey(input)) { o.jumpKey.setPressed(true); return true; }
+            if (o.sneakKey.matchesKey(input)) { o.sneakKey.setPressed(true); return true; }
+            if (o.sprintKey.matchesKey(input)) { o.sprintKey.setPressed(true); return true; }
+        }
+
         // Let super handle other UI keys
         return super.keyPressed(input);
     }
@@ -306,10 +318,19 @@ public class NodeEditorScreen extends Screen {
     private void closeAndStartReturn() {
         // Mark node editing off and start camera return
         ninja.trek.nodes.NodeManager.get().setEditing(false);
+        // Clear any forwarded key states to avoid stuck keys
+        clearMovementKeys();
         if (this.client != null) {
             ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.client, this.client.gameRenderer.getCamera());
             this.client.setScreen(null);
         }
+    }
+
+    @Override
+    public void removed() {
+        // Ensure keys are cleared if the screen is closed by any means
+        clearMovementKeys();
+        super.removed();
     }
 
     @Override
@@ -358,6 +379,36 @@ public class NodeEditorScreen extends Screen {
             }
         }
         return super.mouseDragged(click, deltaX, deltaY);
+    }
+
+    // Reset movement key pressed states
+    private void clearMovementKeys() {
+        if (this.client == null) return;
+        var opts = this.client.options;
+        opts.forwardKey.setPressed(false);
+        opts.backKey.setPressed(false);
+        opts.leftKey.setPressed(false);
+        opts.rightKey.setPressed(false);
+        opts.jumpKey.setPressed(false);
+        opts.sneakKey.setPressed(false);
+        opts.sprintKey.setPressed(false);
+    }
+
+    // (keyPressed override lives earlier in the file)
+
+    @Override
+    public boolean keyReleased(KeyInput input) {
+        if (this.client != null) {
+            var o = this.client.options;
+            if (o.forwardKey.matchesKey(input)) { o.forwardKey.setPressed(false); return true; }
+            if (o.backKey.matchesKey(input)) { o.backKey.setPressed(false); return true; }
+            if (o.leftKey.matchesKey(input)) { o.leftKey.setPressed(false); return true; }
+            if (o.rightKey.matchesKey(input)) { o.rightKey.setPressed(false); return true; }
+            if (o.jumpKey.matchesKey(input)) { o.jumpKey.setPressed(false); return true; }
+            if (o.sneakKey.matchesKey(input)) { o.sneakKey.setPressed(false); return true; }
+            if (o.sprintKey.matchesKey(input)) { o.sprintKey.setPressed(false); return true; }
+        }
+        return super.keyReleased(input);
     }
 }
 
