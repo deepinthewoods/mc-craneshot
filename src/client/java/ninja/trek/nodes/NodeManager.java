@@ -301,4 +301,51 @@ public class NodeManager {
             return MathHelper.clamp(t, 0.0, 1.0);
         }
     }
+
+    // ========== Server Synchronization Methods ==========
+
+    public void enterServerMode(boolean canEdit) {
+        // TODO: Implement server mode - for now just log
+        Craneshot.LOGGER.info("Entered server mode, canEdit={}", canEdit);
+    }
+
+    public void onDisconnected() {
+        // TODO: Clean up server state
+        Craneshot.LOGGER.info("Disconnected from server");
+    }
+
+    public void applyChunkSnapshot(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                                    net.minecraft.util.math.ChunkPos chunk,
+                                    java.util.List<ninja.trek.nodes.model.CameraNodeDTO> nodeList) {
+        // TODO: Apply chunk snapshot from server
+        Craneshot.LOGGER.debug("Received chunk snapshot for {} at {},{} with {} nodes",
+            dimension.getValue(), chunk.x, chunk.z, nodeList.size());
+    }
+
+    public void applyDeltaAdd(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                               net.minecraft.util.math.ChunkPos chunk,
+                               ninja.trek.nodes.model.CameraNodeDTO node) {
+        // TODO: Add node from server delta
+        Craneshot.LOGGER.debug("Add node {} at chunk {},{}", node.uuid, chunk.x, chunk.z);
+    }
+
+    public void applyDeltaUpdate(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                                  net.minecraft.util.math.ChunkPos chunk,
+                                  ninja.trek.nodes.model.CameraNodeDTO node) {
+        // TODO: Update node from server delta
+        Craneshot.LOGGER.debug("Update node {} at chunk {},{}", node.uuid, chunk.x, chunk.z);
+    }
+
+    public void applyDeltaRemove(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                                  net.minecraft.util.math.ChunkPos chunk,
+                                  UUID nodeId) {
+        // TODO: Remove node from server delta
+        Craneshot.LOGGER.debug("Remove node {} at chunk {},{}", nodeId, chunk.x, chunk.z);
+    }
+
+    public void handleChunkUnload(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimension,
+                                   net.minecraft.util.math.ChunkPos chunk) {
+        // TODO: Handle chunk unload
+        Craneshot.LOGGER.debug("Chunk unloaded at {},{}", chunk.x, chunk.z);
+    }
 }

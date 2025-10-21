@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew clean build:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:wiki.fabricmc.net)",
+      "Bash(xargs cat:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(./gradlew genSources:*)",
+      "Bash(./gradlew:*)",
+      "Bash(taskkill:*)",
+      "Bash(wmic process where \"ProcessId=5776\" delete)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

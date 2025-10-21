@@ -116,6 +116,9 @@ public class CraneshotClient implements ClientModInitializer {
 		CraneShotEventHandler.register();
         // Draw second crosshair at camera look point
         CrosshairHudRenderer.register();
+
+        // Register client networking
+        ninja.trek.nodes.network.ClientNodeNetworking.register();
 	}
 	public static void checkKeybinds() {
 		if (toggleMenuKey.wasPressed()) {
