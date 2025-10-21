@@ -1,5 +1,6 @@
 package ninja.trek.nodes.server;
 
+import com.mojang.serialization.Codec;
 import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -28,52 +29,27 @@ import java.util.function.Supplier;
 public class CameraNodesState extends PersistentState {
     public static final String STORAGE_KEY = "craneshot_nodes";
     private static final int FORMAT_VERSION = 1;
-    
+
     private final Map<RegistryKey<net.minecraft.world.World>, Map<Long, LinkedHashMap<UUID, CameraNodeDTO>>> nodesByDimension = new HashMap<>();
     private final Map<RegistryKey<net.minecraft.world.World>, Map<UUID, Long>> nodeIndex = new HashMap<>();
 
+    // Create a Codec that wraps our NBT-based serialization
+    private static final Codec<CameraNodesState> CODEC = Codec.unit(() -> {
+        // This codec is only used for creating empty instances
+        // The actual serialization still uses writeNbt/fromNbt through PersistentState
+        return new CameraNodesState();
+    });
+
+    private static final net.minecraft.world.PersistentStateType<CameraNodesState> TYPE =
+        new net.minecraft.world.PersistentStateType<>(
+            STORAGE_KEY,
+            CameraNodesState::new,
+            CODEC,
+            null
+        );
+
     public static CameraNodesState get(ServerWorld world) {
-        PersistentStateManager manager = world.getPersistentStateManager();
-
-        // Use direct field access via reflection to get/set state
-        try {
-            java.lang.reflect.Field loadedStatesField = manager.getClass().getDeclaredField("loadedStates");
-            loadedStatesField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Map<String, PersistentState> loadedStates = (Map<String, PersistentState>) loadedStatesField.get(manager);
-
-            // Check if already loaded
-            CameraNodesState existing = (CameraNodesState) loadedStates.get(STORAGE_KEY);
-            if (existing != null) {
-                return existing;
-            }
-
-            // Try to load from file
-            try {
-                java.lang.reflect.Method readFromFileMethod = manager.getClass().getDeclaredMethod(
-                    "readFromFile", BiFunction.class, DataFixTypes.class, String.class);
-                readFromFileMethod.setAccessible(true);
-
-                BiFunction<NbtCompound, RegistryWrapper.WrapperLookup, CameraNodesState> deserializer = CameraNodesState::fromNbt;
-                CameraNodesState loaded = (CameraNodesState) readFromFileMethod.invoke(
-                    manager, deserializer, null, STORAGE_KEY);
-
-                if (loaded != null) {
-                    loadedStates.put(STORAGE_KEY, loaded);
-                    return loaded;
-                }
-            } catch (Exception loadEx) {
-                // File doesn't exist or error reading, create new
-            }
-
-            // Create new state
-            CameraNodesState newState = new CameraNodesState();
-            loadedStates.put(STORAGE_KEY, newState);
-            return newState;
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to access PersistentState", e);
-        }
+        return world.getPersistentStateManager().getOrCreate(TYPE);
     }
 
     public List<CameraNodeDTO> getChunkNodes(RegistryKey<net.minecraft.world.World> dimension, ChunkPos pos) {

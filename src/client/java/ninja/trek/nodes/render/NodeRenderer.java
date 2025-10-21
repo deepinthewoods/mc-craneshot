@@ -102,26 +102,13 @@ public class NodeRenderer {
     private static void submitLine(OrderedRenderCommandQueue queue, MatrixStack matrices,
                                    float r, float g, float b, float a, int light,
                                    double ax, double ay, double az, double bx, double by, double bz) {
-        // Use 1px line layer for consistent screen-space thickness
         RenderLayer layer = RenderLayer.getLines();
         var bq = queue.getBatchingQueue(1000);
-        // Derive a stable normal from camera orientation so lines don't vanish when parallel to world up
         var cam = MinecraftClient.getInstance().gameRenderer.getCamera();
         var rot = cam.getRotation();
         org.joml.Vector3f fV = new org.joml.Vector3f(0f, 0f, -1f).rotate(rot);
-        org.joml.Vector3f uV = new org.joml.Vector3f(0f, 1f, 0f).rotate(rot);
-        Vec3d forward = new Vec3d(fV.x, fV.y, fV.z);
-        Vec3d up = new Vec3d(uV.x, uV.y, uV.z);
-        Vec3d dir = new Vec3d(bx-ax, by-ay, bz-az);
-        double dlen = dir.length();
-        if (dlen > 1e-6) dir = dir.multiply(1.0/dlen);
-        // Prefer normal = dir x forward; if too small (near-parallel), fall back to dir x up
-        Vec3d n = dir.crossProduct(forward);
-        if (n.lengthSquared() < 1e-6) n = dir.crossProduct(up);
-        double nlen = n.length();
-        if (nlen > 1e-6) n = n.multiply(1.0/nlen); else n = up;
+        final float nx = fV.x, ny = fV.y, nz = fV.z;
 
-        final float nx = (float)n.x, ny = (float)n.y, nz = (float)n.z;
         bq.submitCustom(matrices, layer, (entry, vc) -> {
             vc.vertex(entry, (float)ax, (float)ay, (float)az).color(r,g,b,a).normal(entry, nx, ny, nz);
             vc.vertex(entry, (float)bx, (float)by, (float)bz).color(r,g,b,a).normal(entry, nx, ny, nz);

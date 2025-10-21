@@ -11,7 +11,10 @@
       "Bash(./gradlew:*)",
       "Bash(taskkill:*)",
       "Bash(wmic process where \"ProcessId=5776\" delete)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(javap:*)",
+      "WebFetch(domain:maven.fabricmc.net)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
