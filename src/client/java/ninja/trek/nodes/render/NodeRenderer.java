@@ -295,7 +295,7 @@ public class NodeRenderer {
     private static void drawChevrons(OrderedRenderCommandQueue queue, MatrixStack matrices,
                                      double ax, double ay, double az, double bx, double by, double bz,
                                      float r, float g, float b, float a, int light, float phase) {
-        int count = 6;
+        int count = 12;
         double dx = bx - ax, dy = by - ay, dz = bz - az;
         double len = Math.sqrt(dx*dx + dy*dy + dz*dz);
         if (len < 1e-3) return;
@@ -312,7 +312,8 @@ public class NodeRenderer {
             double sx = -uz, sz = ux; double sy = 0;
             double sLen = Math.sqrt(sx*sx + sz*sz); if (sLen < 1e-6) { sx = 0; sz = 1; sLen = 1; }
             sx /= sLen; sz /= sLen;
-            double ex = cx - ux * size; double ey = cy - uy * size; double ez = cz - uz * size;
+            // Reverse direction: point AWAY from lookAt (toward node)
+            double ex = cx + ux * size; double ey = cy + uy * size; double ez = cz + uz * size;
             submitLine(queue, matrices, r,g,b,a, light, ex,ey,ez, cx + sx*size*0.6, cy + sy*size*0.6, cz + sz*size*0.6);
             submitLine(queue, matrices, r,g,b,a, light, ex,ey,ez, cx - sx*size*0.6, cy - sy*size*0.6, cz - sz*size*0.6);
         }

@@ -14,7 +14,8 @@
       "Bash(cat:*)",
       "Bash(javap:*)",
       "WebFetch(domain:maven.fabricmc.net)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(Select-Object -Last 100)"
     ],
     "deny": [],
     "ask": []

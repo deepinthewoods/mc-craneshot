@@ -130,13 +130,10 @@ public class NodeManager {
         if (mc == null || mc.player == null) return base;
         Vec3d playerPos = mc.player.getEyePos();
 
+        // PHASE 1: Calculate position influences and weights
         double totalWeight = 0.0;
         Vec3d accumPos = Vec3d.ZERO;
-        float yawBase = base.getYaw();
-        float pitchBase = base.getPitch();
-        float accumYaw = 0f;
-        float accumPitch = 0f;
-        boolean anyLookAt = false;
+        List<NodeInfluence> nodeInfluences = new ArrayList<>();
 
         for (var node : nodes) {
             double w = 0.0;
@@ -170,34 +167,86 @@ public class NodeManager {
             accumPos = accumPos.add(nodeTarget.multiply(w));
             totalWeight += w;
 
-            if (node.lookAt != null) {
-                Vec3d dir = node.lookAt.subtract(base.getPosition()).normalize();
-                float nYaw = (float)(Math.toDegrees(Math.atan2(dir.x, dir.z)));
-                float nPitch = (float)(-Math.toDegrees(Math.asin(dir.y)));
-                // blend angles by weight in linear space for phase 1
-                accumYaw += nYaw * w;
-                accumPitch += nPitch * w;
-                anyLookAt = true;
-            }
+            // Store node influence for later rotation calculation
+            nodeInfluences.add(new NodeInfluence(node, w));
         }
 
         if (totalWeight <= 1e-6) return base;
+
+        // Normalize if needed
         if (totalWeight > 1.0) {
             accumPos = accumPos.multiply(1.0 / totalWeight);
-            accumYaw /= totalWeight;
-            accumPitch /= totalWeight;
             totalWeight = 1.0;
         }
 
+        // Calculate final blended position
         Vec3d blendedPos = base.getPosition().multiply(1.0 - totalWeight).add(accumPos);
+
+        // PHASE 2: Calculate rotation influences from the FINAL camera position
+        float yawBase = base.getYaw();
+        float pitchBase = base.getPitch();
+        float accumYaw = 0f;
+        float accumPitch = 0f;
+        boolean anyLookAt = false;
+
+        for (var influence : nodeInfluences) {
+            if (influence.node.lookAt == null) continue;
+
+            // Calculate direction from FINAL blended position to LookAt point
+            Vec3d dir = influence.node.lookAt.subtract(blendedPos).normalize();
+            float nYaw = (float)(Math.toDegrees(Math.atan2(dir.x, dir.z)));
+            float nPitch = (float)(-Math.toDegrees(Math.asin(MathHelper.clamp(dir.y, -1.0, 1.0))));
+
+            // Blend angles by weight, accounting for angle wrapping
+            accumYaw += wrapAngleDelta(yawBase, nYaw) * influence.weight;
+            accumPitch += nPitch * influence.weight;
+            anyLookAt = true;
+        }
+
         float outYaw = yawBase;
         float outPitch = pitchBase;
         if (anyLookAt) {
-            outYaw = (float)((yawBase * (1.0 - totalWeight)) + (accumYaw * totalWeight));
-            outPitch = (float)((pitchBase * (1.0 - totalWeight)) + (accumPitch * totalWeight));
+            // Normalize accumulated angles if totalWeight > 1.0
+            if (totalWeight > 1.0) {
+                accumYaw /= totalWeight;
+                accumPitch /= totalWeight;
+            }
+
+            // Apply weighted rotation from base angles
+            outYaw = normalizeAngle(yawBase + accumYaw * (float)totalWeight);
+            outPitch = pitchBase * (1.0f - (float)totalWeight) + accumPitch * (float)totalWeight;
+            outPitch = MathHelper.clamp(outPitch, -90f, 90f);
         }
 
         return new CameraTarget(blendedPos, outYaw, outPitch, base.getFovMultiplier(), base.getOrthoFactor());
+    }
+
+    // Helper class to store node influence data
+    private static class NodeInfluence {
+        final CameraNode node;
+        final double weight;
+
+        NodeInfluence(CameraNode node, double weight) {
+            this.node = node;
+            this.weight = weight;
+        }
+    }
+
+    // Normalize angle to [-180, 180] range
+    private static float normalizeAngle(float angle) {
+        angle = angle % 360f;
+        if (angle > 180f) angle -= 360f;
+        if (angle < -180f) angle += 360f;
+        return angle;
+    }
+
+    // Calculate shortest angular delta from 'from' to 'to', accounting for wrapping
+    private static float wrapAngleDelta(float from, float to) {
+        float delta = to - from;
+        delta = delta % 360f;
+        if (delta > 180f) delta -= 360f;
+        if (delta < -180f) delta += 360f;
+        return delta;
     }
 
     private double cubeDistance(Vec3d p, Vec3d c, double r) {

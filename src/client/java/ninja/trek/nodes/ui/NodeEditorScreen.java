@@ -21,6 +21,11 @@ import java.util.List;
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
     private boolean dragging = false;
+    private long mouseDownTime = 0;
+    private double mouseDownX = 0;
+    private double mouseDownY = 0;
+    private static final long CLICK_TIME_THRESHOLD_MS = 200;
+    private static final double CLICK_MOVEMENT_THRESHOLD_PX = 5.0;
     
 
     public NodeEditorScreen() {
@@ -330,6 +335,10 @@ public class NodeEditorScreen extends Screen {
     public void removed() {
         // Ensure keys are cleared if the screen is closed by any means
         clearMovementKeys();
+        // Ensure cursor is released when screen is closed
+        if (client != null && client.getWindow() != null) {
+            GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        }
         super.removed();
     }
 
@@ -337,19 +346,13 @@ public class NodeEditorScreen extends Screen {
     public boolean mouseClicked(Click click, boolean fromInside) {
         if (click != null) {
             dragging = true;
-            try {
-                Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-                if (cam != null) {
-                    NodeManager.get().selectNearestToScreen(click.x(), click.y(), this.width, this.height, cam);
-                    this.init(client, this.width, this.height);
-                }
-            } catch (Throwable t) {
-                // Fallback: select center
-                Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-                if (cam != null) {
-                    NodeManager.get().selectNearestToScreen(this.width/2.0, this.height/2.0, this.width, this.height, cam);
-                    this.init(client, this.width, this.height);
-                }
+            mouseDownTime = System.currentTimeMillis();
+            mouseDownX = click.x();
+            mouseDownY = click.y();
+
+            // Capture mouse cursor when dragging starts
+            if (client != null && client.getWindow() != null) {
+                GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
             }
         }
         return super.mouseClicked(click, fromInside);
@@ -357,25 +360,59 @@ public class NodeEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(Click click) {
+        // Release mouse cursor when dragging ends
+        if (client != null && client.getWindow() != null) {
+            GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        }
+
         dragging = false;
+
+        // Only select a node if this was a quick click (< 200ms) without significant movement
+        if (click != null && mouseDownTime > 0) {
+            long clickDuration = System.currentTimeMillis() - mouseDownTime;
+            double dx = click.x() - mouseDownX;
+            double dy = click.y() - mouseDownY;
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (clickDuration < CLICK_TIME_THRESHOLD_MS && distance < CLICK_MOVEMENT_THRESHOLD_PX) {
+                // This was a click, not a drag - select the node
+                try {
+                    Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+                    if (cam != null) {
+                        NodeManager.get().selectNearestToScreen(click.x(), click.y(), this.width, this.height, cam);
+                        this.init(client, this.width, this.height);
+                    }
+                } catch (Throwable t) {
+                    // Fallback: select center
+                    Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+                    if (cam != null) {
+                        NodeManager.get().selectNearestToScreen(this.width/2.0, this.height/2.0, this.width, this.height, cam);
+                        this.init(client, this.width, this.height);
+                    }
+                }
+            }
+        }
+
+        mouseDownTime = 0;
         return super.mouseReleased(click);
     }
 
     @Override
     public boolean mouseDragged(Click click, double deltaX, double deltaY) {
         if (dragging) {
+            // 3x sensitivity for node editing
             double sens = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
             double calc = 0.6 * sens * sens * sens + 0.2;
-            // Apply Node Editor sensitivity multiplier (default 6x) and invert X direction
-            double mult = ninja.trek.config.GeneralMenuSettings.getNodeEditSensitivityMultiplier();
-            double scaleEntity = calc * mult;
-            double scaleSystem = calc * 0.55D * mult;
+            calc *= 3.0;
+
             // Rotate using regular freecam pipeline: entity if present, otherwise CameraSystem
             ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
             if (camEnt != null) {
-                camEnt.updateCameraRotations((float)(-deltaX * scaleEntity), (float)(-deltaY * scaleEntity));
+                // CameraEntity.updateCameraRotations applies 0.15F internally, so just pass calc
+                camEnt.updateCameraRotations((float)(deltaX * calc), (float)(-deltaY * calc));
             } else {
-                ninja.trek.camera.CameraSystem.getInstance().updateRotation(-deltaX * scaleSystem, -deltaY * scaleSystem, 1.0);
+                // CameraSystem.updateRotation expects pre-multiplied values
+                ninja.trek.camera.CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55, deltaY * calc * 0.55, 1.0);
             }
         }
         return super.mouseDragged(click, deltaX, deltaY);
