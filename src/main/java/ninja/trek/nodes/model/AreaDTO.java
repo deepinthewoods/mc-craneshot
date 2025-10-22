@@ -19,11 +19,11 @@ public class AreaDTO {
 
     public AreaShape shape = AreaShape.CUBE;
     public Vec3d center = Vec3d.ZERO;
-    public double minRadius = 8.0;
-    public double maxRadius = 16.0;
+    public double insideRadius = 8.0;
+    public double outsideRadius = 16.0;
     public boolean advanced = false;
-    public Vec3d minRadii = null;
-    public Vec3d maxRadii = null;
+    public Vec3d insideRadii = null;
+    public Vec3d outsideRadii = null;
     public int filterMask = FILTER_WALKING
             | FILTER_ELYTRA
             | FILTER_MINECART
@@ -39,11 +39,11 @@ public class AreaDTO {
         AreaDTO dto = new AreaDTO();
         dto.shape = area.shape;
         dto.center = area.center;
-        dto.minRadius = area.minRadius;
-        dto.maxRadius = area.maxRadius;
+        dto.insideRadius = area.insideRadius;
+        dto.outsideRadius = area.outsideRadius;
         dto.advanced = area.advanced;
-        dto.minRadii = area.minRadii;
-        dto.maxRadii = area.maxRadii;
+        dto.insideRadii = area.insideRadii;
+        dto.outsideRadii = area.outsideRadii;
         dto.easing = area.easing;
         dto.filterMask = packFilters(area);
         return dto;
@@ -53,11 +53,11 @@ public class AreaDTO {
         Area area = new Area();
         area.shape = this.shape;
         area.center = this.center;
-        area.minRadius = this.minRadius;
-        area.maxRadius = this.maxRadius;
+        area.insideRadius = this.insideRadius;
+        area.outsideRadius = this.outsideRadius;
         area.advanced = this.advanced;
-        area.minRadii = this.minRadii;
-        area.maxRadii = this.maxRadii;
+        area.insideRadii = this.insideRadii;
+        area.outsideRadii = this.outsideRadii;
         area.easing = this.easing == null ? EasingCurve.LINEAR : this.easing;
         unpackFilters(area, this.filterMask);
         return area;
@@ -67,11 +67,11 @@ public class AreaDTO {
         AreaDTO dto = new AreaDTO();
         dto.shape = this.shape;
         dto.center = this.center;
-        dto.minRadius = this.minRadius;
-        dto.maxRadius = this.maxRadius;
+        dto.insideRadius = this.insideRadius;
+        dto.outsideRadius = this.outsideRadius;
         dto.advanced = this.advanced;
-        dto.minRadii = this.minRadii;
-        dto.maxRadii = this.maxRadii;
+        dto.insideRadii = this.insideRadii;
+        dto.outsideRadii = this.outsideRadii;
         dto.filterMask = this.filterMask;
         dto.easing = this.easing;
         return dto;
@@ -80,11 +80,11 @@ public class AreaDTO {
     public void write(PacketByteBuf buf) {
         buf.writeEnumConstant(shape);
         writeVec3d(buf, center);
-        buf.writeDouble(minRadius);
-        buf.writeDouble(maxRadius);
+        buf.writeDouble(insideRadius);
+        buf.writeDouble(outsideRadius);
         buf.writeBoolean(advanced);
-        writeNullableVec3d(buf, minRadii);
-        writeNullableVec3d(buf, maxRadii);
+        writeNullableVec3d(buf, insideRadii);
+        writeNullableVec3d(buf, outsideRadii);
         buf.writeVarInt(filterMask);
         buf.writeEnumConstant(easing == null ? EasingCurve.LINEAR : easing);
     }
@@ -93,11 +93,11 @@ public class AreaDTO {
         AreaDTO dto = new AreaDTO();
         dto.shape = buf.readEnumConstant(AreaShape.class);
         dto.center = readVec3d(buf);
-        dto.minRadius = buf.readDouble();
-        dto.maxRadius = buf.readDouble();
+        dto.insideRadius = buf.readDouble();
+        dto.outsideRadius = buf.readDouble();
         dto.advanced = buf.readBoolean();
-        dto.minRadii = readNullableVec3d(buf);
-        dto.maxRadii = readNullableVec3d(buf);
+        dto.insideRadii = readNullableVec3d(buf);
+        dto.outsideRadii = readNullableVec3d(buf);
         dto.filterMask = buf.readVarInt();
         dto.easing = buf.readEnumConstant(EasingCurve.class);
         return dto;
@@ -107,11 +107,11 @@ public class AreaDTO {
         NbtCompound tag = new NbtCompound();
         tag.putString("shape", shape.name());
         tag.put("center", vec3dToNbt(center));
-        tag.putDouble("minRadius", minRadius);
-        tag.putDouble("maxRadius", maxRadius);
+        tag.putDouble("insideRadius", insideRadius);
+        tag.putDouble("outsideRadius", outsideRadius);
         tag.putBoolean("advanced", advanced);
-        if (minRadii != null) tag.put("minRadii", vec3dToNbt(minRadii));
-        if (maxRadii != null) tag.put("maxRadii", vec3dToNbt(maxRadii));
+        if (insideRadii != null) tag.put("insideRadii", vec3dToNbt(insideRadii));
+        if (outsideRadii != null) tag.put("outsideRadii", vec3dToNbt(outsideRadii));
         tag.putInt("filters", filterMask);
         tag.putString("easing", (easing == null ? EasingCurve.LINEAR : easing).name());
         return tag;
@@ -129,17 +129,17 @@ public class AreaDTO {
                 dto.center = vec3dFromNbt(list);
             }
         });
-        dto.minRadius = tag.getDouble("minRadius").orElse(8.0);
-        dto.maxRadius = tag.getDouble("maxRadius").orElse(16.0);
+        dto.insideRadius = tag.getDouble("insideRadius").orElse(8.0);
+        dto.outsideRadius = tag.getDouble("outsideRadius").orElse(16.0);
         dto.advanced = tag.getBoolean("advanced").orElse(false);
-        tag.getList("minRadii").ifPresent(list -> {
+        tag.getList("insideRadii").ifPresent(list -> {
             if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
-                dto.minRadii = vec3dFromNbt(list);
+                dto.insideRadii = vec3dFromNbt(list);
             }
         });
-        tag.getList("maxRadii").ifPresent(list -> {
+        tag.getList("outsideRadii").ifPresent(list -> {
             if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
-                dto.maxRadii = vec3dFromNbt(list);
+                dto.outsideRadii = vec3dFromNbt(list);
             }
         });
         dto.filterMask = tag.getInt("filters").orElse(dto.filterMask);

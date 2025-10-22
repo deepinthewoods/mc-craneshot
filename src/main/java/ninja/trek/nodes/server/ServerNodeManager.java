@@ -99,20 +99,20 @@ public class ServerNodeManager {
         if (dto.areas != null) {
             for (int i = 0; i < dto.areas.size(); i++) {
                 var area = dto.areas.get(i);
-                if (area.minRadius < 0.0 || area.maxRadius < 0.0) {
+                if (area.insideRadius < 0.0 || area.outsideRadius < 0.0) {
                     return "negative_radius";
                 }
-                if (area.maxRadius < area.minRadius) {
-                    return "max_lt_min";
+                if (area.outsideRadius < area.insideRadius) {
+                    return "outside_lt_inside";
                 }
-                if (area.advanced && area.minRadii != null && area.maxRadii != null) {
-                    if (area.minRadii.x < 0 || area.minRadii.y < 0 || area.minRadii.z < 0) {
-                        return "negative_min_axis";
+                if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
+                    if (area.insideRadii.x < 0 || area.insideRadii.y < 0 || area.insideRadii.z < 0) {
+                        return "negative_inside_axis";
                     }
-                    if (area.maxRadii.x < area.minRadii.x ||
-                            area.maxRadii.y < area.minRadii.y ||
-                            area.maxRadii.z < area.minRadii.z) {
-                        return "axis_max_lt_min";
+                    if (area.outsideRadii.x < area.insideRadii.x ||
+                            area.outsideRadii.y < area.insideRadii.y ||
+                            area.outsideRadii.z < area.insideRadii.z) {
+                        return "axis_outside_lt_inside";
                     }
                 }
             }

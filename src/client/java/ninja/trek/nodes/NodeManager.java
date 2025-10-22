@@ -232,6 +232,37 @@ public class NodeManager {
         }
     }
 
+    /**
+     * Calculate the total influence weight from all nodes at the given position.
+     * Returns 0.0 if no influence, up to 1.0+ if multiple nodes overlap.
+     * This is normalized to max 1.0 in applyInfluence(), but raw total is useful for detection.
+     */
+    public double getTotalInfluence(Vec3d position) {
+        if (nodes.isEmpty() || position == null) return 0.0;
+
+        double totalWeight = 0.0;
+
+        for (var node : nodes) {
+            double w = 0.0;
+            for (var area : node.areas) {
+                if (!isAreaEligibleForPlayer(area)) continue;
+
+                double t = 0.0;
+                if (area.shape == AreaShape.SPHERE) {
+                    t = influenceForSphereArea(position, area);
+                } else {
+                    t = influenceForBoxArea(position, area);
+                }
+                // apply easing curve per-area
+                t = (area.easing != null ? area.easing.apply(t) : t);
+                w = Math.max(w, MathHelper.clamp(t, 0.0, 1.0));
+            }
+            totalWeight += w;
+        }
+
+        return totalWeight;
+    }
+
     // Normalize angle to [-180, 180] range
     private static float normalizeAngle(float angle) {
         angle = angle % 360f;
@@ -295,54 +326,60 @@ public class NodeManager {
 
     private double influenceForSphereArea(Vec3d pos, Area area) {
         Vec3d d = pos.subtract(area.center);
-        if (area.advanced && area.minRadii != null && area.maxRadii != null) {
-            // Ellipsoids defined by minRadii and maxRadii
-            double lOuter = Math.sqrt(
-                    (d.x * d.x) / (area.maxRadii.x * area.maxRadii.x)
-                            + (d.y * d.y) / (area.maxRadii.y * area.maxRadii.y)
-                            + (d.z * d.z) / (area.maxRadii.z * area.maxRadii.z));
-            double lInner = Math.sqrt(
-                    (d.x * d.x) / (area.minRadii.x * area.minRadii.x)
-                            + (d.y * d.y) / (area.minRadii.y * area.minRadii.y)
-                            + (d.z * d.z) / (area.minRadii.z * area.minRadii.z));
+        if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
+            // insideRadii = inner ellipsoid (100% influence), outsideRadii = outer ellipsoid (0% influence)
+            // Normalized distance at inside ellipsoid surface
+            double distAtInside = Math.sqrt(
+                    (d.x * d.x) / (area.insideRadii.x * area.insideRadii.x)
+                            + (d.y * d.y) / (area.insideRadii.y * area.insideRadii.y)
+                            + (d.z * d.z) / (area.insideRadii.z * area.insideRadii.z));
+            // Normalized distance at outside ellipsoid surface
+            double distAtOutside = Math.sqrt(
+                    (d.x * d.x) / (area.outsideRadii.x * area.outsideRadii.x)
+                            + (d.y * d.y) / (area.outsideRadii.y * area.outsideRadii.y)
+                            + (d.z * d.z) / (area.outsideRadii.z * area.outsideRadii.z));
 
-            if (lInner <= 1.0) return 1.0;
-            if (lOuter >= 1.0) return 0.0;
-            // Linear interpolation between surfaces in normalized radius space
-            double denom = (lInner - 1.0);
-            if (denom <= 1e-6) return 1.0;
-            double t = 1.0 - ((lOuter - 1.0) / denom);
+            // Inside inner ellipsoid => 100% influence
+            if (distAtInside <= 1.0) return 1.0;
+            // Outside outer ellipsoid => 0% influence
+            if (distAtOutside >= 1.0) return 0.0;
+            // Between: linear interpolation
+            // distAtInside = 1.0 means on inner surface, distAtOutside = 1.0 means on outer surface
+            double t = (distAtOutside - 1.0) / (distAtOutside - distAtInside);
             return MathHelper.clamp(t, 0.0, 1.0);
         } else {
             double dist = pos.distanceTo(area.center);
-            if (dist <= area.minRadius) return 1.0;
-            if (dist >= area.maxRadius) return 0.0;
-            return 1.0 - ((dist - area.minRadius) / (area.maxRadius - area.minRadius));
+            // Inside insideRadius => 100% influence
+            if (dist <= area.insideRadius) return 1.0;
+            // Outside outsideRadius => 0% influence
+            if (dist >= area.outsideRadius) return 0.0;
+            // Between: linear interpolation from 100% to 0%
+            return 1.0 - ((dist - area.insideRadius) / (area.outsideRadius - area.insideRadius));
         }
     }
 
     private double influenceForBoxArea(Vec3d pos, Area area) {
         Vec3d d = pos.subtract(area.center);
-        if (area.advanced && area.minRadii != null && area.maxRadii != null) {
+        if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
             // Inside inner box => full weight
-            if (ax <= area.minRadii.x && ay <= area.minRadii.y && az <= area.minRadii.z) return 1.0;
+            if (ax <= area.insideRadii.x && ay <= area.insideRadii.y && az <= area.insideRadii.z) return 1.0;
             // Outside outer box => zero
-            if (ax >= area.maxRadii.x || ay >= area.maxRadii.y || az >= area.maxRadii.z) return 0.0;
+            if (ax >= area.outsideRadii.x || ay >= area.outsideRadii.y || az >= area.outsideRadii.z) return 0.0;
             // Between: compute normalized expansion beyond inner toward outer per axis
-            double rx = (area.maxRadii.x - area.minRadii.x);
-            double ry = (area.maxRadii.y - area.minRadii.y);
-            double rz = (area.maxRadii.z - area.minRadii.z);
-            double nx = rx > 1e-6 ? Math.max(0.0, (ax - area.minRadii.x) / rx) : 1.0;
-            double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.minRadii.y) / ry) : 1.0;
-            double nz = rz > 1e-6 ? Math.max(0.0, (az - area.minRadii.z) / rz) : 1.0;
+            double rx = (area.outsideRadii.x - area.insideRadii.x);
+            double ry = (area.outsideRadii.y - area.insideRadii.y);
+            double rz = (area.outsideRadii.z - area.insideRadii.z);
+            double nx = rx > 1e-6 ? Math.max(0.0, (ax - area.insideRadii.x) / rx) : 1.0;
+            double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.insideRadii.y) / ry) : 1.0;
+            double nz = rz > 1e-6 ? Math.max(0.0, (az - area.insideRadii.z) / rz) : 1.0;
             double t = 1.0 - Math.max(nx, Math.max(ny, nz));
             return MathHelper.clamp(t, 0.0, 1.0);
         } else {
-            double dist = cubeDistance(pos, area.center, area.maxRadius);
+            double dist = cubeDistance(pos, area.center, area.outsideRadius);
             if (dist <= 0.0) return 1.0; // inside outer cube, approximate mapping
             // fall back to scalar mapping relative to inner/outer
-            double inner = cubeDistance(pos, area.center, area.minRadius);
+            double inner = cubeDistance(pos, area.center, area.insideRadius);
             if (inner <= 0.0) return 1.0;
             // approximate fraction
             double denom = (inner);

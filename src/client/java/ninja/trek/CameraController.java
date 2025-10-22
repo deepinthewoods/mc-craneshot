@@ -22,9 +22,13 @@ public class CameraController {
     public static float freeCamYaw = 0f;
     public static float freeCamPitch = 0f;
     public static CameraTarget controlStick = new CameraTarget();
-    
+
     // Track whether the camera has been moved with keyboard input
     public static boolean hasMovedWithKeyboard = false;
+
+    // Track if camera was activated by node influence
+    private static boolean cameraActivatedByNodes = false;
+    private static double lastNodeInfluence = 0.0;
 
     private String currentMessage = "";
     private long messageTimer = 0;
@@ -411,16 +415,62 @@ public class CameraController {
 
         // Get the base camera state from movement manager - always update to track state
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
-        // Important: keep movement targets and the applied camera position in sync.
-        // Do NOT apply node influence while a movement is active, otherwise the camera
-        // will be driven toward a different position than the movement’s start/end,
-        // causing visible jumps and wrong return paths.
+
+        // Skip node influence when:
+        // - In freecam/edit modes (manual camera control)
         boolean skipNodeInfluence = ninja.trek.nodes.NodeManager.get().isEditing()
-                || CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+                || currentKeyMoveMode != POST_MOVE_KEYS.NONE
+                || currentMouseMoveMode != POST_MOVE_MOUSE.NONE
+                ;
+
         baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, skipNodeInfluence);
 
-        // Check if we have an active camera system
+        // Handle node-based camera activation/deactivation
         CameraSystem cameraSystem = CameraSystem.getInstance();
+        double currentNodeInfluence = 0.0;
+        if (!skipNodeInfluence && client.player != null) {
+            currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(client.player.getEyePos());
+        }
+
+        // Activate camera when nodes start influencing
+        if (currentNodeInfluence > 0.0 && !cameraActivatedByNodes && !skipNodeInfluence) {
+            // Only activate if not already active from another source
+            if (!cameraSystem.isCameraActive()) {
+                cameraSystem.setCameraPosition(baseTarget.getPosition());
+                cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
+                cameraSystem.activateCamera(CameraSystem.CameraMode.NODE_DRIVEN);
+                cameraActivatedByNodes = true;
+            }
+        }
+        // Deactivate and trigger return when influence drops to 0
+        // BUT: Don't deactivate if we're in freecam/edit mode (those modes own the camera now)
+        else if (currentNodeInfluence <= 0.0 && cameraActivatedByNodes && lastNodeInfluence > 0.0 && !skipNodeInfluence) {
+            // Camera was active due to nodes, but influence dropped to zero
+            // Capture current camera position before deactivating
+            freeCamPosition = cameraSystem.getCameraPosition();
+            freeCamYaw = cameraSystem.getCameraYaw();
+            freeCamPitch = cameraSystem.getCameraPitch();
+
+            // Deactivate camera system
+            cameraSystem.deactivateCamera();
+
+            // Start FreeCamReturnMovement to smoothly return to player
+            if (client != null) {
+                ninja.trek.cameramovements.movements.FreeCamReturnMovement returnMovement =
+                    ninja.trek.config.GeneralMenuSettings.getFreeCamReturnMovement();
+                returnMovement.start(client, camera);
+
+                // Manually set it as the active movement in the manager
+                // (this mimics what finishTransition does)
+                CraneshotClient.MOVEMENT_MANAGER.setActiveMovementForNodeReturn(returnMovement);
+            }
+
+            cameraActivatedByNodes = false;
+        }
+
+        lastNodeInfluence = currentNodeInfluence;
+
+        // Check if we have an active camera system
         boolean cameraSystemActive = cameraSystem.isCameraActive();
 
         if (baseTarget != null) {
@@ -434,8 +484,26 @@ public class CameraController {
                 // Let the camera system update its state
                 boolean rotating = (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) || ninja.trek.nodes.NodeManager.get().isEditing();
                 boolean entityFreecam = (ninja.trek.util.CameraEntity.getCamera() != null);
+
+                // If camera is being controlled by nodes, force position/rotation from baseTarget
+                if (cameraActivatedByNodes && currentNodeInfluence > 0.0) {
+                    // Nodes are controlling the camera - override position/rotation
+                    cameraSystem.setCameraPosition(baseTarget.getPosition());
+                    cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
+
+                    // Synchronize CameraEntity if it exists
+                    if (entityFreecam) {
+                        ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+                        if (camEnt != null) {
+                            Vec3d pos = baseTarget.getPosition();
+                            camEnt.setPos(pos.x, pos.y, pos.z);
+                            camEnt.setCameraRotations(baseTarget.getYaw(), baseTarget.getPitch());
+                            camEnt.setVelocity(Vec3d.ZERO); // Prevent physics interference
+                        }
+                    }
+                }
                 // Avoid per-frame logs; rely on Diag guards inside CameraSystem
-                if (entityFreecam) {
+                else if (entityFreecam) {
                     // If using the dedicated camera entity: do not push manual camera pos/rot
                     if (rotating && client.mouse instanceof IMouseMixin) {
                         IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
@@ -465,12 +533,15 @@ public class CameraController {
                                 1.0
                             );
                         }
-                    } else {
-                        // Use the movement manager's position/rotation if not freely rotating
+                    } else if (!cameraActivatedByNodes) {
+                        // Use the movement manager's position/rotation if not freely rotating and not controlled by nodes
                         cameraSystem.setCameraPosition(baseTarget.getPosition());
                         cameraSystem.setCameraRotation(baseTarget.getYaw(), baseTarget.getPitch());
                     }
-                    // Let the camera system update the camera
+                }
+
+                // Let the camera system update the camera (if not using CameraEntity)
+                if (!entityFreecam || cameraActivatedByNodes) {
                     cameraSystem.updateCamera(camera);
                 }
 
@@ -594,6 +665,10 @@ public class CameraController {
         // Reset the keyboard movement tracking flag
         hasMovedWithKeyboard = false;
 
+        // Reset node activation tracking
+        cameraActivatedByNodes = false;
+        lastNodeInfluence = 0.0;
+
         // Ensure keyboard input is enabled for the player
         MinecraftClient client = MinecraftClient.getInstance();
         if (client != null && client.player != null && client.player.input instanceof IKeyboardInputMixin) {
@@ -614,7 +689,7 @@ public class CameraController {
             freeCamPosition = client.player.getEyePos();
             freeCamYaw = client.player.getYaw();
             freeCamPitch = client.player.getPitch();
-            
+
         }
 
         // Reset FOV to default

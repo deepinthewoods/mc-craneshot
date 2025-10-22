@@ -76,11 +76,11 @@ public class NodeEditorScreen extends Screen {
                     Area c = new Area();
                     c.shape = a.shape;
                     c.center = a.center;
-                    c.minRadius = a.minRadius;
-                    c.maxRadius = a.maxRadius;
+                    c.insideRadius = a.insideRadius;
+                    c.outsideRadius = a.outsideRadius;
                     c.advanced = a.advanced;
-                    c.minRadii = a.minRadii;
-                    c.maxRadii = a.maxRadii;
+                    c.insideRadii = a.insideRadii;
+                    c.outsideRadii = a.outsideRadii;
                     c.filterWalking = a.filterWalking;
                     c.filterElytra = a.filterElytra;
                     c.filterMinecart = a.filterMinecart;
@@ -264,7 +264,7 @@ public class NodeEditorScreen extends Screen {
             List<Area> areas = sel.areas;
             int i=0;
             for (Area a : areas) {
-                context.drawText(textRenderer, Text.literal("Area "+i+" ("+a.shape+") min:"+(int)a.minRadius+" max:"+(int)a.maxRadius), rightX, y, 0xFFFFFF, true);
+                context.drawText(textRenderer, Text.literal("Area "+i+" ("+a.shape+") in:"+(int)a.insideRadius+" out:"+(int)a.outsideRadius), rightX, y, 0xFFFFFF, true);
                 y+=12;
             }
         } else {
@@ -409,10 +409,12 @@ public class NodeEditorScreen extends Screen {
             ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
             if (camEnt != null) {
                 // CameraEntity.updateCameraRotations applies 0.15F internally, so just pass calc
-                camEnt.updateCameraRotations((float)(deltaX * calc), (float)(-deltaY * calc));
+                // Invert deltaY for intuitive up/down control
+                camEnt.updateCameraRotations((float)(deltaX * calc), (float)(deltaY * calc));
             } else {
                 // CameraSystem.updateRotation expects pre-multiplied values
-                ninja.trek.camera.CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55, deltaY * calc * 0.55, 1.0);
+                // Invert deltaY for intuitive up/down control
+                ninja.trek.camera.CameraSystem.getInstance().updateRotation(deltaX * calc * 0.55, -deltaY * calc * 0.55, 1.0);
             }
         }
         return super.mouseDragged(click, deltaX, deltaY);

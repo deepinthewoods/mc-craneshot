@@ -57,30 +57,30 @@ public class NodeRenderer {
                 // Draw area outline (simple)
                 float rr = r * 0.6f, gg = g * 0.6f, bb = b * 0.6f;
                 if (area.shape == AreaShape.CUBE) {
-                    // Outer (max): keep existing style (advanced dashed animated, simple solid)
-                    if (area.advanced && area.maxRadii != null) {
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
+                    // Outer (outside): keep existing style (advanced dashed animated, simple solid)
+                    if (area.advanced && area.outsideRadii != null) {
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.outsideRadii, r,g,b,a, fullbright, true, dashPhase);
                     } else {
-                        drawCubeOutline(queue, matrices, area.center.subtract(cam), area.maxRadius, r, g, b, a, fullbright);
+                        drawCubeOutline(queue, matrices, area.center.subtract(cam), area.outsideRadius, r, g, b, a, fullbright);
                     }
-                    // Inner (min): dashed, non-animated
-                    if (area.advanced && area.minRadii != null) {
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, true, 0f);
+                    // Inner (inside): dashed, non-animated
+                    if (area.advanced && area.insideRadii != null) {
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.insideRadii, rr,gg,bb,a, fullbright, true, 0f);
                     } else {
                         // Approximate cube with dashed box using uniform radii
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), new Vec3d(area.minRadius, area.minRadius, area.minRadius), rr,gg,bb,a, fullbright, true, 0f);
+                        drawBoxOutline(queue, matrices, area.center.subtract(cam), new Vec3d(area.insideRadius, area.insideRadius, area.insideRadius), rr,gg,bb,a, fullbright, true, 0f);
                     }
                 } else {
-                    // Ellipse/Sphere: Outer (max) remains dashed animated in XZ; inner (min) dashed non-animated in XZ
-                    if (area.advanced && area.maxRadii != null) {
-                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.maxRadii, r,g,b,a, fullbright, true, dashPhase);
+                    // Ellipse/Sphere: Outer (outside) remains dashed animated in XZ; inner (inside) dashed non-animated in XZ
+                    if (area.advanced && area.outsideRadii != null) {
+                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.outsideRadii, r,g,b,a, fullbright, true, dashPhase);
                     } else {
-                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.maxRadius, area.maxRadius, r,g,b,a, fullbright, dashPhase);
+                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.outsideRadius, area.outsideRadius, r,g,b,a, fullbright, dashPhase);
                     }
-                    if (area.advanced && area.minRadii != null) {
-                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.minRadii, rr,gg,bb,a, fullbright, true, 0f);
+                    if (area.advanced && area.insideRadii != null) {
+                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.insideRadii, rr,gg,bb,a, fullbright, true, 0f);
                     } else {
-                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.minRadius, area.minRadius, rr,gg,bb,a, fullbright, 0f);
+                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.insideRadius, area.insideRadius, rr,gg,bb,a, fullbright, 0f);
                     }
                 }
             }
@@ -89,8 +89,8 @@ public class NodeRenderer {
             if (node.lookAt != null) {
                 Vec3d la = node.lookAt.subtract(cam);
                 float s = 0.3f;
-                drawCircleApprox(queue, matrices, la, s, r, g, b, a, fullbright);
-                drawCircleApprox(queue, matrices, la, s*0.6f, r, g, b, a, fullbright);
+                drawBillboardCircle(queue, matrices, la, s, r, g, b, a, fullbright);
+                drawBillboardCircle(queue, matrices, la, s*0.6f, r, g, b, a, fullbright);
                 // chevrons along link
                 drawChevrons(queue, matrices,
                         p.x - cam.x, p.y - cam.y, p.z - cam.z,
@@ -194,6 +194,29 @@ public class NodeRenderer {
             double z = c.z + Math.sin(ang) * r;
             submitLine(queue, matrices, cr,cg,cb,ca, light, prevx, prevy, prevz, x, c.y, z);
             prevx = x; prevy = c.y; prevz = z;
+        }
+    }
+
+    private static void drawBillboardCircle(OrderedRenderCommandQueue queue, MatrixStack matrices, Vec3d c,
+                                            double r, float cr, float cg, float cb, float ca, int light) {
+        // Get camera-aligned vectors for billboarding
+        var cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+        var rot = cam.getRotation();
+        org.joml.Vector3f rv = new org.joml.Vector3f(1,0,0).rotate(rot);
+        org.joml.Vector3f uv = new org.joml.Vector3f(0,1,0).rotate(rot);
+
+        int seg = 24;
+        double prevx = c.x + rv.x * r;
+        double prevy = c.y + rv.y * r;
+        double prevz = c.z + rv.z * r;
+
+        for (int i=1;i<=seg;i++) {
+            double ang = (i * 2 * Math.PI)/seg;
+            double x = c.x + (Math.cos(ang) * rv.x + Math.sin(ang) * uv.x) * r;
+            double y = c.y + (Math.cos(ang) * rv.y + Math.sin(ang) * uv.y) * r;
+            double z = c.z + (Math.cos(ang) * rv.z + Math.sin(ang) * uv.z) * r;
+            submitLine(queue, matrices, cr,cg,cb,ca, light, prevx, prevy, prevz, x, y, z);
+            prevx = x; prevy = y; prevz = z;
         }
     }
 
@@ -302,16 +325,18 @@ public class NodeRenderer {
         double ux = dx/len, uy = dy/len, uz = dz/len;
         double step = len / (count + 1);
         double size = Math.min(0.4, step * 0.3);
+
+        // Get camera-aligned side vector for billboarding
+        var cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+        var rot = cam.getRotation();
+        org.joml.Vector3f rv = new org.joml.Vector3f(1,0,0).rotate(rot);
+        double sx = rv.x, sy = rv.y, sz = rv.z;
+
         for (int i=1;i<=count;i++) {
             double t = (i/(double)(count+1) + phase) % 1.0;
             double cx = ax + dx * t;
             double cy = ay + dy * t;
             double cz = az + dz * t;
-            // make a small V shape oriented along the line (using a simple perpendicular in XZ plane)
-            // compute a rough side vector in XZ
-            double sx = -uz, sz = ux; double sy = 0;
-            double sLen = Math.sqrt(sx*sx + sz*sz); if (sLen < 1e-6) { sx = 0; sz = 1; sLen = 1; }
-            sx /= sLen; sz /= sLen;
             // Reverse direction: point AWAY from lookAt (toward node)
             double ex = cx + ux * size; double ey = cy + uy * size; double ez = cz + uz * size;
             submitLine(queue, matrices, r,g,b,a, light, ex,ey,ez, cx + sx*size*0.6, cy + sy*size*0.6, cz + sz*size*0.6);

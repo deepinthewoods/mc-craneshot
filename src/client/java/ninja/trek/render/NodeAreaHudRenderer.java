@@ -150,50 +150,48 @@ public class NodeAreaHudRenderer {
 
     private static double influenceForSphereArea(Vec3d pos, Area area) {
         Vec3d d = pos.subtract(area.center);
-        if (area.advanced && area.minRadii != null && area.maxRadii != null) {
-            // Ellipsoids defined by minRadii and maxRadii
-            double lOuter = Math.sqrt(
-                    (d.x * d.x) / (area.maxRadii.x * area.maxRadii.x)
-                            + (d.y * d.y) / (area.maxRadii.y * area.maxRadii.y)
-                            + (d.z * d.z) / (area.maxRadii.z * area.maxRadii.z));
-            double lInner = Math.sqrt(
-                    (d.x * d.x) / (area.minRadii.x * area.minRadii.x)
-                            + (d.y * d.y) / (area.minRadii.y * area.minRadii.y)
-                            + (d.z * d.z) / (area.minRadii.z * area.minRadii.z));
+        if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
+            // Ellipsoids defined by insideRadii and outsideRadii
+            double distAtInside = Math.sqrt(
+                    (d.x * d.x) / (area.insideRadii.x * area.insideRadii.x)
+                            + (d.y * d.y) / (area.insideRadii.y * area.insideRadii.y)
+                            + (d.z * d.z) / (area.insideRadii.z * area.insideRadii.z));
+            double distAtOutside = Math.sqrt(
+                    (d.x * d.x) / (area.outsideRadii.x * area.outsideRadii.x)
+                            + (d.y * d.y) / (area.outsideRadii.y * area.outsideRadii.y)
+                            + (d.z * d.z) / (area.outsideRadii.z * area.outsideRadii.z));
 
-            if (lInner <= 1.0) return 1.0;
-            if (lOuter >= 1.0) return 0.0;
-            double denom = (lInner - 1.0);
-            if (denom <= 1e-6) return 1.0;
-            double t = 1.0 - ((lOuter - 1.0) / denom);
+            if (distAtInside <= 1.0) return 1.0;
+            if (distAtOutside >= 1.0) return 0.0;
+            double t = (distAtOutside - 1.0) / (distAtOutside - distAtInside);
             return MathHelper.clamp(t, 0.0, 1.0);
         } else {
             double dist = pos.distanceTo(area.center);
-            if (dist <= area.minRadius) return 1.0;
-            if (dist >= area.maxRadius) return 0.0;
-            return 1.0 - ((dist - area.minRadius) / (area.maxRadius - area.minRadius));
+            if (dist <= area.insideRadius) return 1.0;
+            if (dist >= area.outsideRadius) return 0.0;
+            return 1.0 - ((dist - area.insideRadius) / (area.outsideRadius - area.insideRadius));
         }
     }
 
     private static double influenceForBoxArea(Vec3d pos, Area area) {
         Vec3d d = pos.subtract(area.center);
-        if (area.advanced && area.minRadii != null && area.maxRadii != null) {
+        if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
-            if (ax <= area.minRadii.x && ay <= area.minRadii.y && az <= area.minRadii.z) return 1.0;
-            if (ax >= area.maxRadii.x || ay >= area.maxRadii.y || az >= area.maxRadii.z) return 0.0;
+            if (ax <= area.insideRadii.x && ay <= area.insideRadii.y && az <= area.insideRadii.z) return 1.0;
+            if (ax >= area.outsideRadii.x || ay >= area.outsideRadii.y || az >= area.outsideRadii.z) return 0.0;
 
-            double rx = (area.maxRadii.x - area.minRadii.x);
-            double ry = (area.maxRadii.y - area.minRadii.y);
-            double rz = (area.maxRadii.z - area.minRadii.z);
-            double nx = rx > 1e-6 ? Math.max(0.0, (ax - area.minRadii.x) / rx) : 1.0;
-            double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.minRadii.y) / ry) : 1.0;
-            double nz = rz > 1e-6 ? Math.max(0.0, (az - area.minRadii.z) / rz) : 1.0;
+            double rx = (area.outsideRadii.x - area.insideRadii.x);
+            double ry = (area.outsideRadii.y - area.insideRadii.y);
+            double rz = (area.outsideRadii.z - area.insideRadii.z);
+            double nx = rx > 1e-6 ? Math.max(0.0, (ax - area.insideRadii.x) / rx) : 1.0;
+            double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.insideRadii.y) / ry) : 1.0;
+            double nz = rz > 1e-6 ? Math.max(0.0, (az - area.insideRadii.z) / rz) : 1.0;
             double t = 1.0 - Math.max(nx, Math.max(ny, nz));
             return MathHelper.clamp(t, 0.0, 1.0);
         } else {
-            double dist = cubeDistance(pos, area.center, area.maxRadius);
+            double dist = cubeDistance(pos, area.center, area.outsideRadius);
             if (dist <= 0.0) return 1.0;
-            double inner = cubeDistance(pos, area.center, area.minRadius);
+            double inner = cubeDistance(pos, area.center, area.insideRadius);
             if (inner <= 0.0) return 1.0;
             double denom = (inner);
             double t = 1.0 - Math.min(1.0, dist / Math.max(1e-6, denom));

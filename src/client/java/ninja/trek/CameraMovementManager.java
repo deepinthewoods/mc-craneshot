@@ -553,6 +553,26 @@ public class CameraMovementManager {
         return activeMovement != null;
     }
 
+    /**
+     * Check if movement is in out phase, fully out, or in phase (any POST_MOVE state)
+     * Used to determine if node influence should be skipped
+     */
+    public boolean isMovementInOutOrFullyOut() {
+        if (activeMovement == null) return false;
+        // If isOut is true, we're in the "fully out" or "in" phase
+        // If isOut is false but activeMovement exists, we're in the "out" phase
+        return true; // Any active movement means we're in some phase
+    }
+
+    /**
+     * Sets the active movement for node-triggered return (bypassing normal slot logic)
+     */
+    public void setActiveMovementForNodeReturn(ICameraMovement movement) {
+        this.activeMovement = movement;
+        this.activeMovementSlot = null; // Not associated with any slot
+        this.inFreeCamReturnPhase = true;
+    }
+
     public AbstractMovementSettings.SCROLL_WHEEL getActiveMouseWheelMode() {
         if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
             return ((AbstractMovementSettings) activeMovement).mouseWheel;
