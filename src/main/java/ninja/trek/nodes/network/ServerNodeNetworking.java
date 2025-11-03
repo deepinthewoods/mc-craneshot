@@ -17,12 +17,16 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.WorldChunk;
 import ninja.trek.Craneshot;
+import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
 import ninja.trek.nodes.network.ServerNodeNetworking.NodeDelta.Type;
 import ninja.trek.nodes.network.payload.ChunkNodesPayload;
 import ninja.trek.nodes.network.payload.EditRequestPayload;
 import ninja.trek.nodes.network.payload.HandshakePayload;
 import ninja.trek.nodes.network.payload.NodesDeltaPayload;
+import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
+import ninja.trek.nodes.network.payload.AreasDeltaPayload;
+import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.server.ServerNodeManager;
 
 import java.util.*;
@@ -37,6 +41,7 @@ public final class ServerNodeNetworking {
         // Register CustomPayload receivers
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayload.ID, ServerNodeNetworking::handleHandshakePayload);
         ServerPlayNetworking.registerGlobalReceiver(EditRequestPayload.ID, ServerNodeNetworking::handleEditRequestPayload);
+        ServerPlayNetworking.registerGlobalReceiver(AreaEditRequestPayload.ID, ServerNodeNetworking::handleAreaEditRequestPayload);
 
         ServerChunkEvents.CHUNK_LOAD.register(ServerNodeNetworking::onChunkLoad);
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -104,6 +109,30 @@ public final class ServerNodeNetworking {
             case CREATE -> handleCreate(player, world, payload.nodeData());
             case UPDATE -> handleUpdate(player, world, payload.nodeData());
             case DELETE -> handleDelete(player, world, payload.nodeIdForDelete());
+        }
+    }
+
+    private static void handleAreaEditRequestPayload(AreaEditRequestPayload payload, ServerPlayNetworking.Context context) {
+        ServerPlayerEntity player = context.player();
+        if (!ServerNodeManager.get().isHandshakeComplete(player)) {
+            Craneshot.LOGGER.debug("Ignoring area edit request from {} before handshake completion", player.getName().getString());
+            return;
+        }
+        if (!ServerNodeManager.get().consumeRequest(player)) {
+            player.sendMessage(Text.literal("[Craneshot] Too many edit requests; slow down."), false);
+            return;
+        }
+
+        ServerWorld world = ServerNodeManager.resolveWorld(context.server(), payload.dimension());
+        if (world == null) {
+            Craneshot.LOGGER.warn("Received area edit request for unknown dimension {}", payload.dimension().getValue());
+            return;
+        }
+
+        switch (payload.operation()) {
+            case CREATE -> handleAreaCreate(player, world, payload.areaData());
+            case UPDATE -> handleAreaUpdate(player, world, payload.areaData());
+            case DELETE -> handleAreaDelete(player, world, payload.areaIdForDelete());
         }
     }
 
@@ -183,6 +212,73 @@ public final class ServerNodeNetworking {
         }
     }
 
+    private static void handleAreaCreate(ServerPlayerEntity player, ServerWorld world, AreaInstanceDTO incoming) {
+        if (incoming == null) return;
+        if (!ServerNodeManager.get().hasCreatePermission(player)) {
+            player.sendMessage(Text.literal("[Craneshot] You do not have permission to create areas on this server."), false);
+            return;
+        }
+        String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
+        if (error != null) {
+            player.sendMessage(Text.literal("[Craneshot] Invalid area: " + error), false);
+            return;
+        }
+
+        UUID tempId = incoming.uuid;
+        incoming.uuid = UUID.randomUUID();
+        incoming.owner = player.getUuid();
+        incoming.clientRequestId = null;
+
+        ServerNodeManager.get().upsertArea(world, incoming);
+
+        AreaInstanceDTO packetDto = AreaInstanceDTO.fromAreaInstance(incoming.toAreaInstance());
+        packetDto.clientRequestId = tempId;
+
+        AreaDelta delta = AreaDelta.add(world.getRegistryKey(), packetDto);
+        broadcastAreaDeltas(world, List.of(delta));
+        Craneshot.LOGGER.info("Player {} created area {}", player.getName().getString(), incoming.uuid);
+    }
+
+    private static void handleAreaUpdate(ServerPlayerEntity player, ServerWorld world, AreaInstanceDTO incoming) {
+        if (incoming == null) return;
+        AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, incoming.uuid);
+        if (existing == null) {
+            player.sendMessage(Text.literal("[Craneshot] Area was not found on the server."), false);
+            return;
+        }
+        if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
+            player.sendMessage(Text.literal("[Craneshot] You do not have permission to edit this area."), false);
+            return;
+        }
+        incoming.owner = existing.owner;
+        String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
+        if (error != null) {
+            player.sendMessage(Text.literal("[Craneshot] Invalid area update: " + error), false);
+            return;
+        }
+        incoming.clientRequestId = null;
+        ServerNodeManager.get().upsertArea(world, incoming);
+        AreaInstanceDTO packetDto = AreaInstanceDTO.fromAreaInstance(incoming.toAreaInstance());
+        AreaDelta delta = AreaDelta.update(world.getRegistryKey(), packetDto);
+        broadcastAreaDeltas(world, List.of(delta));
+        Craneshot.LOGGER.info("Player {} updated area {}", player.getName().getString(), incoming.uuid);
+    }
+
+    private static void handleAreaDelete(ServerPlayerEntity player, ServerWorld world, UUID areaId) {
+        if (areaId == null) return;
+        AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, areaId);
+        if (existing == null) return;
+        if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
+            player.sendMessage(Text.literal("[Craneshot] You do not have permission to delete this area."), false);
+            return;
+        }
+        if (ServerNodeManager.get().removeArea(world, areaId)) {
+            AreaDelta delta = AreaDelta.remove(world.getRegistryKey(), areaId);
+            broadcastAreaDeltas(world, List.of(delta));
+            Craneshot.LOGGER.info("Player {} removed area {}", player.getName().getString(), areaId);
+        }
+    }
+
     private static void onChunkLoad(ServerWorld world, WorldChunk chunk) {
         ChunkPos pos = chunk.getPos();
         Iterable<ServerPlayerEntity> players = PlayerLookup.tracking(world, pos);
@@ -211,6 +307,9 @@ public final class ServerNodeNetworking {
 
     private static void syncTrackedChunks(ServerPlayerEntity player, ServerWorld world) {
         RegistryKey<World> dimension = world.getRegistryKey();
+        if (ServerNodeManager.get().markAreasSynced(player, dimension)) {
+            sendAreasSnapshot(player, world);
+        }
         ChunkPos center = player.getChunkPos();
         MinecraftServer server = world.getServer();
         int viewDistance = Math.max(2, server != null ? server.getPlayerManager().getViewDistance() : 10);
@@ -242,6 +341,18 @@ public final class ServerNodeNetworking {
             cleanNodes.add(clean);
         }
         ChunkNodesPayload payload = new ChunkNodesPayload(world.getRegistryKey(), pos, cleanNodes);
+        ServerPlayNetworking.send(player, payload);
+    }
+
+    private static void sendAreasSnapshot(ServerPlayerEntity player, ServerWorld world) {
+        List<AreaInstanceDTO> areas = ServerNodeManager.get().getAreas(world);
+        List<AreaInstanceDTO> cleanAreas = new ArrayList<>(areas.size());
+        for (AreaInstanceDTO dto : areas) {
+            AreaInstanceDTO copy = AreaInstanceDTO.fromAreaInstance(dto.toAreaInstance());
+            copy.clientRequestId = null;
+            cleanAreas.add(copy);
+        }
+        AreasSnapshotPayload payload = new AreasSnapshotPayload(world.getRegistryKey(), cleanAreas);
         ServerPlayNetworking.send(player, payload);
     }
 
@@ -294,6 +405,35 @@ public final class ServerNodeNetworking {
         }
     }
 
+    private static void broadcastAreaDeltas(ServerWorld world, List<AreaDelta> deltas) {
+        if (deltas.isEmpty()) return;
+        List<AreasDeltaPayload.AreaOperation> operations = new ArrayList<>(deltas.size());
+        for (AreaDelta delta : deltas) {
+            AreasDeltaPayload.OperationType opType = switch (delta.type()) {
+                case ADD -> AreasDeltaPayload.OperationType.ADD;
+                case UPDATE -> AreasDeltaPayload.OperationType.UPDATE;
+                case REMOVE -> AreasDeltaPayload.OperationType.REMOVE;
+            };
+            UUID areaId = delta.type() == AreaDelta.Type.REMOVE ? delta.removedId() : delta.area().uuid;
+            Optional<AreaInstanceDTO> areaData;
+            if (delta.type() == AreaDelta.Type.ADD || delta.type() == AreaDelta.Type.UPDATE) {
+                AreaInstanceDTO source = delta.area();
+                AreaInstanceDTO copy = AreaInstanceDTO.fromAreaInstance(source.toAreaInstance());
+                copy.clientRequestId = source.clientRequestId;
+                areaData = Optional.of(copy);
+            } else {
+                areaData = Optional.empty();
+            }
+            operations.add(new AreasDeltaPayload.AreaOperation(opType, areaId, areaData));
+        }
+
+        AreasDeltaPayload payload = new AreasDeltaPayload(world.getRegistryKey(), operations);
+        for (ServerPlayerEntity player : PlayerLookup.world(world)) {
+            if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
+            ServerPlayNetworking.send(player, payload);
+        }
+    }
+
     private record ChunkGroupKey(RegistryKey<World> dimension, ChunkPos chunk) {}
 
     public record NodeDelta(Type type, RegistryKey<World> dimension, ChunkPos chunk, CameraNodeDTO node, UUID removedId, UUID clientRequestId) {
@@ -308,6 +448,24 @@ public final class ServerNodeNetworking {
 
         static NodeDelta remove(RegistryKey<World> dimension, ChunkPos chunk, UUID removedId) {
             return new NodeDelta(Type.REMOVE, dimension, chunk, null, removedId, null);
+        }
+
+        public enum Type {
+            ADD, UPDATE, REMOVE
+        }
+    }
+
+    public record AreaDelta(Type type, RegistryKey<World> dimension, AreaInstanceDTO area, UUID removedId) {
+        static AreaDelta add(RegistryKey<World> dimension, AreaInstanceDTO area) {
+            return new AreaDelta(Type.ADD, dimension, area, null);
+        }
+
+        static AreaDelta update(RegistryKey<World> dimension, AreaInstanceDTO area) {
+            return new AreaDelta(Type.UPDATE, dimension, area, null);
+        }
+
+        static AreaDelta remove(RegistryKey<World> dimension, UUID removedId) {
+            return new AreaDelta(Type.REMOVE, dimension, null, removedId);
         }
 
         public enum Type {

@@ -7,6 +7,9 @@ import ninja.trek.nodes.network.payload.ChunkNodesPayload;
 import ninja.trek.nodes.network.payload.EditRequestPayload;
 import ninja.trek.nodes.network.payload.HandshakePayload;
 import ninja.trek.nodes.network.payload.NodesDeltaPayload;
+import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
+import ninja.trek.nodes.network.payload.AreasDeltaPayload;
+import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 
 public class Craneshot implements ModInitializer {
     public static final String MOD_ID = "craneshot";
@@ -28,9 +31,12 @@ public class Craneshot implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(ChunkNodesPayload.ID, ChunkNodesPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(NodesDeltaPayload.ID, NodesDeltaPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(HandshakePayload.ID, HandshakePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(AreasSnapshotPayload.ID, AreasSnapshotPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(AreasDeltaPayload.ID, AreasDeltaPayload.CODEC);
 
         // Client-to-Server payloads
         PayloadTypeRegistry.playC2S().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(HandshakePayload.ID, HandshakePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(AreaEditRequestPayload.ID, AreaEditRequestPayload.CODEC);
     }
 }

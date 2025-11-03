@@ -10,10 +10,14 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.NodeManager;
+import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
 import ninja.trek.nodes.network.payload.ChunkNodesPayload;
 import ninja.trek.nodes.network.payload.HandshakePayload;
 import ninja.trek.nodes.network.payload.NodesDeltaPayload;
+import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
+import ninja.trek.nodes.network.payload.AreasDeltaPayload;
+import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +31,8 @@ public final class ClientNodeNetworking {
         ClientPlayNetworking.registerGlobalReceiver(HandshakePayload.ID, ClientNodeNetworking::handleHandshakePayload);
         ClientPlayNetworking.registerGlobalReceiver(ChunkNodesPayload.ID, ClientNodeNetworking::handleChunkNodesPayload);
         ClientPlayNetworking.registerGlobalReceiver(NodesDeltaPayload.ID, ClientNodeNetworking::handleNodesDeltaPayload);
+        ClientPlayNetworking.registerGlobalReceiver(AreasSnapshotPayload.ID, ClientNodeNetworking::handleAreasSnapshotPayload);
+        ClientPlayNetworking.registerGlobalReceiver(AreasDeltaPayload.ID, ClientNodeNetworking::handleAreasDeltaPayload);
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> NodeManager.get().onDisconnected());
         ClientChunkEvents.CHUNK_UNLOAD.register(ClientNodeNetworking::onChunkUnload);
@@ -86,7 +92,42 @@ public final class ClientNodeNetworking {
         context.client().execute(() -> tasks.forEach(Runnable::run));
     }
 
+    private static void handleAreasSnapshotPayload(AreasSnapshotPayload payload, ClientPlayNetworking.Context context) {
+        context.client().execute(() ->
+            NodeManager.get().applyAreasSnapshot(payload.dimension(), payload.areas())
+        );
+    }
+
+    private static void handleAreasDeltaPayload(AreasDeltaPayload payload, ClientPlayNetworking.Context context) {
+        List<Runnable> tasks = new ArrayList<>(payload.operations().size());
+        for (AreasDeltaPayload.AreaOperation operation : payload.operations()) {
+            switch (operation.type()) {
+                case ADD -> operation.areaData().ifPresent(dto ->
+                        tasks.add(() -> NodeManager.get().applyAreaDeltaAdd(payload.dimension(), dto)));
+                case UPDATE -> operation.areaData().ifPresent(dto ->
+                        tasks.add(() -> NodeManager.get().applyAreaDeltaUpdate(payload.dimension(), dto)));
+                case REMOVE -> {
+                    UUID id = operation.areaId();
+                    tasks.add(() -> NodeManager.get().applyAreaDeltaRemove(payload.dimension(), id));
+                }
+            }
+        }
+        context.client().execute(() -> tasks.forEach(Runnable::run));
+    }
+
     private static void onChunkUnload(ClientWorld world, net.minecraft.world.chunk.WorldChunk chunk) {
         NodeManager.get().handleChunkUnload(world.getRegistryKey(), chunk.getPos());
+    }
+
+    public static void sendAreaCreate(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+        ClientPlayNetworking.send(AreaEditRequestPayload.create(dimension, dto));
+    }
+
+    public static void sendAreaUpdate(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+        ClientPlayNetworking.send(AreaEditRequestPayload.update(dimension, dto));
+    }
+
+    public static void sendAreaDelete(RegistryKey<World> dimension, UUID areaId) {
+        ClientPlayNetworking.send(AreaEditRequestPayload.delete(dimension, areaId));
     }
 }

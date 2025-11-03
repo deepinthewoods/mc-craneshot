@@ -46,55 +46,46 @@ public class NodeRenderer {
             if (sel != null && sel.id.equals(node.id)) {
                 drawBillboardOutline(queue, matrices, p.subtract(cam), size * 1.1f, 1f,1f,1f, a, fullbright);
             }
+        }
 
-            // Lines to area centers
-            for (var area : node.areas) {
-                // Make dash segments 8x smaller for animated link
-                submitDashedLine(queue, matrices, r, g, b, a, fullbright,
-                        p.x - cam.x, p.y - cam.y, p.z - cam.z,
-                        area.center.x - cam.x, area.center.y - cam.y, area.center.z - cam.z,
-                        0.5f/8f, 0.3f/8f, dashPhase);
-                // Draw area outline (simple)
-                float rr = r * 0.6f, gg = g * 0.6f, bb = b * 0.6f;
-                if (area.shape == AreaShape.CUBE) {
-                    // Outer (outside): keep existing style (advanced dashed animated, simple solid)
-                    if (area.advanced && area.outsideRadii != null) {
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.outsideRadii, r,g,b,a, fullbright, true, dashPhase);
-                    } else {
-                        drawCubeOutline(queue, matrices, area.center.subtract(cam), area.outsideRadius, r, g, b, a, fullbright);
-                    }
-                    // Inner (inside): dashed, non-animated
-                    if (area.advanced && area.insideRadii != null) {
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), area.insideRadii, rr,gg,bb,a, fullbright, true, 0f);
-                    } else {
-                        // Approximate cube with dashed box using uniform radii
-                        drawBoxOutline(queue, matrices, area.center.subtract(cam), new Vec3d(area.insideRadius, area.insideRadius, area.insideRadius), rr,gg,bb,a, fullbright, true, 0f);
-                    }
+        AreaInstance selectedArea = NodeManager.get().getSelectedArea();
+        for (var area : NodeManager.get().getAreas()) {
+            boolean isSelected = selectedArea != null && selectedArea.id.equals(area.id);
+            int color = isSelected ? 0xFF66FFAA : 0xFF4CB3FF;
+            float a = 0.65f;
+            float r = ((color >> 16) & 0xFF) / 255f;
+            float g = ((color >> 8) & 0xFF) / 255f;
+            float b = (color & 0xFF) / 255f;
+            float rr = r * 0.6f;
+            float gg = g * 0.6f;
+            float bb = b * 0.6f;
+
+            Vec3d rel = area.center.subtract(cam);
+            if (area.shape == AreaShape.CUBE) {
+                if (area.advanced && area.outsideRadii != null) {
+                    drawBoxOutline(queue, matrices, rel, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
                 } else {
-                    // Ellipse/Sphere: Outer (outside) remains dashed animated in XZ; inner (inside) dashed non-animated in XZ
-                    if (area.advanced && area.outsideRadii != null) {
-                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.outsideRadii, r,g,b,a, fullbright, true, dashPhase);
-                    } else {
-                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.outsideRadius, area.outsideRadius, r,g,b,a, fullbright, dashPhase);
-                    }
-                    if (area.advanced && area.insideRadii != null) {
-                        drawEllipsoidApprox(queue, matrices, area.center.subtract(cam), area.insideRadii, rr,gg,bb,a, fullbright, true, 0f);
-                    } else {
-                        drawDashedEllipse(queue, matrices, area.center.subtract(cam), area.insideRadius, area.insideRadius, rr,gg,bb,a, fullbright, 0f);
-                    }
+                    drawCubeOutline(queue, matrices, rel, area.outsideRadius, r, g, b, a, fullbright);
                 }
-            }
 
-            // LookAt marker
-            if (node.lookAt != null) {
-                Vec3d la = node.lookAt.subtract(cam);
-                float s = 0.3f;
-                drawBillboardCircle(queue, matrices, la, s, r, g, b, a, fullbright);
-                drawBillboardCircle(queue, matrices, la, s*0.6f, r, g, b, a, fullbright);
-                // chevrons along link
-                drawChevrons(queue, matrices,
-                        p.x - cam.x, p.y - cam.y, p.z - cam.z,
-                        la.x, la.y, la.z, r,g,b,a, fullbright, dashPhase);
+                if (area.advanced && area.insideRadii != null) {
+                    drawBoxOutline(queue, matrices, rel, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
+                } else {
+                    Vec3d inner = new Vec3d(area.insideRadius, area.insideRadius, area.insideRadius);
+                    drawBoxOutline(queue, matrices, rel, inner, rr, gg, bb, a, fullbright, true, 0f);
+                }
+            } else {
+                if (area.advanced && area.outsideRadii != null) {
+                    drawEllipsoidApprox(queue, matrices, rel, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
+                } else {
+                    drawDashedEllipse(queue, matrices, rel, area.outsideRadius, area.outsideRadius, r, g, b, a, fullbright, dashPhase);
+                }
+
+                if (area.advanced && area.insideRadii != null) {
+                    drawEllipsoidApprox(queue, matrices, rel, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
+                } else {
+                    drawDashedEllipse(queue, matrices, rel, area.insideRadius, area.insideRadius, rr, gg, bb, a, fullbright, 0f);
+                }
             }
         }
     }

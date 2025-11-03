@@ -4,16 +4,18 @@ import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.Vec3d;
-import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.*;
 
 import java.io.*;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.*;
 
 public class NodeStorage {
+    public static class Payload {
+        public final List<CameraNode> nodes = new ArrayList<>();
+        public final List<AreaInstance> areas = new ArrayList<>();
+    }
+
     private static final Gson GSON = new GsonBuilder()
             .registerTypeAdapter(Vec3d.class, new Vec3dAdapter())
             .setPrettyPrinting()
@@ -36,23 +38,44 @@ public class NodeStorage {
         return new File(cfgDir, "craneshot_nodes.json");
     }
 
-    public static List<CameraNode> load() {
+    public static Payload load() {
+        Payload payload = new Payload();
         File f = getFile();
-        if (!f.exists()) return new ArrayList<>();
+        if (!f.exists()) return payload;
         try (Reader r = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) {
-            Type type = new TypeToken<List<CameraNode>>(){}.getType();
-            List<CameraNode> list = GSON.fromJson(r, type);
-            return list != null ? list : new ArrayList<>();
+            JsonElement root = JsonParser.parseReader(r);
+            if (root == null) return payload;
+            if (root.isJsonArray()) {
+                // Legacy format: array of nodes only
+                List<CameraNode> list = GSON.fromJson(root, new TypeToken<List<CameraNode>>(){}.getType());
+                if (list != null) {
+                    payload.nodes.addAll(list);
+                }
+            } else if (root.isJsonObject()) {
+                JsonObject obj = root.getAsJsonObject();
+                if (obj.has("nodes")) {
+                    List<CameraNode> list = GSON.fromJson(obj.get("nodes"), new TypeToken<List<CameraNode>>(){}.getType());
+                    if (list != null) payload.nodes.addAll(list);
+                }
+                if (obj.has("areas")) {
+                    List<AreaInstance> list = GSON.fromJson(obj.get("areas"), new TypeToken<List<AreaInstance>>(){}.getType());
+                    if (list != null) payload.areas.addAll(list);
+                }
+            }
         } catch (Exception e) {
             // logging removed
-            return new ArrayList<>();
         }
+        return payload;
     }
 
-    public static void save(List<CameraNode> nodes) {
+    public static void save(List<CameraNode> nodes, List<AreaInstance> areas) {
         File f = getFile();
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
-            GSON.toJson(nodes, w);
+            JsonObject root = new JsonObject();
+            root.addProperty("version", 1);
+            root.add("nodes", GSON.toJsonTree(nodes, new TypeToken<List<CameraNode>>(){}.getType()));
+            root.add("areas", GSON.toJsonTree(areas, new TypeToken<List<AreaInstance>>(){}.getType()));
+            GSON.toJson(root, w);
         } catch (Exception e) {
             // logging removed
         }
@@ -64,24 +87,43 @@ public class NodeStorage {
         return new File(cfgDir, "craneshot_nodes_export.json");
     }
 
-    public static boolean exportNodes(java.util.List<CameraNode> nodes) {
+    public static boolean exportData(List<CameraNode> nodes, List<AreaInstance> areas) {
         File f = getExportFile();
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
-            GSON.toJson(nodes, w);
+            JsonObject root = new JsonObject();
+            root.addProperty("version", 1);
+            root.add("nodes", GSON.toJsonTree(nodes, new TypeToken<List<CameraNode>>(){}.getType()));
+            root.add("areas", GSON.toJsonTree(areas, new TypeToken<List<AreaInstance>>(){}.getType()));
+            GSON.toJson(root, w);
             return true;
         } catch (Exception e) { return false; }
     }
 
-    public static java.util.List<CameraNode> importNodes() {
+    public static Payload importData() {
+        Payload payload = new Payload();
         File f = getExportFile();
-        if (!f.exists()) return java.util.Collections.emptyList();
+        if (!f.exists()) return payload;
         try (Reader r = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) {
-            Type type = new TypeToken<java.util.List<CameraNode>>(){}.getType();
-            java.util.List<CameraNode> list = GSON.fromJson(r, type);
-            return list != null ? list : java.util.Collections.emptyList();
+            JsonElement root = JsonParser.parseReader(r);
+            if (root == null) return payload;
+            if (root.isJsonObject()) {
+                JsonObject obj = root.getAsJsonObject();
+                if (obj.has("nodes")) {
+                    List<CameraNode> list = GSON.fromJson(obj.get("nodes"), new TypeToken<List<CameraNode>>(){}.getType());
+                    if (list != null) payload.nodes.addAll(list);
+                }
+                if (obj.has("areas")) {
+                    List<AreaInstance> list = GSON.fromJson(obj.get("areas"), new TypeToken<List<AreaInstance>>(){}.getType());
+                    if (list != null) payload.areas.addAll(list);
+                }
+            } else if (root.isJsonArray()) {
+                List<CameraNode> list = GSON.fromJson(root, new TypeToken<List<CameraNode>>(){}.getType());
+                if (list != null) payload.nodes.addAll(list);
+            }
         } catch (Exception e) {
-            return java.util.Collections.emptyList();
+            return payload;
         }
+        return payload;
     }
 
     static class Vec3dAdapter implements JsonSerializer<Vec3d>, JsonDeserializer<Vec3d> {

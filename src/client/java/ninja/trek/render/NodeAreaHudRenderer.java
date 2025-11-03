@@ -9,9 +9,10 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.nodes.NodeManager;
+import ninja.trek.nodes.NodeManager.PlayerStateSnapshot;
 import ninja.trek.nodes.model.Area;
+import ninja.trek.nodes.model.AreaInstance;
 import ninja.trek.nodes.model.AreaShape;
-import ninja.trek.nodes.model.CameraNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public class NodeAreaHudRenderer {
         if (client == null || client.world == null || client.player == null) return;
 
         NodeManager nodeManager = NodeManager.get();
-        if (nodeManager.getNodes().isEmpty()) return;
+        if (nodeManager.getAreas().isEmpty()) return;
 
         Vec3d playerPos = client.player.getEyePos();
         TextRenderer textRenderer = client.textRenderer;
@@ -38,22 +39,16 @@ public class NodeAreaHudRenderer {
 
         // Collect active areas with their influences
         List<AreaInfluenceInfo> activeAreas = new ArrayList<>();
+        AreaInstance selectedArea = nodeManager.getSelectedArea();
+        PlayerStateSnapshot snapshot = nodeManager.collectPlayerStates(client);
 
-        for (CameraNode node : nodeManager.getNodes()) {
-            for (int i = 0; i < node.areas.size(); i++) {
-                Area area = node.areas.get(i);
+        for (AreaInstance area : nodeManager.getAreas()) {
+            if (!NodeManager.areaMatchesPlayerStates(area, snapshot)) continue;
 
-                // Check if area is eligible for current player state
-                if (!isAreaEligibleForPlayer(area, client)) continue;
-
-                // Calculate influence
-                double influence = calculateInfluence(playerPos, area);
-
-                if (influence > 0.001) { // Only show areas with >0% influence
-                    // Apply easing curve if present
-                    double displayInfluence = area.easing != null ? area.easing.apply(influence) : influence;
-                    activeAreas.add(new AreaInfluenceInfo(node, i, displayInfluence));
-                }
+            double influence = calculateInfluence(playerPos, area);
+            if (influence > 0.001) {
+                double displayInfluence = area.easing != null ? area.easing.apply(influence) : influence;
+                activeAreas.add(new AreaInfluenceInfo(area, displayInfluence, selectedArea != null && selectedArea.id.equals(area.id)));
             }
         }
 
@@ -64,20 +59,10 @@ public class NodeAreaHudRenderer {
             AreaInfluenceInfo info = activeAreas.get(i);
             y -= LINE_HEIGHT;
 
-            // Format: "NodeName [Area 1]: 45.2%"
-            String nodeName = info.node.name != null && !info.node.name.isEmpty()
-                ? info.node.name
-                : "Node";
-            int areaIndex = info.areaIndex + 1; // 1-based for display
-            String text = String.format("%s [Area %d]: %.1f%%", nodeName, areaIndex, info.influence * 100.0);
+            String areaName = info.area.name != null && !info.area.name.isBlank() ? info.area.name : "Area";
+            String text = String.format("%s: %.1f%%", areaName, info.influence * 100.0);
 
-            // Use node color if available, otherwise white
-            int color = info.node.colorARGB != null ? info.node.colorARGB : 0xFFFFFFFF;
-
-            // Ensure alpha is set (in case stored color has 0 alpha)
-            if ((color & 0xFF000000) == 0) {
-                color |= 0xFF000000;
-            }
+            int color = info.selected ? 0xFF66FFAA : 0xFF4CB3FF;
 
             ctx.drawTextWithShadow(
                 textRenderer,
@@ -91,52 +76,15 @@ public class NodeAreaHudRenderer {
 
     // Helper class to store area influence information
     private static class AreaInfluenceInfo {
-        final CameraNode node;
-        final int areaIndex;
+        final AreaInstance area;
         final double influence;
+        final boolean selected;
 
-        AreaInfluenceInfo(CameraNode node, int areaIndex, double influence) {
-            this.node = node;
-            this.areaIndex = areaIndex;
+        AreaInfluenceInfo(AreaInstance area, double influence, boolean selected) {
+            this.area = area;
             this.influence = influence;
+            this.selected = selected;
         }
-    }
-
-    // Copied from NodeManager - checks if area matches current player movement state
-    private static boolean isAreaEligibleForPlayer(Area area, MinecraftClient mc) {
-        if (mc.player == null) return true;
-        var pl = mc.player;
-
-        boolean isElytra = false;
-        try {
-            Object pose = pl.getPose();
-            if (pose != null) {
-                String n = pose.toString();
-                isElytra = "FALL_FLYING".equals(n) || "GLIDING".equals(n);
-            }
-        } catch (Throwable ignored) {}
-
-        boolean isSwimming = pl.isSwimming();
-        boolean isSneaking = pl.isSneaking();
-        var vehicle = pl.getVehicle();
-        boolean isBoat = vehicle instanceof net.minecraft.entity.vehicle.BoatEntity;
-        boolean isMinecart = vehicle instanceof net.minecraft.entity.vehicle.AbstractMinecartEntity;
-        boolean isRidingGhast = vehicle instanceof net.minecraft.entity.mob.GhastEntity;
-        boolean isRidingOther = vehicle != null && !isBoat && !isMinecart && !isRidingGhast;
-        boolean isCrawling1Block = pl.isInSwimmingPose() && !pl.isTouchingWater() && !isSwimming;
-        boolean isWalking = !isElytra && !isSwimming && vehicle == null;
-
-        boolean ok = false;
-        if (area.filterWalking && isWalking && !isSneaking) ok = true;
-        if (area.filterSneaking && isWalking && isSneaking) ok = true;
-        if (area.filterElytra && isElytra) ok = true;
-        if (area.filterBoat && isBoat) ok = true;
-        if (area.filterMinecart && isMinecart) ok = true;
-        if (area.filterRidingGhast && isRidingGhast) ok = true;
-        if (area.filterRidingOther && isRidingOther) ok = true;
-        if (area.filterSwimming && isSwimming) ok = true;
-        if (area.filterCrawling1Block && isCrawling1Block) ok = true;
-        return ok;
     }
 
     // Copied from NodeManager - calculates influence for an area

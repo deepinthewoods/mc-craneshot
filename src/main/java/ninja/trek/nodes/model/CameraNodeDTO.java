@@ -9,13 +9,11 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 public class CameraNodeDTO {
-    public static final int CURRENT_VERSION = 2;
+    public static final int CURRENT_VERSION = 3;
 
     public int version = CURRENT_VERSION;
     public UUID uuid = UUID.randomUUID();
@@ -25,8 +23,6 @@ public class CameraNodeDTO {
     public NodeType type = NodeType.CAMERA_CONTROL;
     public Vec3d position = Vec3d.ZERO;
     public int colorARGB = 0xFFFF8800;
-    public Vec3d lookAt = null;
-    public final List<AreaDTO> areas = new ArrayList<>();
     public double droneRadius = 6.0;
     public double droneSpeedDegPerSec = 30.0;
     public double droneStartAngleDeg = 0.0;
@@ -40,16 +36,12 @@ public class CameraNodeDTO {
         dto.uuid = node.id;
         dto.owner = owner != null ? owner : node.owner;
         dto.name = node.name;
-        dto.type = node.type;
-        dto.position = node.position;
-        dto.colorARGB = node.colorARGB == null ? 0xFFFF8800 : node.colorARGB;
-        dto.lookAt = node.lookAt;
+      	dto.type = node.type;
+       	dto.position = node.position;
+       	dto.colorARGB = node.colorARGB == null ? 0xFFFF8800 : node.colorARGB;
         dto.droneRadius = node.droneRadius;
         dto.droneSpeedDegPerSec = node.droneSpeedDegPerSec;
         dto.droneStartAngleDeg = node.droneStartAngleDeg;
-        for (Area area : node.areas) {
-            dto.areas.add(AreaDTO.fromArea(area));
-        }
         return dto;
     }
 
@@ -60,15 +52,10 @@ public class CameraNodeDTO {
         node.type = this.type == null ? NodeType.CAMERA_CONTROL : this.type;
         node.position = this.position;
         node.colorARGB = this.colorARGB;
-        node.lookAt = this.lookAt;
         node.droneRadius = this.droneRadius;
         node.droneSpeedDegPerSec = this.droneSpeedDegPerSec;
         node.droneStartAngleDeg = this.droneStartAngleDeg;
         node.owner = this.owner;
-        node.areas.clear();
-        for (AreaDTO dto : this.areas) {
-            node.areas.add(dto.toArea());
-        }
         return node;
     }
 
@@ -82,14 +69,9 @@ public class CameraNodeDTO {
         dto.type = this.type;
         dto.position = this.position;
         dto.colorARGB = this.colorARGB;
-        dto.lookAt = this.lookAt;
         dto.droneRadius = this.droneRadius;
         dto.droneSpeedDegPerSec = this.droneSpeedDegPerSec;
         dto.droneStartAngleDeg = this.droneStartAngleDeg;
-        dto.areas.clear();
-        for (AreaDTO area : this.areas) {
-            dto.areas.add(area.copy());
-        }
         return dto;
     }
 
@@ -104,15 +86,9 @@ public class CameraNodeDTO {
         buf.writeEnumConstant(type == null ? NodeType.CAMERA_CONTROL : type);
         writeVec3d(buf, position);
         buf.writeInt(colorARGB);
-        buf.writeBoolean(lookAt != null);
-        if (lookAt != null) writeVec3d(buf, lookAt);
         buf.writeDouble(droneRadius);
         buf.writeDouble(droneSpeedDegPerSec);
         buf.writeDouble(droneStartAngleDeg);
-        buf.writeVarInt(areas.size());
-        for (AreaDTO area : areas) {
-            area.write(buf);
-        }
     }
 
     public static CameraNodeDTO read(PacketByteBuf buf) {
@@ -125,15 +101,9 @@ public class CameraNodeDTO {
         dto.type = buf.readEnumConstant(NodeType.class);
         dto.position = readVec3d(buf);
         dto.colorARGB = buf.readInt();
-        if (buf.readBoolean()) dto.lookAt = readVec3d(buf);
         dto.droneRadius = buf.readDouble();
         dto.droneSpeedDegPerSec = buf.readDouble();
         dto.droneStartAngleDeg = buf.readDouble();
-        int areaCount = buf.readVarInt();
-        dto.areas.clear();
-        for (int i = 0; i < areaCount; i++) {
-            dto.areas.add(AreaDTO.read(buf));
-        }
         return dto;
     }
 
@@ -146,15 +116,9 @@ public class CameraNodeDTO {
         tag.putString("type", (type == null ? NodeType.CAMERA_CONTROL : type).name());
         tag.put("pos", vec3dToNbt(position));
         tag.putInt("color", colorARGB);
-        if (lookAt != null) tag.put("lookAt", vec3dToNbt(lookAt));
         tag.putDouble("droneRadius", droneRadius);
         tag.putDouble("droneSpeedDegPerSec", droneSpeedDegPerSec);
         tag.putDouble("droneStartAngleDeg", droneStartAngleDeg);
-        NbtList areasTag = new NbtList();
-        for (AreaDTO area : areas) {
-            areasTag.add(area.toNbt());
-        }
-        tag.put("areas", areasTag);
         return tag;
     }
 
@@ -184,22 +148,9 @@ public class CameraNodeDTO {
             }
         });
         dto.colorARGB = tag.getInt("color").orElse(0xFFFF8800);
-        tag.getList("lookAt").ifPresent(list -> {
-            if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
-                dto.lookAt = vec3dFromNbt(list);
-            }
-        });
         dto.droneRadius = tag.getDouble("droneRadius").orElse(6.0);
         dto.droneSpeedDegPerSec = tag.getDouble("droneSpeedDegPerSec").orElse(30.0);
         dto.droneStartAngleDeg = tag.getDouble("droneStartAngleDeg").orElse(0.0);
-        dto.areas.clear();
-        tag.getList("areas").ifPresent(list -> {
-            for (NbtElement element : list) {
-                if (element instanceof NbtCompound areaTag) {
-                    dto.areas.add(AreaDTO.fromNbt(areaTag));
-                }
-            }
-        });
         return dto;
     }
 

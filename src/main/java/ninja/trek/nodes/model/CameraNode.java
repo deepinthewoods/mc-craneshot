@@ -1,8 +1,7 @@
 package ninja.trek.nodes.model;
 
 import net.minecraft.util.math.Vec3d;
-import java.util.ArrayList;
-import java.util.List;
+
 import java.util.UUID;
 
 public class CameraNode {
@@ -11,8 +10,6 @@ public class CameraNode {
     public NodeType type = NodeType.CAMERA_CONTROL;
     public Vec3d position = Vec3d.ZERO;
     public Integer colorARGB = 0xFFFF8800; // default orange
-    public Vec3d lookAt = null; // optional
-    public final List<Area> areas = new ArrayList<>();
     public UUID owner = null;
 
     // DroneShot params (used when type == DRONE_SHOT)

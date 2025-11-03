@@ -12,11 +12,9 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.nodes.NodeManager;
-import ninja.trek.nodes.model.Area;
 import ninja.trek.nodes.model.CameraNode;
+import ninja.trek.nodes.model.AreaInstance;
 import org.lwjgl.glfw.GLFW;
-
-import java.util.List;
 
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
@@ -71,28 +69,6 @@ public class NodeEditorScreen extends Screen {
                 n.type = sel.type;
                 n.position = sel.position.add(0.25, 0, 0.25);
                 n.colorARGB = sel.colorARGB;
-                n.lookAt = sel.lookAt;
-                for (Area a : sel.areas) {
-                    Area c = new Area();
-                    c.shape = a.shape;
-                    c.center = a.center;
-                    c.insideRadius = a.insideRadius;
-                    c.outsideRadius = a.outsideRadius;
-                    c.advanced = a.advanced;
-                    c.insideRadii = a.insideRadii;
-                    c.outsideRadii = a.outsideRadii;
-                    c.filterWalking = a.filterWalking;
-                    c.filterElytra = a.filterElytra;
-                    c.filterMinecart = a.filterMinecart;
-                    c.filterRidingGhast = a.filterRidingGhast;
-                    c.filterRidingOther = a.filterRidingOther;
-                    c.filterBoat = a.filterBoat;
-                    c.filterSwimming = a.filterSwimming;
-                    c.filterSneaking = a.filterSneaking;
-                    c.filterCrawling1Block = a.filterCrawling1Block;
-                    c.easing = a.easing;
-                    n.areas.add(c);
-                }
                 ninja.trek.nodes.NodeManager.get().getNodes();
                 // add and select
                 NodeManager.get().setSelected(NodeManager.get().addNode(n.position).id);
@@ -102,8 +78,6 @@ public class NodeEditorScreen extends Screen {
                     added.name = n.name;
                     added.type = n.type;
                     added.colorARGB = n.colorARGB;
-                    added.lookAt = n.lookAt;
-                    added.areas.addAll(n.areas);
                     NodeManager.get().save();
                 }
                 this.init(client, this.width, this.height);
@@ -114,27 +88,18 @@ public class NodeEditorScreen extends Screen {
 
         // Export/Import node sets
         addDrawableChild(ButtonWidget.builder(Text.literal("Export"), b-> {
-            boolean ok = ninja.trek.nodes.io.NodeStorage.exportNodes(new java.util.ArrayList<>(NodeManager.get().getNodes()));
+            boolean ok = ninja.trek.nodes.io.NodeStorage.exportData(
+                    new java.util.ArrayList<>(NodeManager.get().getNodes()),
+                    new java.util.ArrayList<>(NodeManager.get().getAreas()));
             if (!ok) {
                 // no toast; silent
             }
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
         addDrawableChild(ButtonWidget.builder(Text.literal("Import"), b-> {
-            java.util.List<CameraNode> list = ninja.trek.nodes.io.NodeStorage.importNodes();
-            if (!list.isEmpty()) {
-                // Replace current set
-                // simple: clear + add all
-                // since NodeManager lacks clear API, we simulate by direct field replacement via reflection or rebuild
-                // fallback: remove selected id and overwrite underlying storage
-                try {
-                    java.lang.reflect.Field f = ninja.trek.nodes.NodeManager.class.getDeclaredField("nodes");
-                    f.setAccessible(true);
-                    java.util.List<CameraNode> nodes = (java.util.List<CameraNode>) f.get(ninja.trek.nodes.NodeManager.get());
-                    nodes.clear();
-                    nodes.addAll(list);
-                    ninja.trek.nodes.NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                } catch (Throwable ignored) {}
+            ninja.trek.nodes.io.NodeStorage.Payload payload = ninja.trek.nodes.io.NodeStorage.importData();
+            if (!payload.nodes.isEmpty() || !payload.areas.isEmpty()) {
+                NodeManager.get().replaceAll(payload.nodes, payload.areas);
+                this.init(client, this.width, this.height);
             }
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
 
@@ -150,23 +115,11 @@ public class NodeEditorScreen extends Screen {
                 .dimensions(rightX,y,w,h).build()); y+=h+sp;
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Add Area"), b-> {
-            CameraNode sel = NodeManager.get().getSelected();
-            if (sel != null) {
-                Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-                if (cam != null) NodeManager.get().addAreaTo(sel, cam.getPos());
-                this.init(client, this.width, this.height);
-            }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Set LookAt"), b-> {
-            CameraNode sel = NodeManager.get().getSelected();
             Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-            if (sel != null && cam != null) NodeManager.get().setLookAt(sel, cam.getPos());
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Unset LookAt"), b-> {
-            CameraNode sel = NodeManager.get().getSelected();
-            if (sel != null) NodeManager.get().unsetLookAt(sel);
+            Vec3d pos = cam != null ? cam.getPos() : Vec3d.ZERO;
+            var area = NodeManager.get().addArea(pos);
+            NodeManager.get().setSelectedArea(area.id);
+            this.init(client, this.width, this.height);
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
 
 
@@ -211,26 +164,35 @@ public class NodeEditorScreen extends Screen {
             }
         }
 
-        // Build area list buttons for selected node
-        CameraNode sel = NodeManager.get().getSelected();
-        if (sel != null) {
-            int listX = this.width - 240;
-            int listY = 10;
-            int idx = 0;
-            for (Area a : sel.areas) {
-                final int areaIndex = idx++;
-                addDrawableChild(ButtonWidget.builder(Text.literal("Edit Area "+areaIndex), b-> {
-                    client.setScreen(new AreaSettingsModal(a, updated -> {
-                        NodeManager.get().save();
-                        client.setScreen(this);
-                    }));
-                }).dimensions(listX, listY, 100, 18).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("-"), b-> {
-                    NodeManager.get().removeArea(sel, a);
-                    this.init(client, this.width, this.height);
-                }).dimensions(listX+105, listY, 18, 18).build());
-                listY += 22;
-            }
+        int areaListX = this.width - 260;
+        int areaListY = 10;
+        int areaIdx = 0;
+        AreaInstance selectedArea = NodeManager.get().getSelectedArea();
+        for (AreaInstance area : NodeManager.get().getAreas()) {
+            boolean isSelected = selectedArea != null && selectedArea.id.equals(area.id);
+            String displayName = (area.name != null && !area.name.isBlank()) ? area.name : "Area " + areaIdx;
+            if (isSelected) displayName = "* " + displayName;
+
+            addDrawableChild(ButtonWidget.builder(Text.literal(displayName), b -> {
+                NodeManager.get().setSelectedArea(area.id);
+                client.setScreen(new AreaSettingsModal(area, updated -> {
+                    NodeManager.get().save();
+                    client.setScreen(this);
+                }));
+            }).dimensions(areaListX, areaListY, 140, 18).build());
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("Sel"), b -> {
+                NodeManager.get().setSelectedArea(area.id);
+                this.init(client, this.width, this.height);
+            }).dimensions(areaListX + 145, areaListY, 32, 18).build());
+
+            addDrawableChild(ButtonWidget.builder(Text.literal("-"), b -> {
+                NodeManager.get().removeArea(area.id);
+                this.init(client, this.width, this.height);
+            }).dimensions(areaListX + 182, areaListY, 18, 18).build());
+
+            areaListY += 22;
+            areaIdx++;
         }
     }
 
@@ -253,22 +215,34 @@ public class NodeEditorScreen extends Screen {
         // Side info text (selected node + areas)
         int rightX = this.width - 240;
         int y = 10;
-        CameraNode sel = NodeManager.get().getSelected();
-        if (sel != null) {
-            context.drawText(textRenderer, Text.literal("Type: "+sel.type), rightX, y, 0xFFFFFF, true); y+=12;
-            if (sel.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
-                context.drawText(textRenderer, Text.literal(String.format("Radius: %.1f", sel.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Speed: %.0f deg/s", sel.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
-                y+=4;
-            }
-            List<Area> areas = sel.areas;
-            int i=0;
-            for (Area a : areas) {
-                context.drawText(textRenderer, Text.literal("Area "+i+" ("+a.shape+") in:"+(int)a.insideRadius+" out:"+(int)a.outsideRadius), rightX, y, 0xFFFFFF, true);
-                y+=12;
+        CameraNode selNode = NodeManager.get().getSelected();
+        if (selNode != null) {
+            context.drawText(textRenderer, Text.literal("Node: "+selNode.name), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawText(textRenderer, Text.literal("Type: "+selNode.type), rightX, y, 0xFFFFFF, true); y+=12;
+            if (selNode.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
+                context.drawText(textRenderer, Text.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawText(textRenderer, Text.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
             }
         } else {
-            context.drawText(textRenderer, Text.literal("No node selected"), rightX, y, 0xAAAAAA, true);
+            context.drawText(textRenderer, Text.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;
+        }
+
+        y += 6;
+
+        AreaInstance selArea = NodeManager.get().getSelectedArea();
+        if (selArea != null) {
+            context.drawText(textRenderer, Text.literal("Area: "+(selArea.name != null ? selArea.name : selArea.id.toString())), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawText(textRenderer, Text.literal("Shape: "+selArea.shape), rightX, y, 0xFFFFFF, true); y+=12;
+            if (selArea.advanced && selArea.insideRadii != null && selArea.outsideRadii != null) {
+                context.drawText(textRenderer, Text.literal(String.format("Inside: %.1f/%.1f/%.1f", selArea.insideRadii.x, selArea.insideRadii.y, selArea.insideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawText(textRenderer, Text.literal(String.format("Outside: %.1f/%.1f/%.1f", selArea.outsideRadii.x, selArea.outsideRadii.y, selArea.outsideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+            } else {
+                context.drawText(textRenderer, Text.literal(String.format("Inside: %.1f", selArea.insideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawText(textRenderer, Text.literal(String.format("Outside: %.1f", selArea.outsideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+            }
+            context.drawText(textRenderer, Text.literal("Curve: "+selArea.easing), rightX, y, 0xFFFFFF, true); y+=12;
+        } else {
+            context.drawText(textRenderer, Text.literal("No area selected"), rightX, y, 0xAAAAAA, true);
         }
     }
 
