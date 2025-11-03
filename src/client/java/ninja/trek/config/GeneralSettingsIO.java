@@ -4,7 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import net.minecraft.client.MinecraftClient;
+import ninja.trek.CameraMovementManager;
 import ninja.trek.Craneshot;
 import java.io.*;
 
@@ -23,7 +26,8 @@ public class GeneralSettingsIO {
                 // Save wrap states and toggle states
                 JsonObject wrapStatesObj = new JsonObject();
                 JsonObject toggleStatesObj = new JsonObject();
-                for (int i = 0; i < 3; i++) {
+                int slotCount = CameraMovementManager.SLOT_COUNT;
+                for (int i = 0; i < slotCount; i++) {
                     wrapStatesObj.addProperty("slot" + i, SlotMenuSettings.getWrapState(i));
                     toggleStatesObj.addProperty("slot" + i, SlotMenuSettings.getToggleState(i));
                 }
@@ -111,12 +115,13 @@ public class GeneralSettingsIO {
         }
 
         try (FileReader reader = new FileReader(CONFIG_FILE)) {
-            JsonObject settingsObj = GSON.fromJson(reader, JsonObject.class);
+            JsonObject settingsObj = JsonParser.parseReader(reader).getAsJsonObject();
 
             // Load wrap states and toggle states
+            int slotCount = CameraMovementManager.SLOT_COUNT;
             if (settingsObj.has("wrapStates")) {
                 JsonObject wrapStatesObj = settingsObj.getAsJsonObject("wrapStates");
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < slotCount; i++) {
                     String key = "slot" + i;
                     if (wrapStatesObj.has(key)) {
                         boolean wrapState = wrapStatesObj.get(key).getAsBoolean();
@@ -127,7 +132,7 @@ public class GeneralSettingsIO {
 
             if (settingsObj.has("toggleStates")) {
                 JsonObject toggleStatesObj = settingsObj.getAsJsonObject("toggleStates");
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < slotCount; i++) {
                     String key = "slot" + i;
                     if (toggleStatesObj.has(key)) {
                         boolean toggleState = toggleStatesObj.get(key).getAsBoolean();
@@ -257,8 +262,8 @@ public class GeneralSettingsIO {
                 }
             }
 
-        } catch (IOException e) {
-            // logging removed
+        } catch (IOException | JsonParseException | IllegalStateException e) {
+            Craneshot.LOGGER.warn("Failed to read craneshot general settings, using defaults", e);
         }
     }
 }

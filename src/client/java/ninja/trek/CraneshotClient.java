@@ -45,68 +45,25 @@ public class CraneshotClient implements ClientModInitializer {
                 KB_CAT_CAMERA
         ));
 
-        cameraKeyBinds = new KeyBinding[]{
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera1",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_C,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera2",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_V,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera3",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_B,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera4",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera5",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera6",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera7",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera8",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera9",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                )),
-                KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                        "key.craneshot.camera10",
-                        InputUtil.Type.KEYSYM,
-                        GLFW.GLFW_KEY_UNKNOWN,
-                        KB_CAT_CAMERA
-                ))
+        cameraKeyBinds = new KeyBinding[CameraMovementManager.SLOT_COUNT];
+        int[] defaultKeyCodes = new int[]{
+                GLFW.GLFW_KEY_C,
+                GLFW.GLFW_KEY_V,
+                GLFW.GLFW_KEY_B,
+                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_UNKNOWN,
+                GLFW.GLFW_KEY_UNKNOWN
         };
+
+        for (int i = 0; i < cameraKeyBinds.length; i++) {
+            int keyCode = i < defaultKeyCodes.length ? defaultKeyCodes[i] : GLFW.GLFW_KEY_UNKNOWN;
+            cameraKeyBinds[i] = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                    "key.craneshot.camera" + (i + 1),
+                    InputUtil.Type.KEYSYM,
+                    keyCode,
+                    KB_CAT_CAMERA
+            ));
+        }
         CameraMovementRegistry.initialize();
         // Load camera nodes from client config
         ninja.trek.nodes.NodeManager.get().load();

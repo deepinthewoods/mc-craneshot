@@ -5,7 +5,6 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.util.InputUtil;
@@ -17,8 +16,6 @@ import ninja.trek.nodes.model.CameraNode;
 import ninja.trek.nodes.model.AreaInstance;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Locale;
-
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
     private boolean dragging = false;
@@ -27,13 +24,7 @@ public class NodeEditorScreen extends Screen {
     private double mouseDownY = 0;
     private static final long CLICK_TIME_THRESHOLD_MS = 200;
     private static final double CLICK_MOVEMENT_THRESHOLD_PX = 5.0;
-    private static final double AREA_CENTER_STEP = 1.0;
-
-    private ButtonWidget areaXButton;
-    private ButtonWidget areaYButton;
-    private ButtonWidget areaZButton;
-
-    private enum AreaAxis { X, Y, Z }
+    
 
     public NodeEditorScreen() {
         super(Text.literal("Node Edit"));
@@ -41,9 +32,6 @@ public class NodeEditorScreen extends Screen {
 
     @Override protected void init() {
         this.clearChildren();
-        areaXButton = null;
-        areaYButton = null;
-        areaZButton = null;
         int rightX = this.width - 120;
         int y = 10;
         int w = 110, h = 20, sp=4;
@@ -206,33 +194,6 @@ public class NodeEditorScreen extends Screen {
             areaListY += 22;
             areaIdx++;
         }
-
-        selectedArea = NodeManager.get().getSelectedArea();
-        if (selectedArea != null) {
-            int coordWidth = 80;
-            int coordHeight = 18;
-            int coordSpacing = 4;
-            int coordY = areaListY + 8;
-            Vec3d center = selectedArea.center != null ? selectedArea.center : Vec3d.ZERO;
-            areaXButton = ButtonWidget.builder(areaAxisText("X", center.x), b -> {
-                adjustSelectedAreaCenter(AreaAxis.X, AREA_CENTER_STEP);
-            }).dimensions(areaListX, coordY, coordWidth, coordHeight).build();
-            areaXButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaXButton);
-
-            areaYButton = ButtonWidget.builder(areaAxisText("Y", center.y), b -> {
-                adjustSelectedAreaCenter(AreaAxis.Y, AREA_CENTER_STEP);
-            }).dimensions(areaListX + coordWidth + coordSpacing, coordY, coordWidth, coordHeight).build();
-            areaYButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaYButton);
-
-            areaZButton = ButtonWidget.builder(areaAxisText("Z", center.z), b -> {
-                adjustSelectedAreaCenter(AreaAxis.Z, AREA_CENTER_STEP);
-            }).dimensions(areaListX + (coordWidth + coordSpacing) * 2, coordY, coordWidth, coordHeight).build();
-            areaZButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaZButton);
-        }
-        updateAreaCoordButtons();
     }
 
     @Override public boolean shouldPause() { return false; }
@@ -358,9 +319,6 @@ public class NodeEditorScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean fromInside) {
         if (click != null) {
-            if (handleAreaCoordinateRightClick(click)) {
-                return true;
-            }
             dragging = true;
             mouseDownTime = System.currentTimeMillis();
             mouseDownX = click.x();
@@ -464,90 +422,6 @@ public class NodeEditorScreen extends Screen {
             if (o.sprintKey.matchesKey(input)) { o.sprintKey.setPressed(false); return true; }
         }
         return super.keyReleased(input);
-    }
-
-    private boolean handleAreaCoordinateRightClick(Click click) {
-        if (click == null || click.button() != 1) {
-            return false;
-        }
-        double mx = click.x();
-        double my = click.y();
-        var soundManager = MinecraftClient.getInstance().getSoundManager();
-        if (areaXButton != null && areaXButton.active && areaXButton.isMouseOver(mx, my)) {
-            areaXButton.playDownSound(soundManager);
-            adjustSelectedAreaCenter(AreaAxis.X, -AREA_CENTER_STEP);
-            return true;
-        }
-        if (areaYButton != null && areaYButton.active && areaYButton.isMouseOver(mx, my)) {
-            areaYButton.playDownSound(soundManager);
-            adjustSelectedAreaCenter(AreaAxis.Y, -AREA_CENTER_STEP);
-            return true;
-        }
-        if (areaZButton != null && areaZButton.active && areaZButton.isMouseOver(mx, my)) {
-            areaZButton.playDownSound(soundManager);
-            adjustSelectedAreaCenter(AreaAxis.Z, -AREA_CENTER_STEP);
-            return true;
-        }
-        return false;
-    }
-
-    private void adjustSelectedAreaCenter(AreaAxis axis, double delta) {
-        AreaInstance area = NodeManager.get().getSelectedArea();
-        if (area == null) {
-            return;
-        }
-        Vec3d center = area.center != null ? area.center : Vec3d.ZERO;
-        double x = center.x;
-        double y = center.y;
-        double z = center.z;
-        switch (axis) {
-            case X -> x += delta;
-            case Y -> y += delta;
-            case Z -> z += delta;
-        }
-        area.center = new Vec3d(x, y, z);
-        NodeManager.get().markAreaDirty(area.id);
-        NodeManager.get().save();
-        updateAreaCoordButtons();
-    }
-
-    private void updateAreaCoordButtons() {
-        AreaInstance area = NodeManager.get().getSelectedArea();
-        if (area == null || area.center == null) {
-            if (areaXButton != null) {
-                areaXButton.active = false;
-                areaXButton.setMessage(areaAxisPlaceholder("X"));
-            }
-            if (areaYButton != null) {
-                areaYButton.active = false;
-                areaYButton.setMessage(areaAxisPlaceholder("Y"));
-            }
-            if (areaZButton != null) {
-                areaZButton.active = false;
-                areaZButton.setMessage(areaAxisPlaceholder("Z"));
-            }
-            return;
-        }
-        if (areaXButton != null) {
-            areaXButton.active = true;
-            areaXButton.setMessage(areaAxisText("X", area.center.x));
-        }
-        if (areaYButton != null) {
-            areaYButton.active = true;
-            areaYButton.setMessage(areaAxisText("Y", area.center.y));
-        }
-        if (areaZButton != null) {
-            areaZButton.active = true;
-            areaZButton.setMessage(areaAxisText("Z", area.center.z));
-        }
-    }
-
-    private static Text areaAxisText(String axis, double value) {
-        return Text.literal(String.format(Locale.US, "%s: %.1f", axis, value));
-    }
-
-    private static Text areaAxisPlaceholder(String axis) {
-        return Text.literal(axis + ": --");
     }
 }
 

@@ -373,7 +373,7 @@ public class AreaInstanceDTO {
         tag.getList("filters").ifPresent(list -> {
             for (NbtElement element : list) {
                 if (element instanceof net.minecraft.nbt.NbtString str) {
-                    cfg.stateFilters.add(str.asString());
+                    str.asString().ifPresent(cfg.stateFilters::add);
                 }
             }
         });

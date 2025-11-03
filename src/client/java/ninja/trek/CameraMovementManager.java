@@ -15,6 +15,8 @@ import ninja.trek.mixin.client.FovAccessor;
 import java.util.*;
 
 public class CameraMovementManager {
+    public static final int SLOT_COUNT = 6;
+
     private List<List<ICameraMovement>> slots;
     private List<Integer> currentTypes;
     private Integer activeMovementSlot;
@@ -36,7 +38,6 @@ public class CameraMovementManager {
     private long lastMovementLogTimeMs = 0L;
 
     public CameraMovementManager() {
-        int numSlots = 10;
         slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
         toggledStates = new HashMap<>();
@@ -44,7 +45,7 @@ public class CameraMovementManager {
         hasScrolledDuringPress = new HashMap<>();
         keyPressStartTimes = new HashMap<>();
 
-        for (int i = 0; i < numSlots; i++) {
+        for (int i = 0; i < SLOT_COUNT; i++) {
             slots.add(new ArrayList<>());
             currentTypes.add(0);
             scrollSelectedTypes.put(i, 0);
@@ -56,11 +57,28 @@ public class CameraMovementManager {
     }
 
     public void setAllSlots(List<List<ICameraMovement>> savedSlots) {
-        this.slots = savedSlots;
+        if (savedSlots == null) {
+            savedSlots = Collections.emptyList();
+        }
+
+        slots = new ArrayList<>();
         currentTypes = new ArrayList<>();
-        for (int i = 0; i < slots.size(); i++) {
+        scrollSelectedTypes = new HashMap<>();
+        toggledStates.clear();
+        hasScrolledDuringPress.clear();
+        keyPressStartTimes.clear();
+
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            List<ICameraMovement> slot = i < savedSlots.size()
+                    ? new ArrayList<>(savedSlots.get(i))
+                    : new ArrayList<>();
+            slots.add(slot);
             currentTypes.add(0);
             scrollSelectedTypes.put(i, 0);
+        }
+
+        if (activeMovementSlot != null && activeMovementSlot >= SLOT_COUNT) {
+            activeMovementSlot = null;
         }
     }
 

@@ -21,7 +21,6 @@ public class NodeRenderer {
         int viewDist = Math.max(2, MinecraftClient.getInstance().options.getViewDistance().getValue());
         int camCX = (int)Math.floor(cam.x) >> 4;
         int camCZ = (int)Math.floor(cam.z) >> 4;
-        var bq = queue.getBatchingQueue(1000);
         int fullbright = 0x00F000F0;
 
         long nowMs = System.currentTimeMillis();
@@ -41,10 +40,10 @@ public class NodeRenderer {
             // Draw node marker as a small filled billboarded quad with white outline if selected
             Vec3d p = node.position;
             float size = 0.2f;
-            drawBillboardQuad(queue, matrices, p.subtract(cam), size, r, g, b, a, fullbright);
+            drawBillboardQuad(queue, matrices, p, size, r, g, b, a, fullbright);
             CameraNode sel = NodeManager.get().getSelected();
             if (sel != null && sel.id.equals(node.id)) {
-                drawBillboardOutline(queue, matrices, p.subtract(cam), size * 1.1f, 1f,1f,1f, a, fullbright);
+                drawBillboardOutline(queue, matrices, p, size * 1.1f, 1f,1f,1f, a, fullbright);
             }
         }
 
@@ -60,31 +59,31 @@ public class NodeRenderer {
             float gg = g * 0.6f;
             float bb = b * 0.6f;
 
-            Vec3d rel = area.center.subtract(cam);
+            Vec3d center = area.center;
             if (area.shape == AreaShape.CUBE) {
                 if (area.advanced && area.outsideRadii != null) {
-                    drawBoxOutline(queue, matrices, rel, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
+                    drawBoxOutline(queue, matrices, center, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
                 } else {
-                    drawCubeOutline(queue, matrices, rel, area.outsideRadius, r, g, b, a, fullbright);
+                    drawCubeOutline(queue, matrices, center, area.outsideRadius, r, g, b, a, fullbright);
                 }
 
                 if (area.advanced && area.insideRadii != null) {
-                    drawBoxOutline(queue, matrices, rel, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
+                    drawBoxOutline(queue, matrices, center, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
                 } else {
                     Vec3d inner = new Vec3d(area.insideRadius, area.insideRadius, area.insideRadius);
-                    drawBoxOutline(queue, matrices, rel, inner, rr, gg, bb, a, fullbright, true, 0f);
+                    drawBoxOutline(queue, matrices, center, inner, rr, gg, bb, a, fullbright, true, 0f);
                 }
             } else {
                 if (area.advanced && area.outsideRadii != null) {
-                    drawEllipsoidApprox(queue, matrices, rel, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
+                    drawEllipsoidApprox(queue, matrices, center, area.outsideRadii, r, g, b, a, fullbright, true, dashPhase);
                 } else {
-                    drawDashedEllipse(queue, matrices, rel, area.outsideRadius, area.outsideRadius, r, g, b, a, fullbright, dashPhase);
+                    drawDashedEllipse(queue, matrices, center, area.outsideRadius, area.outsideRadius, r, g, b, a, fullbright, dashPhase);
                 }
 
                 if (area.advanced && area.insideRadii != null) {
-                    drawEllipsoidApprox(queue, matrices, rel, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
+                    drawEllipsoidApprox(queue, matrices, center, area.insideRadii, rr, gg, bb, a, fullbright, true, 0f);
                 } else {
-                    drawDashedEllipse(queue, matrices, rel, area.insideRadius, area.insideRadius, rr, gg, bb, a, fullbright, 0f);
+                    drawDashedEllipse(queue, matrices, center, area.insideRadius, area.insideRadius, rr, gg, bb, a, fullbright, 0f);
                 }
             }
         }

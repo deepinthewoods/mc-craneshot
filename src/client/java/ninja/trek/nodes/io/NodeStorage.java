@@ -7,6 +7,7 @@ import net.minecraft.util.math.Vec3d;
 import ninja.trek.nodes.model.*;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
