@@ -17,7 +17,6 @@ public class WorldRendererMixin {
             at = @At("TAIL")
     )
     private void craneshot$renderNodes(MatrixStack matrices, WorldRenderState renderStates, OrderedRenderCommandQueue queue, CallbackInfo ci) {
-        // Lightweight proof hook: draw nodes/areas when editing
         NodeRenderer.render(matrices, renderStates, queue);
     }
 }
