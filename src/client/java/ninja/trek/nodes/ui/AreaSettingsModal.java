@@ -56,19 +56,6 @@ public class AreaSettingsModal extends Screen {
         }).dimensions(x,y,w*2,h).build());
         y+=h+sp;
 
-        // Movement filters toggle buttons
-        int fx = x, fy = y;
-        fy = addFilterRow(fx, fy, "Walk", ()-> area.filterWalking, v-> area.filterWalking=v);
-        fy = addFilterRow(fx, fy, "Sneak", ()-> area.filterSneaking, v-> area.filterSneaking=v);
-        fy = addFilterRow(fx, fy, "Crawl1b", ()-> area.filterCrawling1Block, v-> area.filterCrawling1Block=v);
-        fy = addFilterRow(fx, fy, "Swim", ()-> area.filterSwimming, v-> area.filterSwimming=v);
-        fy = addFilterRow(fx, fy, "Elytra", ()-> area.filterElytra, v-> area.filterElytra=v);
-        fy = addFilterRow(fx, fy, "Boat", ()-> area.filterBoat, v-> area.filterBoat=v);
-        fy = addFilterRow(fx, fy, "Minecart", ()-> area.filterMinecart, v-> area.filterMinecart=v);
-        fy = addFilterRow(fx, fy, "RideOther", ()-> area.filterRidingOther, v-> area.filterRidingOther=v);
-        fy = addFilterRow(fx, fy, "RideGhast", ()-> area.filterRidingGhast, v-> area.filterRidingGhast=v);
-        y = fy + sp;
-
         // Advanced toggle
         addDrawableChild(ButtonWidget.builder(Text.literal(showAdvanced? "... (advanced on)" : "... (advanced off)"), b-> {
             showAdvanced = !showAdvanced;
@@ -325,17 +312,6 @@ public class AreaSettingsModal extends Screen {
     @Override
     protected void applyBlur(DrawContext context) {
         // no-op
-    }
-
-    private int addFilterRow(int x, int y, String label, java.util.function.Supplier<Boolean> getter, java.util.function.Consumer<Boolean> setter) {
-        Text t = Text.literal(label+": "+ (getter.get()?"ON":"OFF"));
-        this.addDrawableChild(ButtonWidget.builder(t, b-> {
-            boolean v = !getter.get();
-            setter.accept(v);
-            NodeManager.get().markAreaDirty(area.id);
-            b.setMessage(Text.literal(label+": "+(v?"ON":"OFF")));
-        }).dimensions(x, y, 120, 18).build());
-        return y + 18 + 4;
     }
 
     private interface DoubleSetter { void set(double v); }
