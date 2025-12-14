@@ -82,11 +82,12 @@ State to store:
 Per-frame logic (non-resetting):
 1. Compute player reference position `playerRef`:
    - `playerRef = CameraController.controlStick.getPosition()`
-2. Compute desired XZ:
-   - Let `camXZ = (current.x, current.z)`, `playerXZ = (playerRef.x, playerRef.z)`
-   - `delta = playerXZ - camXZ`
-   - If `|delta| <= xzThreshold`: keep camera XZ
-   - Else: set desired camera XZ so `|playerXZ - desiredCamXZ| == xzThreshold`
+2. Maintain a deadzoned follow-center `followCenter` in XZ (platformer-style):
+   - If `distance(playerXZ, followCenterXZ) > xzThreshold`, shift `followCenterXZ` so the player lies on the threshold boundary.
+3. Compute desired XZ as an orbit around `followCenter` using `controlStick` yaw:
+   - Maintain a persistent `orbitTargetXZ` (world position) and rotate it around the player by `deltaYaw = controlStickYaw - lastControlStickYaw`.
+   - This makes the orbit “complete” even with position easing (the target stays rotated until the camera reaches it).
+   - After the player has started moving, clamp `distance(playerXZ, orbitTargetXZ)` to `xzThreshold` to enforce the deadzone.
 3. Compute desired Y:
    - `targetY = playerRef.y + followHeight`
    - If `player.isOnGround()`: follow toward `targetY`
