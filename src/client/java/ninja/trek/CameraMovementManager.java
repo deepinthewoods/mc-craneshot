@@ -7,6 +7,7 @@ import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
+import ninja.trek.cameramovements.movements.FollowMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
@@ -195,6 +196,32 @@ public class CameraMovementManager {
 
         // Show the toast when starting a new movement
         MovementToastRenderer.showToast(slotIndex);
+    }
+
+    public void startFollowMovement(MinecraftClient client, Camera camera) {
+        FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+        if (follow == null) return;
+        if (activeMovement == follow) return;
+
+        // Override any current movement immediately
+        if (activeMovementSlot != null) {
+            toggledStates.put(activeMovementSlot, false);
+        }
+        activeMovementSlot = null;
+        activeMovement = follow;
+        inFreeCamReturnPhase = false;
+        isOut = false;
+
+        CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+        follow.start(client, camera);
+        CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(follow);
+    }
+
+    public void stopFollowMovement(MinecraftClient client, Camera camera) {
+        FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+        if (follow == null) return;
+        if (activeMovement != follow) return;
+        activeMovement.queueReset(client, camera);
     }
 
     public void finishTransition(MinecraftClient client, Camera camera) {

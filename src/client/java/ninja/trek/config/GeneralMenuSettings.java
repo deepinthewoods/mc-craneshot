@@ -1,11 +1,14 @@
 package ninja.trek.config;
 
 import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
+import ninja.trek.cameramovements.movements.FollowMovement;
 
 public class GeneralMenuSettings {
     private static boolean autoAdvance = false;
     private static final FreeCamSettings freeCamSettings = new FreeCamSettings();
     private static final FreeCamReturnMovement freeCamReturnMovement = new FreeCamReturnMovement();
+    // Follow movement (keybind-only)
+    private static final FollowMovement followMovement = new FollowMovement();
     // Default idle movement control
     private static boolean useDefaultIdleMovement = false;
     private static final ninja.trek.cameramovements.movements.LinearMovement defaultIdleMovement =
@@ -37,6 +40,10 @@ public class GeneralMenuSettings {
     
     public static FreeCamReturnMovement getFreeCamReturnMovement() {
         return freeCamReturnMovement;
+    }
+
+    public static FollowMovement getFollowMovement() {
+        return followMovement;
     }
 
     // Default idle movement settings

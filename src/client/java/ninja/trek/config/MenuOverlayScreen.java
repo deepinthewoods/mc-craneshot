@@ -475,6 +475,48 @@ public class MenuOverlayScreen extends Screen {
             yOffset += settingsPerColumn * BUTTON_HEIGHT;
         }
 
+        // Add collapsible Follow Movement Settings section (keybind-only)
+        yOffset += spacing;
+        String followKey = "followMovementSection";
+        boolean followExpanded = isSettingsExpanded(followKey);
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal((followExpanded ? "v " : "> ") + "Follow Movement").formatted(Formatting.YELLOW),
+                button -> {
+                    toggleSettingsExpanded(followKey);
+                    reinitialize();
+                })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+
+        if (followExpanded) {
+            yOffset += spacing;
+            ninja.trek.cameramovements.movements.FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+
+            java.util.List<java.lang.reflect.Field> settingFields = new java.util.ArrayList<>();
+            collectSettingFields(follow, settingFields);
+
+            int settingWidth = labelWidth + controlWidth + 10;
+            int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+            int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+            for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                java.lang.reflect.Field field = settingFields.get(fieldIndex);
+                ninja.trek.config.MovementSetting annotation = field.getAnnotation(ninja.trek.config.MovementSetting.class);
+                field.setAccessible(true);
+                try {
+                    int column = fieldIndex / settingsPerColumn;
+                    int row = fieldIndex % settingsPerColumn;
+                    int settingX = centerX + 20 + column * (settingWidth + 20);
+                    int settingY = centerY + yOffset + (row * BUTTON_HEIGHT) - scrollOffset;
+
+                    createSettingControl(follow, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, BUTTON_HEIGHT);
+                } catch (IllegalAccessException ignored) {}
+            }
+
+            yOffset += settingsPerColumn * BUTTON_HEIGHT;
+        }
+
         // Add collapsible Free Camera Return section header
         yOffset += spacing;
         String freeCamReturnKey = "freeCamReturnSection";

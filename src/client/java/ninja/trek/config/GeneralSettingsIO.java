@@ -92,6 +92,23 @@ public class GeneralSettingsIO {
                 });
                 settingsObj.add("defaultIdleMovement", defaultIdleObj);
 
+                // Save FollowMovement settings (keybind-only)
+                JsonObject followObj = new JsonObject();
+                ninja.trek.cameramovements.movements.FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+                java.util.Map<String, Object> followSettings = ((ninja.trek.cameramovements.AbstractMovementSettings)follow).getSettings();
+                followSettings.forEach((key, value) -> {
+                    if (value instanceof Float || value instanceof Double) {
+                        followObj.addProperty(key, ((Number)value).doubleValue());
+                    } else if (value instanceof String) {
+                        followObj.addProperty(key, (String)value);
+                    } else if (value instanceof Boolean) {
+                        followObj.addProperty(key, (Boolean)value);
+                    } else if (value instanceof Enum) {
+                        followObj.addProperty(key, ((Enum<?>)value).name());
+                    }
+                });
+                settingsObj.add("followMovement", followObj);
+
                 // Save autoAdvance
                 settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
                 
@@ -213,6 +230,30 @@ public class GeneralSettingsIO {
                             } else if (defaultIdleObj.get(key).getAsJsonPrimitive().isBoolean()) {
                                 ((ninja.trek.cameramovements.AbstractMovementSettings)defaultIdle).updateSetting(
                                     key, defaultIdleObj.get(key).getAsBoolean());
+                            }
+                        }
+                    } catch (Exception e) {
+                        // logging removed
+                    }
+                }
+            }
+
+            // Load FollowMovement settings
+            if (settingsObj.has("followMovement")) {
+                JsonObject followObj = settingsObj.getAsJsonObject("followMovement");
+                ninja.trek.cameramovements.movements.FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+                for (String key : followObj.keySet()) {
+                    try {
+                        if (followObj.get(key).isJsonPrimitive()) {
+                            if (followObj.get(key).getAsJsonPrimitive().isString()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)follow).updateSetting(
+                                    key, followObj.get(key).getAsString());
+                            } else if (followObj.get(key).getAsJsonPrimitive().isNumber()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)follow).updateSetting(
+                                    key, followObj.get(key).getAsDouble());
+                            } else if (followObj.get(key).getAsJsonPrimitive().isBoolean()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)follow).updateSetting(
+                                    key, followObj.get(key).getAsBoolean());
                             }
                         }
                     } catch (Exception e) {

@@ -15,6 +15,7 @@ public class CraneShotEventHandler {
     private static double lastScrollTime = 0;
     private static final Map<Integer, Boolean> keyStates = new HashMap<>();
     private static Integer lastActiveSlot = null;
+    private static boolean followWasPressed = false;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -30,15 +31,28 @@ public class CraneShotEventHandler {
             CraneshotClient.checkKeybinds();
 
             Camera camera = client.gameRenderer.getCamera();
+
+            boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
+            if (followPressed != followWasPressed) {
+                if (followPressed) {
+                    CraneshotClient.MOVEMENT_MANAGER.startFollowMovement(client, camera);
+                } else {
+                    CraneshotClient.MOVEMENT_MANAGER.stopFollowMovement(client, camera);
+                }
+                followWasPressed = followPressed;
+            }
+
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
                 boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isPressed();
                 boolean wasPressed = keyStates.getOrDefault(i, false);
 
-                if (currentlyPressed != wasPressed) {
-                    boolean isToggle = SlotMenuSettings.getToggleState(i);
-                    CraneshotClient.MOVEMENT_MANAGER.handleKeyStateChange(i, currentlyPressed, client, camera, isToggle);
-                    if (currentlyPressed) {
-                        lastActiveSlot = i;
+                if (!followPressed) {
+                    if (currentlyPressed != wasPressed) {
+                        boolean isToggle = SlotMenuSettings.getToggleState(i);
+                        CraneshotClient.MOVEMENT_MANAGER.handleKeyStateChange(i, currentlyPressed, client, camera, isToggle);
+                        if (currentlyPressed) {
+                            lastActiveSlot = i;
+                        }
                     }
                 }
                 keyStates.put(i, currentlyPressed);
