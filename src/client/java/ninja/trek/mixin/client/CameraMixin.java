@@ -50,6 +50,6 @@ public class CameraMixin {
         }
         float frameSeconds = deltaTicks / 20.0f;
         previousTickDelta = tickDelta;
-        CraneshotClient.CAMERA_CONTROLLER.handleCameraUpdate(area, focusedEntity, thirdPerson, inverseView, frameSeconds, (Camera)(Object)this);
+        CraneshotClient.CAMERA_CONTROLLER.handleCameraUpdate(area, focusedEntity, thirdPerson, inverseView, tickDelta, frameSeconds, (Camera)(Object)this);
     }
 }

@@ -44,16 +44,16 @@ public class CameraController {
 
     private Vec3d currentVelocity = Vec3d.ZERO;
 
-    private void updateControlStick(MinecraftClient client) {
+    private void updateControlStick(MinecraftClient client, float tickDelta) {
         if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
                 currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
 
             if (client.player == null) return;
             Camera camera = client.gameRenderer.getCamera();
             if (camera != null) {
-                Vec3d eyePos = client.player.getEyePos();
-                float yaw = client.player.getYaw();
-                float pitch = client.player.getPitch();
+                Vec3d eyePos = client.player.getCameraPosVec(tickDelta);
+                float yaw = client.player.getYaw(tickDelta);
+                float pitch = client.player.getPitch(tickDelta);
 
                 // Update movement tracking for VELOCITY targets
                 if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
@@ -410,8 +410,8 @@ public class CameraController {
         ((CameraAccessor) camera).invokesetPos(freeCamPosition);
     }
 
-    public void updateCamera(MinecraftClient client, Camera camera, float deltaSeconds) {
-        updateControlStick(client);
+    public void updateCamera(MinecraftClient client, Camera camera, float tickDelta, float deltaSeconds) {
+        updateControlStick(client, tickDelta);
 
         // Get the base camera state from movement manager - always update to track state
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
@@ -627,7 +627,7 @@ public class CameraController {
      * processing any free keyboard/mouse input. It should be placed in CameraController.
      */
     public void handleCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson,
-                                   boolean inverseView, float frameSeconds, Camera camera) {
+                                   boolean inverseView, float tickDelta, float frameSeconds, Camera camera) {
         // Verify that both the camera and the focused entity exist.
         if (camera == null || focusedEntity == null) return;
 
@@ -635,7 +635,7 @@ public class CameraController {
         if (client == null || client.world == null) return;
 
         // Update the camera based on movement-manager and free control states.
-        updateCamera(client, camera, frameSeconds);
+        updateCamera(client, camera, tickDelta, frameSeconds);
 
         // Optionally update keyboard input (e.g. disable it when free control is active)
         updateKeyboardInput(client);
@@ -698,4 +698,3 @@ public class CameraController {
         }
     }
 }
-
