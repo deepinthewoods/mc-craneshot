@@ -276,6 +276,40 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         return !hasCollision(client, groundPos.up(1)) && !hasCollision(client, groundPos.up(2));
     }
 
+    private static Vec3d[] getForwardCornerOffsetsXZ(Vec3d dir, double extent) {
+        if (dir == null || extent <= 1e-9) {
+            return new Vec3d[] { Vec3d.ZERO };
+        }
+
+        double ax = Math.abs(dir.x);
+        double az = Math.abs(dir.z);
+        double eps = 1e-6;
+
+        if (ax < eps && az < eps) {
+            return new Vec3d[] { Vec3d.ZERO };
+        }
+
+        double sx = Math.signum(dir.x);
+        double sz = Math.signum(dir.z);
+
+        // If we're almost perfectly aligned with an axis, include both corners along the other axis
+        // to avoid picking only one corner due to tiny floating-point components.
+        if (ax < eps) {
+            return new Vec3d[] {
+                    new Vec3d(extent, 0.0, sz * extent),
+                    new Vec3d(-extent, 0.0, sz * extent)
+            };
+        }
+        if (az < eps) {
+            return new Vec3d[] {
+                    new Vec3d(sx * extent, 0.0, extent),
+                    new Vec3d(sx * extent, 0.0, -extent)
+            };
+        }
+
+        return new Vec3d[] { new Vec3d(sx * extent, 0.0, sz * extent) };
+    }
+
     private static AutoJumpDecision getAutoJumpDecision(
             MinecraftClient client,
             PlayerEntity player,
@@ -323,6 +357,25 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
                 player
         ));
         bestStep = pickBestStepDecision(client, groundPos, startRight, hitRight, "right", bestStep);
+
+        // Sample from the forward-most corner(s) of the player's (axis-aligned) body. This fixes
+        // "jump too late when running diagonally into a block corner" by accounting for the fact that
+        // the leading point of the player's AABB is a corner when moving at an angle.
+        double cornerInset = 0.05;
+        double cornerExtent = Math.max(0.0, player.getWidth() * 0.5 - cornerInset);
+        Vec3d[] cornerOffsets = getForwardCornerOffsetsXZ(dir, cornerExtent);
+        for (int i = 0; i < cornerOffsets.length; i++) {
+            Vec3d rayStart = startBase.add(cornerOffsets[i]);
+            Vec3d rayEnd = rayStart.add(dir.multiply(leadDistance));
+            BlockHitResult hit = client.world.raycast(new RaycastContext(
+                    rayStart,
+                    rayEnd,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    player
+            ));
+            bestStep = pickBestStepDecision(client, groundPos, rayStart, hit, "corner_" + i, bestStep);
+        }
 
         if (bestStep != null) {
             return bestStep;
