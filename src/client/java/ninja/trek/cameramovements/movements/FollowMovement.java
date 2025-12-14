@@ -2,13 +2,21 @@ package ninja.trek.cameramovements.movements;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.MovementState;
 import ninja.trek.config.MovementSetting;
+import ninja.trek.config.MovementSettingType;
+import ninja.trek.Craneshot;
 import ninja.trek.mixin.client.FovAccessor;
 
 public class FollowMovement extends AbstractMovementSettings implements ICameraMovement {
@@ -33,6 +41,41 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 1000.0)
     private double rotationSpeedLimit = 500.0;
 
+    @MovementSetting(
+            label = "Auto Run & Jump",
+            type = MovementSettingType.BOOLEAN,
+            description = "Forces forward+sprint and jumps early over full blocks and small gaps while Follow is active"
+    )
+    private boolean autoRunAndJump = false;
+
+    // Predictive auto-jump lead: leadDistance = horizontalSpeed * LEAD_TIME + PAD, then clamped to [MIN_LEAD, MAX_LEAD].
+    private static final double AUTO_JUMP_LEAD_TIME_SECONDS = 0.62; // How far ahead (in time) we anticipate collisions when computing lead distance.
+    private static final double AUTO_JUMP_PAD_BLOCKS = 0.60;        // Fixed extra distance added to the lead distance to jump earlier (helps when speed reads low).
+    private static final double AUTO_JUMP_MIN_LEAD_BLOCKS = 1.25;   // Minimum lead distance, even at low speed (prevents "jump too late" at near-zero velocity).
+    private static final double AUTO_JUMP_MAX_LEAD_BLOCKS = 2.50;   // Maximum lead distance at high speed (prevents jumping absurdly early).
+
+    // Key simulation timing.
+    private static final int AUTO_JUMP_PRESS_TICKS = 1;    // How many client ticks we hold the jump key down per jump trigger.
+    private static final int AUTO_JUMP_COOLDOWN_TICKS = 10; // Cooldown after a triggered jump before we can trigger another (reduces pogo / repeat triggers).
+
+    // Gap jumping: treat it as a gap only if BOTH left+right "foot" samples have no ground, and then ground reappears within the scan window.
+    private static final double AUTO_GAP_MIN_CHECK_BLOCKS = 0.75;  // Minimum distance ahead to start checking for missing ground (avoid jumping tiny dips).
+    private static final double AUTO_GAP_MAX_SCAN_BLOCKS = 3.0;    // Furthest distance to search for ground reappearing (limits jumping into huge voids).
+    private static final double AUTO_GAP_SCAN_STEP_BLOCKS = 0.5;   // Step size for scanning along the path for ground reappearing (smaller = more accurate, more checks).
+
+    // Logging throttles.
+    private static final long AUTO_JUMP_LOG_COOLDOWN_MS = 750L;           // Minimum time between "auto-jump" log lines.
+    private static final long AUTO_ASSIST_STATUS_LOG_COOLDOWN_MS = 5000L; // Minimum time between "auto-run active" status log lines.
+
+    private Boolean savedVanillaAutoJump = null;
+    private boolean forcedForward = false;
+    private boolean forcedSprint = false;
+    private boolean forcedJump = false;
+    private int jumpPressTicksRemaining = 0;
+    private int jumpCooldownTicksRemaining = 0;
+    private long lastAutoJumpLogTimeMs = 0L;
+    private long lastAutoAssistStatusLogTimeMs = 0L;
+
     private CameraTarget current = new CameraTarget();
     private float lastStickYaw = 0.0f;
     private Vec3d startPlayerPosXZ = null;
@@ -43,6 +86,334 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     private boolean finalInterpActive = false;
     private double finalInterpT = 0.0;
     private Vec3d finalInterpStart = null;
+
+    public boolean isAutoRunAndJump() {
+        return autoRunAndJump;
+    }
+
+    public void tickAutoRunAndJump(MinecraftClient client) {
+        if (!autoRunAndJump) {
+            stopAutoRunAndJump(client);
+            return;
+        }
+
+        if (client == null || client.world == null || client.player == null) {
+            stopAutoRunAndJump(client);
+            return;
+        }
+
+        PlayerEntity player = client.player;
+        if (shouldSuppressAllAssist(player)) {
+            stopForcedKeys(client);
+            restoreVanillaAutoJump(client);
+            return;
+        }
+
+        disableVanillaAutoJump(client);
+
+        forceMoveKeys(client);
+        tickJumpTimers(client);
+
+        // Keep running while airborne, but only *decide* new jumps when grounded.
+        if (!player.isOnGround()) {
+            return;
+        }
+
+        if (jumpCooldownTicksRemaining > 0) {
+            return;
+        }
+
+        Vec3d vel = player.getVelocity();
+        double horizontalSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        double leadDistance = horizontalSpeed * AUTO_JUMP_LEAD_TIME_SECONDS + AUTO_JUMP_PAD_BLOCKS;
+        leadDistance = MathHelper.clamp(leadDistance, AUTO_JUMP_MIN_LEAD_BLOCKS, AUTO_JUMP_MAX_LEAD_BLOCKS);
+
+        Vec3d dir = Vec3d.fromPolar(0.0f, player.getYaw()).normalize();
+        if (dir.lengthSquared() < 1e-9) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastAutoAssistStatusLogTimeMs >= AUTO_ASSIST_STATUS_LOG_COOLDOWN_MS) {
+            lastAutoAssistStatusLogTimeMs = now;
+            Craneshot.LOGGER.info(
+                    "Follow auto-run active: speed={} lead={} onGround={}",
+                    format3(horizontalSpeed),
+                    format3(leadDistance),
+                    player.isOnGround()
+            );
+        }
+
+        AutoJumpDecision decision = getAutoJumpDecision(client, player, dir, leadDistance);
+        if (decision == null) {
+            return;
+        }
+
+        triggerJump(client);
+        if (now - lastAutoJumpLogTimeMs >= AUTO_JUMP_LOG_COOLDOWN_MS) {
+            lastAutoJumpLogTimeMs = now;
+            Craneshot.LOGGER.info(
+                    "Follow auto-jump: reason={} speed={} lead={} dist={} pos={}",
+                    decision.reason,
+                    format3(horizontalSpeed),
+                    format3(leadDistance),
+                    format3(decision.distance),
+                    decision.blockPos
+            );
+        }
+    }
+
+    public void stopAutoRunAndJump(MinecraftClient client) {
+        stopForcedKeys(client);
+        restoreVanillaAutoJump(client);
+        jumpPressTicksRemaining = 0;
+        jumpCooldownTicksRemaining = 0;
+        forcedJump = false;
+        lastAutoJumpLogTimeMs = 0L;
+        lastAutoAssistStatusLogTimeMs = 0L;
+    }
+
+    private void disableVanillaAutoJump(MinecraftClient client) {
+        if (savedVanillaAutoJump == null) {
+            try {
+                savedVanillaAutoJump = client.options.getAutoJump().getValue();
+            } catch (Throwable t) {
+                savedVanillaAutoJump = null;
+            }
+        }
+        try {
+            client.options.getAutoJump().setValue(false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void restoreVanillaAutoJump(MinecraftClient client) {
+        if (savedVanillaAutoJump == null || client == null) {
+            savedVanillaAutoJump = null;
+            return;
+        }
+        try {
+            client.options.getAutoJump().setValue(savedVanillaAutoJump);
+        } catch (Throwable ignored) {
+        } finally {
+            savedVanillaAutoJump = null;
+        }
+    }
+
+    private void forceMoveKeys(MinecraftClient client) {
+        client.options.forwardKey.setPressed(true);
+        client.options.sprintKey.setPressed(true);
+        forcedForward = true;
+        forcedSprint = true;
+    }
+
+    private void stopForcedKeys(MinecraftClient client) {
+        if (client == null) return;
+        if (forcedForward) {
+            client.options.forwardKey.setPressed(false);
+            forcedForward = false;
+        }
+        if (forcedSprint) {
+            client.options.sprintKey.setPressed(false);
+            forcedSprint = false;
+        }
+        if (forcedJump) {
+            client.options.jumpKey.setPressed(false);
+            forcedJump = false;
+        }
+    }
+
+    private void tickJumpTimers(MinecraftClient client) {
+        if (jumpCooldownTicksRemaining > 0) {
+            jumpCooldownTicksRemaining--;
+        }
+
+        if (jumpPressTicksRemaining > 0) {
+            client.options.jumpKey.setPressed(true);
+            forcedJump = true;
+            jumpPressTicksRemaining--;
+            if (jumpPressTicksRemaining == 0) {
+                client.options.jumpKey.setPressed(false);
+                forcedJump = false;
+            }
+        }
+    }
+
+    private void triggerJump(MinecraftClient client) {
+        jumpPressTicksRemaining = AUTO_JUMP_PRESS_TICKS;
+        jumpCooldownTicksRemaining = AUTO_JUMP_COOLDOWN_TICKS;
+        client.options.jumpKey.setPressed(true);
+        forcedJump = true;
+    }
+
+    private static boolean shouldSuppressAssist(PlayerEntity player) {
+        return shouldSuppressAllAssist(player);
+    }
+
+    private static boolean shouldSuppressAllAssist(PlayerEntity player) {
+        if (player == null) return true;
+        if (player.hasVehicle()) return true;
+        if (player.isSneaking()) return true;
+        if (player.isTouchingWater()) return true;
+        if (player.isInLava()) return true;
+        if (player.isClimbing()) return true;
+        if (player.getAbilities().flying) return true;
+        if (player.isGliding()) return true;
+        return false;
+    }
+
+    private static boolean hasCollision(MinecraftClient client, BlockPos pos) {
+        if (client == null || client.world == null || pos == null) return false;
+        try {
+            return !client.world.getBlockState(pos).getCollisionShape(client.world, pos).isEmpty();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static boolean isJumpHeadroomClear(MinecraftClient client, BlockPos groundPos) {
+        if (groundPos == null) return false;
+        return !hasCollision(client, groundPos.up(1)) && !hasCollision(client, groundPos.up(2));
+    }
+
+    private static AutoJumpDecision getAutoJumpDecision(
+            MinecraftClient client,
+            PlayerEntity player,
+            Vec3d dir,
+            double leadDistance
+    ) {
+        BlockPos groundPos = BlockPos.ofFloored(player.getX(), player.getY() - 0.01, player.getZ());
+        if (!isJumpHeadroomClear(client, groundPos)) {
+            return null;
+        }
+
+        Vec3d right = new Vec3d(-dir.z, 0.0, dir.x);
+        double rightLen2 = right.lengthSquared();
+        if (rightLen2 > 1e-9) {
+            right = right.multiply(1.0 / Math.sqrt(rightLen2));
+        } else {
+            right = Vec3d.ZERO;
+        }
+        double sideOffset = Math.max(0.0, player.getWidth() * 0.5 - 0.05);
+        Vec3d leftOffset = right.multiply(-sideOffset);
+        Vec3d rightOffset = right.multiply(sideOffset);
+
+        // 1) Full-block step up ahead (raycast from both sides of the player's body).
+        Vec3d startBase = new Vec3d(player.getX(), player.getY() + 0.2, player.getZ());
+        Vec3d startLeft = startBase.add(leftOffset);
+        Vec3d startRight = startBase.add(rightOffset);
+        Vec3d endLeft = startLeft.add(dir.multiply(leadDistance));
+        Vec3d endRight = startRight.add(dir.multiply(leadDistance));
+
+        AutoJumpDecision bestStep = null;
+        BlockHitResult hitLeft = client.world.raycast(new RaycastContext(
+                startLeft,
+                endLeft,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player
+        ));
+        bestStep = pickBestStepDecision(client, groundPos, startLeft, hitLeft, "left", bestStep);
+
+        BlockHitResult hitRight = client.world.raycast(new RaycastContext(
+                startRight,
+                endRight,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                player
+        ));
+        bestStep = pickBestStepDecision(client, groundPos, startRight, hitRight, "right", bestStep);
+
+        if (bestStep != null) {
+            return bestStep;
+        }
+
+        // 2) Gap ahead: jump only if we can see ground again within a short scan window.
+        double checkDist = Math.max(AUTO_GAP_MIN_CHECK_BLOCKS, leadDistance);
+        double x0 = player.getX();
+        double z0 = player.getZ();
+        BlockPos firstLeft = BlockPos.ofFloored(
+                x0 + leftOffset.x + dir.x * checkDist,
+                player.getY() - 0.01,
+                z0 + leftOffset.z + dir.z * checkDist
+        );
+        BlockPos firstRight = BlockPos.ofFloored(
+                x0 + rightOffset.x + dir.x * checkDist,
+                player.getY() - 0.01,
+                z0 + rightOffset.z + dir.z * checkDist
+        );
+
+        // Only treat it as a gap if BOTH sides have no ground at our level, and neither side is a step-up.
+        if (hasCollision(client, firstLeft) || hasCollision(client, firstRight)) {
+            return null;
+        }
+        if (hasCollision(client, firstLeft.up(1)) || hasCollision(client, firstRight.up(1))) {
+            return null;
+        }
+
+        for (double d = checkDist + AUTO_GAP_SCAN_STEP_BLOCKS; d <= AUTO_GAP_MAX_SCAN_BLOCKS; d += AUTO_GAP_SCAN_STEP_BLOCKS) {
+            BlockPos pLeft = BlockPos.ofFloored(x0 + leftOffset.x + dir.x * d, player.getY() - 0.01, z0 + leftOffset.z + dir.z * d);
+            BlockPos pRight = BlockPos.ofFloored(x0 + rightOffset.x + dir.x * d, player.getY() - 0.01, z0 + rightOffset.z + dir.z * d);
+            if (hasCollision(client, pLeft) && hasCollision(client, pRight)) {
+                return new AutoJumpDecision("gap", d, BlockPos.ofFloored(x0 + dir.x * d, player.getY() - 0.01, z0 + dir.z * d));
+            }
+        }
+
+        return null;
+    }
+
+    private static AutoJumpDecision pickBestStepDecision(
+            MinecraftClient client,
+            BlockPos groundPos,
+            Vec3d rayStart,
+            BlockHitResult hit,
+            String side,
+            AutoJumpDecision best
+    ) {
+        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            return best;
+        }
+
+        BlockPos hitPos = hit.getBlockPos();
+        if (hitPos == null || hitPos.getY() != groundPos.getY() + 1) {
+            return best;
+        }
+
+        try {
+            if (!client.world.getBlockState(hitPos).isFullCube(client.world, hitPos)) {
+                return best;
+            }
+        } catch (Throwable t) {
+            return best;
+        }
+
+        if (hasCollision(client, hitPos.up(1)) || hasCollision(client, hitPos.up(2))) {
+            return best;
+        }
+
+        double hitDist = hit.getPos().distanceTo(rayStart);
+        AutoJumpDecision candidate = new AutoJumpDecision("full_block_step_" + side, hitDist, hitPos);
+        if (best == null || hitDist < best.distance) {
+            return candidate;
+        }
+        return best;
+    }
+
+    private static String format3(double v) {
+        return String.format(java.util.Locale.ROOT, "%.3f", v);
+    }
+
+    private static final class AutoJumpDecision {
+        private final String reason;
+        private final double distance;
+        private final BlockPos blockPos;
+
+        private AutoJumpDecision(String reason, double distance, BlockPos blockPos) {
+            this.reason = reason;
+            this.distance = distance;
+            this.blockPos = blockPos;
+        }
+    }
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -58,6 +429,16 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         finalInterpActive = false;
         finalInterpT = 0.0;
         finalInterpStart = null;
+
+        // Reset assist runtime state (setting persists)
+        jumpPressTicksRemaining = 0;
+        jumpCooldownTicksRemaining = 0;
+        forcedJump = false;
+        forcedForward = false;
+        forcedSprint = false;
+        savedVanillaAutoJump = null;
+        lastAutoJumpLogTimeMs = 0L;
+        lastAutoAssistStatusLogTimeMs = 0L;
     }
 
     @Override

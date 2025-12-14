@@ -766,6 +766,23 @@ public class MenuOverlayScreen extends Screen {
                         // logging removed
                     }
             }
+        } else if (annotation.type() == MovementSettingType.BOOLEAN ||
+                field.getType() == boolean.class || field.getType() == Boolean.class) {
+            addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
+                    .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+                    .build());
+
+            boolean checked = false;
+            Object v = field.get(settings);
+            if (v instanceof Boolean b) {
+                checked = b;
+            }
+
+            addDrawableChild(CheckboxWidget.builder(Text.literal(""), this.textRenderer)
+                    .pos(settingX + labelWidth + 10, settingY)
+                    .checked(checked)
+                    .callback((checkbox, isChecked) -> settings.updateSetting(field.getName(), isChecked))
+                    .build());
         } else {
             // For non-enum settings, keep the original label + control layout
             addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})

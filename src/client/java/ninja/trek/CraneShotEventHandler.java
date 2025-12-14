@@ -5,6 +5,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
+import ninja.trek.cameramovements.movements.FollowMovement;
+import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 
 import java.util.HashMap;
@@ -40,6 +42,16 @@ public class CraneShotEventHandler {
                     CraneshotClient.MOVEMENT_MANAGER.stopFollowMovement(client, camera);
                 }
                 followWasPressed = followPressed;
+            }
+
+            FollowMovement follow = GeneralMenuSettings.getFollowMovement();
+            if (follow != null) {
+                boolean followActive = followPressed && CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == follow;
+                if (followActive) {
+                    follow.tickAutoRunAndJump(client);
+                } else {
+                    follow.stopAutoRunAndJump(client);
+                }
             }
 
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
