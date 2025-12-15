@@ -25,6 +25,9 @@ public class GeneralMenuSettings {
     // Node overlay visibility outside edit mode
     private static boolean showNodesOutsideEdit = false;
 
+    // Spectator target player following settings
+    private static String targetPlayerName = "";  // Empty = use local player
+    private static boolean spectatorFollowEnabled = true;  // Master toggle
 
     public static boolean isAutoAdvance() {
         return autoAdvance;
@@ -87,4 +90,15 @@ public class GeneralMenuSettings {
     // Node overlay
     public static boolean isShowNodesOutsideEdit() { return showNodesOutsideEdit; }
     public static void setShowNodesOutsideEdit(boolean value) { showNodesOutsideEdit = value; }
+
+    // Spectator target player settings
+    public static String getTargetPlayerName() { return targetPlayerName; }
+    public static void setTargetPlayerName(String name) {
+        targetPlayerName = (name == null) ? "" : name.trim();
+    }
+
+    public static boolean isSpectatorFollowEnabled() { return spectatorFollowEnabled; }
+    public static void setSpectatorFollowEnabled(boolean enabled) {
+        spectatorFollowEnabled = enabled;
+    }
 }

@@ -29,11 +29,17 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Y Threshold", min = 0.0, max = 50.0)
     private double yThreshold = 2.0;
 
-    @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
-    private double positionEasing = 0.1;
+    @MovementSetting(label = "Position Easing XZ", min = 0.01, max = 1.0)
+    private double positionEasingXZ = 0.1;
 
-    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 200.0)
-    private double positionSpeedLimit = 10.0;
+    @MovementSetting(label = "Position Speed Limit XZ", min = 0.1, max = 200.0)
+    private double positionSpeedLimitXZ = 10.0;
+
+    @MovementSetting(label = "Position Easing Y", min = 0.01, max = 1.0)
+    private double positionEasingY = 0.1;
+
+    @MovementSetting(label = "Position Speed Limit Y", min = 0.1, max = 200.0)
+    private double positionSpeedLimitY = 10.0;
 
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
     private double rotationEasing = 0.1;
@@ -89,6 +95,37 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
     public boolean isAutoRunAndJump() {
         return autoRunAndJump;
+    }
+
+    @Override
+    public void updateSetting(String key, Object value) {
+        if ("positionEasing".equals(key)) {
+            double parsed = parseDouble(value, 0.1);
+            positionEasingXZ = parsed;
+            positionEasingY = parsed;
+            return;
+        }
+        if ("positionSpeedLimit".equals(key)) {
+            double parsed = parseDouble(value, 10.0);
+            positionSpeedLimitXZ = parsed;
+            positionSpeedLimitY = parsed;
+            return;
+        }
+        super.updateSetting(key, value);
+    }
+
+    private static double parseDouble(Object value, double fallback) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String stringValue) {
+            try {
+                return Double.parseDouble(stringValue);
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
     }
 
     public void tickAutoRunAndJump(MinecraftClient client) {
@@ -618,16 +655,25 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
     private Vec3d easedStep(Vec3d currentPos, Vec3d targetPos, float deltaSeconds) {
         Vec3d delta = targetPos.subtract(currentPos);
-        double deltaLength = delta.length();
-        double maxMove = positionSpeedLimit * deltaSeconds;
-        if (deltaLength <= 1e-12) {
+        if (delta.lengthSquared() <= 1e-24) {
             return currentPos;
         }
-        Vec3d move = delta.multiply(positionEasing);
-        if (move.length() > maxMove) {
-            move = move.normalize().multiply(maxMove);
+
+        Vec3d deltaXZ = new Vec3d(delta.x, 0.0, delta.z);
+        Vec3d moveXZ = deltaXZ.multiply(positionEasingXZ);
+        double maxMoveXZ = positionSpeedLimitXZ * deltaSeconds;
+        double moveXZLength = moveXZ.length();
+        if (moveXZLength > maxMoveXZ && moveXZLength > 1e-12) {
+            moveXZ = moveXZ.multiply(maxMoveXZ / moveXZLength);
         }
-        return currentPos.add(move);
+
+        double moveY = delta.y * positionEasingY;
+        double maxMoveY = positionSpeedLimitY * deltaSeconds;
+        if (Math.abs(moveY) > maxMoveY) {
+            moveY = Math.copySign(maxMoveY, moveY);
+        }
+
+        return currentPos.add(moveXZ.x, moveY, moveXZ.z);
     }
 
     private float easedAngle(float currentAngle, float targetAngle, float deltaSeconds) {

@@ -111,7 +111,11 @@ public class GeneralSettingsIO {
 
                 // Save autoAdvance
                 settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
-                
+
+                // Save spectator follow settings
+                settingsObj.addProperty("spectatorFollowEnabled", GeneralMenuSettings.isSpectatorFollowEnabled());
+                settingsObj.addProperty("targetPlayerName", GeneralMenuSettings.getTargetPlayerName());
+
                 // Save expanded settings state
                 JsonArray expandedSettingsArray = new JsonArray();
                 for (String key : MenuOverlayScreen.getExpandedSettings()) {
@@ -291,7 +295,24 @@ public class GeneralSettingsIO {
             if (settingsObj.has("autoAdvance")) {
                 GeneralMenuSettings.setAutoAdvance(settingsObj.get("autoAdvance").getAsBoolean());
             }
-            
+
+            // Load spectator follow settings
+            if (settingsObj.has("spectatorFollowEnabled")) {
+                try {
+                    GeneralMenuSettings.setSpectatorFollowEnabled(
+                        settingsObj.get("spectatorFollowEnabled").getAsBoolean()
+                    );
+                } catch (Exception ignored) {}
+            }
+
+            if (settingsObj.has("targetPlayerName")) {
+                try {
+                    GeneralMenuSettings.setTargetPlayerName(
+                        settingsObj.get("targetPlayerName").getAsString()
+                    );
+                } catch (Exception ignored) {}
+            }
+
             // Load expanded settings
             if (settingsObj.has("expandedSettings") && settingsObj.get("expandedSettings").isJsonArray()) {
                 JsonArray expandedSettingsArray = settingsObj.getAsJsonArray("expandedSettings");

@@ -3,6 +3,7 @@ package ninja.trek;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
 import ninja.trek.camera.CameraSystem;
@@ -22,6 +23,12 @@ public class CameraController {
     public static float freeCamYaw = 0f;
     public static float freeCamPitch = 0f;
     public static CameraTarget controlStick = new CameraTarget();
+
+    // Target player tracking for spectator mode
+    private static PlayerEntity cachedTargetPlayer = null;
+    private static String cachedTargetPlayerName = "";
+    private static long lastTargetCheckTime = 0;
+    private static final long TARGET_CHECK_INTERVAL_MS = 1000; // Check every 1 second
 
     // Track whether the camera has been moved with keyboard input
     public static boolean hasMovedWithKeyboard = false;
@@ -44,21 +51,103 @@ public class CameraController {
 
     private Vec3d currentVelocity = Vec3d.ZERO;
 
+    /**
+     * Attempts to resolve the target player entity from the configured name.
+     * Uses caching to avoid searching every frame.
+     *
+     * @param client Minecraft client instance
+     * @return The target PlayerEntity, or null if not found
+     */
+    private static PlayerEntity resolveTargetPlayer(MinecraftClient client) {
+        if (client == null || client.world == null) {
+            cachedTargetPlayer = null;
+            return null;
+        }
+
+        String targetName = GeneralMenuSettings.getTargetPlayerName();
+
+        // If target name is empty, clear cache and return null (use local player)
+        if (targetName == null || targetName.trim().isEmpty()) {
+            cachedTargetPlayer = null;
+            cachedTargetPlayerName = "";
+            return null;
+        }
+
+        // Use cached player if name hasn't changed and player is still valid
+        long now = System.currentTimeMillis();
+        if (targetName.equals(cachedTargetPlayerName) &&
+            cachedTargetPlayer != null &&
+            !cachedTargetPlayer.isRemoved() &&
+            now - lastTargetCheckTime < TARGET_CHECK_INTERVAL_MS) {
+            return cachedTargetPlayer;
+        }
+
+        // Search for player by name
+        lastTargetCheckTime = now;
+        cachedTargetPlayerName = targetName;
+        cachedTargetPlayer = null;
+
+        for (PlayerEntity player : client.world.getPlayers()) {
+            if (player.getName().getString().equalsIgnoreCase(targetName)) {
+                cachedTargetPlayer = player;
+                break;
+            }
+        }
+
+        return cachedTargetPlayer;
+    }
+
+    /**
+     * Checks if target player following is currently active.
+     * Only active when: enabled, in spectator mode, and target player is found.
+     */
+    private static boolean shouldUseTargetPlayer(MinecraftClient client) {
+        if (client == null || client.player == null) {
+            return false;
+        }
+
+        // Only work in spectator mode
+        if (!client.player.isSpectator()) {
+            return false;
+        }
+
+        // Check if feature is enabled
+        if (!GeneralMenuSettings.isSpectatorFollowEnabled()) {
+            return false;
+        }
+
+        // Check if we have a valid target
+        PlayerEntity target = resolveTargetPlayer(client);
+        return target != null;
+    }
+
     private void updateControlStick(MinecraftClient client, float tickDelta) {
         if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
                 currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
 
             if (client.player == null) return;
+
+            // Determine which player to track
+            PlayerEntity trackedPlayer = client.player;
+            if (shouldUseTargetPlayer(client)) {
+                PlayerEntity target = resolveTargetPlayer(client);
+                if (target != null) {
+                    trackedPlayer = target;
+                }
+                // If target is null, falls back to client.player
+            }
+
             Camera camera = client.gameRenderer.getCamera();
             if (camera != null) {
-                Vec3d eyePos = client.player.getCameraPosVec(tickDelta);
-                float yaw = client.player.getYaw(tickDelta);
-                float pitch = client.player.getPitch(tickDelta);
+                Vec3d eyePos = trackedPlayer.getCameraPosVec(tickDelta);
+                float yaw = trackedPlayer.getYaw(tickDelta);
+                float pitch = trackedPlayer.getPitch(tickDelta);
 
                 // Update movement tracking for VELOCITY targets
                 if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
                         currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_FRONT) {
-                    updateMovementTracking(new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ()));
+                    // Track the target player's position (not local player)
+                    updateMovementTracking(new Vec3d(trackedPlayer.getX(), trackedPlayer.getY(), trackedPlayer.getZ()));
                 }
 
                 // Calculate final angles based on target type
@@ -66,7 +155,6 @@ public class CameraController {
                 float finalPitch = calculateTargetPitch(pitch);
 
                 controlStick.set(eyePos, finalYaw, finalPitch);
-                // No per-frame logging here; keep noise low.
             }
         }
     }

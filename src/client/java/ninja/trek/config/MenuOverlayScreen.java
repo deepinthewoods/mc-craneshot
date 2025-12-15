@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.CheckboxWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
@@ -34,6 +35,7 @@ public class MenuOverlayScreen extends Screen {
     private int centerX;
     private int centerY;
     private int selectedMovementTypeIndex = 0;
+    private TextFieldWidget targetPlayerNameField;
 
     public MenuOverlayScreen() {
         super(Text.literal("CraneShot Settings"));
@@ -318,7 +320,71 @@ public class MenuOverlayScreen extends Screen {
         ));
 
         yOffset += spacing;
-        
+
+        // Add collapsible Spectator Follow section header
+        String spectatorFollowKey = "spectatorFollowSection";
+        boolean spectatorFollowExpanded = isSettingsExpanded(spectatorFollowKey);
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal((spectatorFollowExpanded ? "▼ " : "▶ ") + "Spectator Follow Settings").formatted(Formatting.YELLOW),
+                button -> {
+                    toggleSettingsExpanded(spectatorFollowKey);
+                    reinitialize();
+                })
+                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+        yOffset += spacing;
+
+        if (spectatorFollowExpanded) {
+            // Enable/Disable Spectator Follow
+            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Enable Spectator Follow"), this.textRenderer)
+                    .pos(buttonX + 10, centerY + yOffset)
+                    .checked(GeneralMenuSettings.isSpectatorFollowEnabled())
+                    .callback((checkbox, checked) -> {
+                        GeneralMenuSettings.setSpectatorFollowEnabled(checked);
+                        GeneralSettingsIO.saveSettings();
+                    })
+                    .build());
+
+            yOffset += spacing;
+
+            // Target Player Name Label
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Target Player Name:"), button -> {})
+                    .dimensions(buttonX + 10, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+
+            // Target Player Name Text Field
+            targetPlayerNameField = new TextFieldWidget(
+                    this.textRenderer,
+                    buttonX + labelWidth + 20,
+                    centerY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Player name")
+            );
+            targetPlayerNameField.setMaxLength(16); // Minecraft username max length
+            targetPlayerNameField.setText(GeneralMenuSettings.getTargetPlayerName());
+            targetPlayerNameField.setChangedListener(text -> {
+                GeneralMenuSettings.setTargetPlayerName(text);
+                GeneralSettingsIO.saveSettings();
+            });
+            this.addDrawableChild(targetPlayerNameField);
+
+            yOffset += spacing;
+
+            // Status Indicator
+            MinecraftClient client = MinecraftClient.getInstance();
+            String statusText = getSpectatorFollowStatus(client);
+            Formatting statusColor = getSpectatorFollowStatusColor(client);
+
+            this.addDrawableChild(ButtonWidget.builder(
+                    Text.literal("Status: " + statusText).formatted(statusColor),
+                    button -> {})
+                    .dimensions(buttonX + 10, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                    .build());
+
+            yOffset += spacing;
+        }
+
         // Add collapsible Free Camera section header
         String freeCamKey = "freeCamSection";
         boolean freeCamExpanded = isSettingsExpanded(freeCamKey);
@@ -1029,7 +1095,73 @@ public class MenuOverlayScreen extends Screen {
     public boolean shouldPause() {
         return false;
     }
-    
+
+    /**
+     * Gets the current status text for spectator follow feature.
+     */
+    private String getSpectatorFollowStatus(MinecraftClient client) {
+        if (client == null || client.player == null) {
+            return "Not in game";
+        }
+
+        if (!client.player.isSpectator()) {
+            return "Not in spectator mode";
+        }
+
+        if (!GeneralMenuSettings.isSpectatorFollowEnabled()) {
+            return "Disabled - using local player";
+        }
+
+        String targetName = GeneralMenuSettings.getTargetPlayerName();
+        if (targetName == null || targetName.trim().isEmpty()) {
+            return "No target - using local player";
+        }
+
+        // Check if target player can be found
+        if (client.world != null) {
+            for (net.minecraft.entity.player.PlayerEntity player : client.world.getPlayers()) {
+                if (player.getName().getString().equalsIgnoreCase(targetName)) {
+                    return "Following: " + player.getName().getString();
+                }
+            }
+        }
+
+        return "Target not found - using local player";
+    }
+
+    /**
+     * Gets the color for the status indicator based on current state.
+     */
+    private Formatting getSpectatorFollowStatusColor(MinecraftClient client) {
+        if (client == null || client.player == null) {
+            return Formatting.RED;
+        }
+
+        if (!client.player.isSpectator()) {
+            return Formatting.GRAY;
+        }
+
+        if (!GeneralMenuSettings.isSpectatorFollowEnabled()) {
+            return Formatting.GRAY;
+        }
+
+        String targetName = GeneralMenuSettings.getTargetPlayerName();
+        if (targetName == null || targetName.trim().isEmpty()) {
+            return Formatting.GRAY;
+        }
+
+        // Check if target player can be found
+        if (client.world != null) {
+            for (net.minecraft.entity.player.PlayerEntity player : client.world.getPlayers()) {
+                if (player.getName().getString().equalsIgnoreCase(targetName)) {
+                    return Formatting.GREEN; // Successfully following
+                }
+            }
+        }
+
+        return Formatting.YELLOW; // Target not found
+    }
+
     // Static methods for managing expanded settings
     public static Set<String> getExpandedSettings() {
         return expandedSettings;
