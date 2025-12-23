@@ -9,6 +9,9 @@ public class GeneralMenuSettings {
     private static final FreeCamReturnMovement freeCamReturnMovement = new FreeCamReturnMovement();
     // Follow movement (keybind-only)
     private static final FollowMovement followMovement = new FollowMovement();
+    // Zoom movement (keybind-only)
+    private static final ninja.trek.cameramovements.movements.ZoomMovement zoomMovement =
+            new ninja.trek.cameramovements.movements.ZoomMovement();
     // Default idle movement control
     private static boolean useDefaultIdleMovement = false;
     private static final ninja.trek.cameramovements.movements.LinearMovement defaultIdleMovement =
@@ -47,6 +50,10 @@ public class GeneralMenuSettings {
 
     public static FollowMovement getFollowMovement() {
         return followMovement;
+    }
+
+    public static ninja.trek.cameramovements.movements.ZoomMovement getZoomMovement() {
+        return zoomMovement;
     }
 
     // Default idle movement settings

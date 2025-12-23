@@ -18,6 +18,7 @@ public class CraneShotEventHandler {
     private static final Map<Integer, Boolean> keyStates = new HashMap<>();
     private static Integer lastActiveSlot = null;
     private static boolean followWasPressed = false;
+    private static boolean zoomWasPressed = false;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -52,6 +53,17 @@ public class CraneShotEventHandler {
                 } else {
                     follow.stopAutoRunAndJump(client);
                 }
+            }
+
+            // Handle zoom key
+            boolean zoomPressed = CraneshotClient.zoomKey != null && CraneshotClient.zoomKey.isPressed();
+            if (zoomPressed != zoomWasPressed) {
+                if (zoomPressed) {
+                    CraneshotClient.MOVEMENT_MANAGER.startZoomMovement(client, camera);
+                } else {
+                    CraneshotClient.MOVEMENT_MANAGER.stopZoomMovement(client, camera);
+                }
+                zoomWasPressed = zoomPressed;
             }
 
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {

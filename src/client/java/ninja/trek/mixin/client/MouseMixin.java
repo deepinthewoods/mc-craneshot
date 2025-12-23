@@ -62,6 +62,26 @@ public class MouseMixin implements IMouseMixin {
     @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
     private void onUpdateMouse(double timeDelta, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
+
+        // Adjust mouse sensitivity based on zoom level BEFORE any other processing
+        if (client.currentScreen == null && !MouseInterceptor.isIntercepting()) {
+            if (CraneshotClient.MOVEMENT_MANAGER != null) {
+                ninja.trek.cameramovements.movements.ZoomMovement zoomMovement =
+                    CraneshotClient.MOVEMENT_MANAGER.getActiveZoomOverlay();
+
+                // Check if zoom overlay is active
+                if (zoomMovement != null) {
+                    // Get the current FOV multiplier (e.g., 0.1 for 10x zoom)
+                    float fovMultiplier = zoomMovement.getTargetZoomFov();
+
+                    // Scale mouse deltas by FOV multiplier to reduce sensitivity when zoomed in
+                    cursorDeltaX *= fovMultiplier;
+                    cursorDeltaY *= fovMultiplier;
+                }
+            }
+        }
+
+        // Handle mouse interception for camera control
         if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
             capturedDeltaX = cursorDeltaX;
             capturedDeltaY = cursorDeltaY;

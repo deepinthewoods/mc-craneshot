@@ -109,6 +109,25 @@ public class GeneralSettingsIO {
                 });
                 settingsObj.add("followMovement", followObj);
 
+                // Save ZoomMovement settings (keybind-only)
+                JsonObject zoomObj = new JsonObject();
+                ninja.trek.cameramovements.movements.ZoomMovement zoom = GeneralMenuSettings.getZoomMovement();
+                java.util.Map<String, Object> zoomSettings = ((ninja.trek.cameramovements.AbstractMovementSettings)zoom).getSettings();
+                zoomSettings.forEach((key, value) -> {
+                    if (value instanceof Float || value instanceof Double) {
+                        zoomObj.addProperty(key, ((Number)value).doubleValue());
+                    } else if (value instanceof String) {
+                        zoomObj.addProperty(key, (String)value);
+                    } else if (value instanceof Boolean) {
+                        zoomObj.addProperty(key, (Boolean)value);
+                    } else if (value instanceof Enum) {
+                        zoomObj.addProperty(key, ((Enum<?>)value).name());
+                    }
+                });
+                // Also save the target zoom FOV
+                zoomObj.addProperty("targetZoomFov", zoom.getTargetZoomFov());
+                settingsObj.add("zoomMovement", zoomObj);
+
                 // Save autoAdvance
                 settingsObj.addProperty("autoAdvance", GeneralMenuSettings.isAutoAdvance());
 
@@ -258,6 +277,33 @@ public class GeneralSettingsIO {
                             } else if (followObj.get(key).getAsJsonPrimitive().isBoolean()) {
                                 ((ninja.trek.cameramovements.AbstractMovementSettings)follow).updateSetting(
                                     key, followObj.get(key).getAsBoolean());
+                            }
+                        }
+                    } catch (Exception e) {
+                        // logging removed
+                    }
+                }
+            }
+
+            // Load ZoomMovement settings
+            if (settingsObj.has("zoomMovement")) {
+                JsonObject zoomObj = settingsObj.getAsJsonObject("zoomMovement");
+                ninja.trek.cameramovements.movements.ZoomMovement zoom = GeneralMenuSettings.getZoomMovement();
+                for (String key : zoomObj.keySet()) {
+                    try {
+                        if (key.equals("targetZoomFov")) {
+                            // Special handling for targetZoomFov
+                            zoom.setTargetZoomFov(zoomObj.get(key).getAsFloat());
+                        } else if (zoomObj.get(key).isJsonPrimitive()) {
+                            if (zoomObj.get(key).getAsJsonPrimitive().isString()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)zoom).updateSetting(
+                                    key, zoomObj.get(key).getAsString());
+                            } else if (zoomObj.get(key).getAsJsonPrimitive().isNumber()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)zoom).updateSetting(
+                                    key, zoomObj.get(key).getAsDouble());
+                            } else if (zoomObj.get(key).getAsJsonPrimitive().isBoolean()) {
+                                ((ninja.trek.cameramovements.AbstractMovementSettings)zoom).updateSetting(
+                                    key, zoomObj.get(key).getAsBoolean());
                             }
                         }
                     } catch (Exception e) {

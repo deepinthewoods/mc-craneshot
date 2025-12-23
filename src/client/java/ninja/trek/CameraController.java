@@ -600,6 +600,10 @@ public class CameraController {
                         if (deltaX != 0 || deltaY != 0) {
                             double mouseSensitivity = client.options.getMouseSensitivity().getValue();
                             double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            // Adjust sensitivity based on FOV for zoom
+                            if (baseTarget != null) {
+                                calculatedSensitivity *= baseTarget.getFovMultiplier();
+                            }
                             ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
                             if (camEnt != null) {
                                 // Invert Y like vanilla: moving mouse up should decrease pitch
@@ -615,6 +619,10 @@ public class CameraController {
                         if (deltaX != 0 || deltaY != 0) {
                             double mouseSensitivity = client.options.getMouseSensitivity().getValue();
                             double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                            // Adjust sensitivity based on FOV for zoom
+                            if (baseTarget != null) {
+                                calculatedSensitivity *= baseTarget.getFovMultiplier();
+                            }
                             cameraSystem.updateRotation(
                                 deltaX * calculatedSensitivity * 0.55D,
                                 deltaY * calculatedSensitivity * 0.55D,
@@ -652,6 +660,10 @@ public class CameraController {
                     double deltaY = -mouseMixin.getCapturedDeltaY();
                     double mouseSensitivity = client.options.getMouseSensitivity().getValue();
                     double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
+                    // Adjust sensitivity based on FOV for zoom
+                    if (baseTarget != null) {
+                        calculatedSensitivity *= baseTarget.getFovMultiplier();
+                    }
                     deltaX *= calculatedSensitivity * 0.55D;
                     deltaY *= calculatedSensitivity * 0.55D;
                     if (deltaX != 0 || deltaY != 0) {

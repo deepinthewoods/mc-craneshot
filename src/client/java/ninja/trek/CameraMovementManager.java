@@ -25,9 +25,13 @@ public class CameraMovementManager {
     private ICameraMovement activeMovement;
     private CameraTarget baseTarget;
     private boolean isOut;
-    
+
     // For handling free camera return
     private boolean inFreeCamReturnPhase = false;
+
+    // Zoom overlay - applies FOV modification on top of active movement
+    private ninja.trek.cameramovements.movements.ZoomMovement zoomOverlay = null;
+    private boolean isZoomActive = false;
 
 
     // New fields for managing scroll selection
@@ -224,6 +228,22 @@ public class CameraMovementManager {
         activeMovement.queueReset(client, camera);
     }
 
+    public void startZoomMovement(MinecraftClient client, Camera camera) {
+        ninja.trek.cameramovements.movements.ZoomMovement zoom = GeneralMenuSettings.getZoomMovement();
+        if (zoom == null) return;
+        if (isZoomActive) return;
+
+        // Activate zoom as an overlay (doesn't replace the active movement)
+        zoomOverlay = zoom;
+        isZoomActive = true;
+        zoom.start(client, camera);
+    }
+
+    public void stopZoomMovement(MinecraftClient client, Camera camera) {
+        if (!isZoomActive || zoomOverlay == null) return;
+        zoomOverlay.queueReset(client, camera);
+    }
+
     public void finishTransition(MinecraftClient client, Camera camera) {
         if (activeMovement != null) {
             // Check if we're in free camera mode before initiating return
@@ -357,10 +377,20 @@ public class CameraMovementManager {
     }
 
     public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
-        if (activeMovement == null || client.player == null) {
+        if (client.player == null) {
             return null;
         }
-        
+
+        // Handle zoom overlay deactivation
+        if (isZoomActive && zoomOverlay != null && zoomOverlay.isComplete()) {
+            isZoomActive = false;
+            zoomOverlay = null;
+        }
+
+        if (activeMovement == null) {
+            return null;
+        }
+
         // Check if we're in FreeCamReturn phase
         if (inFreeCamReturnPhase) {
             FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
@@ -479,6 +509,26 @@ public class CameraMovementManager {
         }
 
         baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+
+        // Apply zoom overlay if active (modifies FOV only)
+        if (isZoomActive && zoomOverlay != null) {
+            MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+            if (zoomState != null) {
+                float zoomFov = zoomState.getCameraTarget().getFovMultiplier();
+                // Create new target with zoom FOV but preserve base movement's position/rotation
+                CameraTarget zoomedTarget = new CameraTarget(
+                    baseTarget.getPosition(),
+                    baseTarget.getYaw(),
+                    baseTarget.getPitch(),
+                    zoomFov
+                );
+                baseTarget = zoomedTarget;
+
+                // Also update the state to return
+                state = new MovementState(zoomedTarget, state.isComplete());
+            }
+        }
+
         return state;
     }
 
@@ -619,10 +669,23 @@ public class CameraMovementManager {
     }
 
     public AbstractMovementSettings.SCROLL_WHEEL getActiveMouseWheelMode() {
+        // Zoom overlay takes priority for scroll wheel
+        if (isZoomActive && zoomOverlay != null) {
+            return zoomOverlay.mouseWheel;
+        }
+
         if (activeMovement != null && activeMovement instanceof AbstractMovementSettings) {
             return ((AbstractMovementSettings) activeMovement).mouseWheel;
         }
         return AbstractMovementSettings.SCROLL_WHEEL.NONE;
+    }
+
+    /**
+     * Gets the active zoom overlay if zoom is currently active.
+     * @return The zoom movement overlay, or null if zoom is not active.
+     */
+    public ninja.trek.cameramovements.movements.ZoomMovement getActiveZoomOverlay() {
+        return isZoomActive ? zoomOverlay : null;
     }
     
     /**

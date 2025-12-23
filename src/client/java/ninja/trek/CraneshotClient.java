@@ -22,6 +22,7 @@ public class CraneshotClient implements ClientModInitializer {
 	public static final CameraController CAMERA_CONTROLLER = new CameraController();
 	public static KeyBinding toggleMenuKey;
 	public static KeyBinding followMovementKey;
+	public static KeyBinding zoomKey;
 	private static boolean isMenuOpen = false;
 	public static MenuOverlayScreen MENU = new MenuOverlayScreen();
 	public static final CameraMovementManager MOVEMENT_MANAGER = new CameraMovementManager();
@@ -50,6 +51,13 @@ public class CraneshotClient implements ClientModInitializer {
                 "key.craneshot.follow_movement",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_G,
+                KB_CAT_CAMERA
+        ));
+
+        zoomKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.craneshot.zoom",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
                 KB_CAT_CAMERA
         ));
 
