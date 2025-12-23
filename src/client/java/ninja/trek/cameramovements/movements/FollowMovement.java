@@ -2,6 +2,7 @@ package ninja.trek.cameramovements.movements;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.CarpetBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
@@ -291,12 +292,6 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
     private static boolean shouldSuppressAllAssist(PlayerEntity player) {
         if (player == null) return true;
-        if (player.hasVehicle()) return true;
-        if (player.isSneaking()) return true;
-        if (player.isTouchingWater()) return true;
-        if (player.isInLava()) return true;
-        if (player.getAbilities().flying) return true;
-        if (player.isGliding()) return true;
         return false;
     }
 
@@ -496,6 +491,9 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return false;
         }
         if (state.isOf(Blocks.DIRT_PATH)) {
+            return true;
+        }
+        if (state.getBlock() instanceof CarpetBlock) {
             return true;
         }
         return state.isFullCube(client.world, pos);
