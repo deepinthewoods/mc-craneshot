@@ -1,5 +1,7 @@
 package ninja.trek.cameramovements.movements;
 
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.player.PlayerEntity;
@@ -293,7 +295,6 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         if (player.isSneaking()) return true;
         if (player.isTouchingWater()) return true;
         if (player.isInLava()) return true;
-        if (player.isClimbing()) return true;
         if (player.getAbilities().flying) return true;
         if (player.isGliding()) return true;
         return false;
@@ -470,7 +471,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         }
 
         try {
-            if (!client.world.getBlockState(hitPos).isFullCube(client.world, hitPos)) {
+            BlockState hitState = client.world.getBlockState(hitPos);
+            if (!isAutoJumpStepBlock(client, hitPos, hitState)) {
                 return best;
             }
         } catch (Throwable t) {
@@ -487,6 +489,16 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return candidate;
         }
         return best;
+    }
+
+    private static boolean isAutoJumpStepBlock(MinecraftClient client, BlockPos pos, BlockState state) {
+        if (client == null || client.world == null || state == null || pos == null) {
+            return false;
+        }
+        if (state.isOf(Blocks.DIRT_PATH)) {
+            return true;
+        }
+        return state.isFullCube(client.world, pos);
     }
 
     private static String format3(double v) {

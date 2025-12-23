@@ -6,6 +6,7 @@ import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
 import ninja.trek.IMouseMixin;
 import ninja.trek.MouseInterceptor;
+import ninja.trek.cameramovements.AbstractMovementSettings;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,7 +32,12 @@ public class MouseMixin implements IMouseMixin {
         }
 
         // Otherwise, check if we should intercept
-        boolean shouldIntercept = CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement();
+        boolean shouldIntercept = false;
+        if (CraneshotClient.MOVEMENT_MANAGER.hasActiveMovement()) {
+            AbstractMovementSettings.SCROLL_WHEEL scrollMode =
+                    CraneshotClient.MOVEMENT_MANAGER.getActiveMouseWheelMode();
+            shouldIntercept = scrollMode != AbstractMovementSettings.SCROLL_WHEEL.NONE;
+        }
 
         // Also intercept if any camera slot key or select movement key is pressed
         if (!shouldIntercept) {
