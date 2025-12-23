@@ -734,6 +734,11 @@ public class CameraController {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.world == null) return;
 
+        // Disable camera control when sleeping to avoid clipping inside the player's head
+        if (client.player != null && client.player.isSleeping()) {
+            return;
+        }
+
         // Update the camera based on movement-manager and free control states.
         updateCamera(client, camera, tickDelta, frameSeconds);
 
