@@ -121,6 +121,24 @@ public class CameraMovementManager {
         return slots.size();
     }
 
+    public void cancelAllMovements(MinecraftClient client, Camera camera) {
+        activeMovement = null;
+        activeMovementSlot = null;
+        inFreeCamReturnPhase = false;
+        isOut = false;
+        baseTarget = null;
+
+        isZoomActive = false;
+        zoomOverlay = null;
+
+        toggledStates.clear();
+        hasScrolledDuringPress.clear();
+        keyPressStartTimes.clear();
+
+        CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+        CraneshotClient.CAMERA_CONTROLLER.onComplete();
+    }
+
     public List<ICameraMovement> getAvailableMovementsForSlot(int slotIndex) {
         if (slotIndex >= 0 && slotIndex < slots.size()) {
             return new ArrayList<>(slots.get(slotIndex));

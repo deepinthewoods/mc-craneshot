@@ -19,6 +19,9 @@ public class CraneShotEventHandler {
     private static Integer lastActiveSlot = null;
     private static boolean followWasPressed = false;
     private static boolean zoomWasPressed = false;
+    private static boolean lastAlive = true;
+    private static boolean lastSleeping = false;
+    private static java.util.UUID lastPlayerUuid = null;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -34,6 +37,7 @@ public class CraneShotEventHandler {
             CraneshotClient.checkKeybinds();
 
             Camera camera = client.gameRenderer.getCamera();
+            handleRespawnAndWakeReset(client, camera);
 
             boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
             if (followPressed != followWasPressed) {
@@ -86,6 +90,31 @@ public class CraneShotEventHandler {
         MovementToastRenderer.register();
     }
 
+    private static void handleRespawnAndWakeReset(MinecraftClient client, Camera camera) {
+        if (client == null || client.player == null) {
+            lastAlive = false;
+            lastSleeping = false;
+            lastPlayerUuid = null;
+            return;
+        }
+
+        boolean isAlive = client.player.isAlive();
+        boolean isSleeping = client.player.isSleeping();
+        java.util.UUID playerUuid = client.player.getUuid();
+
+        boolean respawned = (!lastAlive && isAlive) ||
+            (lastPlayerUuid != null && !lastPlayerUuid.equals(playerUuid) && isAlive);
+        boolean wokeUp = lastSleeping && !isSleeping;
+
+        if (respawned || wokeUp) {
+            CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+        }
+
+        lastAlive = isAlive;
+        lastSleeping = isSleeping;
+        lastPlayerUuid = playerUuid;
+    }
+
     /**
      * Safely get the scroll value from the mouse mixin
      * @param client The Minecraft client instance
@@ -132,8 +161,18 @@ public class CraneShotEventHandler {
         // Check for active movement with scroll modes
         AbstractMovementSettings.SCROLL_WHEEL activeScrollMode =
                 CraneshotClient.MOVEMENT_MANAGER.getActiveMouseWheelMode();
-        ICameraMovement activeMovement = CraneshotClient.MOVEMENT_MANAGER.getActiveMovement();
 
+        // Check for zoom overlay first (takes priority)
+        ninja.trek.cameramovements.movements.ZoomMovement zoomOverlay =
+                CraneshotClient.MOVEMENT_MANAGER.getActiveZoomOverlay();
+        if (zoomOverlay != null && activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.FOV) {
+            zoomOverlay.adjustFov(!scrollUp, client);
+            lastScrollTime = currentTime;
+            resetScrollValue(client);
+            return;
+        }
+
+        ICameraMovement activeMovement = CraneshotClient.MOVEMENT_MANAGER.getActiveMovement();
         if (activeMovement != null) {
             if (activeScrollMode == AbstractMovementSettings.SCROLL_WHEEL.DISTANCE) {
                 activeMovement.adjustDistance(!scrollUp, client);

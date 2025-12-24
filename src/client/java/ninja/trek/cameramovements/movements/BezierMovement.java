@@ -526,7 +526,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public void adjustDistance(boolean increase, MinecraftClient client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
-            double multiplier = increase ? 1.1 : 0.9;
+            double multiplier = increase ? 1.2 : 0.8;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
             distanceChanged = true;
         } else if (mouseWheel == SCROLL_WHEEL.FOV) {
