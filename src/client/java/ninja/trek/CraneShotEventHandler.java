@@ -3,6 +3,8 @@ package ninja.trek;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.world.World;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.FollowMovement;
@@ -22,6 +24,7 @@ public class CraneShotEventHandler {
     private static boolean lastAlive = true;
     private static boolean lastSleeping = false;
     private static java.util.UUID lastPlayerUuid = null;
+    private static RegistryKey<World> lastDimension = null;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -38,6 +41,7 @@ public class CraneShotEventHandler {
 
             Camera camera = client.gameRenderer.getCamera();
             handleRespawnAndWakeReset(client, camera);
+            handleDimensionChange(client, camera);
 
             boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
             if (followPressed != followWasPressed) {
@@ -113,6 +117,22 @@ public class CraneShotEventHandler {
         lastAlive = isAlive;
         lastSleeping = isSleeping;
         lastPlayerUuid = playerUuid;
+    }
+
+    private static void handleDimensionChange(MinecraftClient client, Camera camera) {
+        if (client == null || client.world == null) {
+            lastDimension = null;
+            return;
+        }
+
+        RegistryKey<World> currentDimension = client.world.getRegistryKey();
+
+        if (lastDimension != null && !lastDimension.equals(currentDimension)) {
+            // Dimension changed - cancel all camera movements
+            CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+        }
+
+        lastDimension = currentDimension;
     }
 
     /**
