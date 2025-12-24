@@ -44,6 +44,12 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     @MovementSetting(label = "Position Speed Limit Y", min = 0.1, max = 200.0)
     private double positionSpeedLimitY = 10.0;
 
+    @MovementSetting(label = "Return Position Easing Y", min = 0.01, max = 1.0)
+    private double returnPositionEasingY = 0.1;
+
+    @MovementSetting(label = "Return Position Speed Limit Y", min = 0.1, max = 200.0)
+    private double returnPositionSpeedLimitY = 10.0;
+
     @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
     private double rotationEasing = 0.1;
 
@@ -572,7 +578,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
                 finalInterpT = Math.min(1.0, finalInterpT + step);
                 desiredPos = finalInterpStart.lerp(playerPos, finalInterpT);
             } else {
-                desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds);
+                desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
             }
         } else {
             targetYaw = stickYaw;
@@ -664,6 +670,10 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     private Vec3d easedStep(Vec3d currentPos, Vec3d targetPos, float deltaSeconds) {
+        return easedStep(currentPos, targetPos, deltaSeconds, positionEasingY, positionSpeedLimitY);
+    }
+
+    private Vec3d easedStep(Vec3d currentPos, Vec3d targetPos, float deltaSeconds, double easingY, double speedLimitY) {
         Vec3d delta = targetPos.subtract(currentPos);
         if (delta.lengthSquared() <= 1e-24) {
             return currentPos;
@@ -677,8 +687,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             moveXZ = moveXZ.multiply(maxMoveXZ / moveXZLength);
         }
 
-        double moveY = delta.y * positionEasingY;
-        double maxMoveY = positionSpeedLimitY * deltaSeconds;
+        double moveY = delta.y * easingY;
+        double maxMoveY = speedLimitY * deltaSeconds;
         if (Math.abs(moveY) > maxMoveY) {
             moveY = Math.copySign(maxMoveY, moveY);
         }
@@ -718,6 +728,29 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             finalInterpStart = null;
             current = CameraTarget.fromCamera(camera);
         }
+    }
+
+    public boolean isResetting() {
+        return resetting;
+    }
+
+    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+        if (!resetting) {
+            return;
+        }
+        resetting = false;
+        finalInterpActive = false;
+        finalInterpT = 0.0;
+        finalInterpStart = null;
+        if (camera != null) {
+            current = CameraTarget.fromCamera(camera);
+        }
+        Vec3d stickPos = CameraController.controlStick.getPosition();
+        lastStickYaw = CameraController.controlStick.getYaw();
+        startPlayerPosXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);
+        orbitTargetXZ = new Vec3d(current.getPosition().x, 0.0, current.getPosition().z);
+        clampArmed = false;
+        alpha = 1.0;
     }
 
     @Override

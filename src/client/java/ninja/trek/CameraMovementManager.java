@@ -8,6 +8,8 @@ import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
 import ninja.trek.cameramovements.movements.FollowMovement;
+import ninja.trek.cameramovements.movements.BezierMovement;
+import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
@@ -182,7 +184,9 @@ public class CameraMovementManager {
         if (movement == null) return;
 
         if (activeMovementSlot != null && activeMovementSlot.equals(slotIndex)) {
-            finishTransition(client, camera);
+            if (!resumeOutPhaseIfReturning(client, camera)) {
+                finishTransition(client, camera);
+            }
             return;
         }
 
@@ -205,7 +209,13 @@ public class CameraMovementManager {
     public void startFollowMovement(MinecraftClient client, Camera camera) {
         FollowMovement follow = GeneralMenuSettings.getFollowMovement();
         if (follow == null) return;
-        if (activeMovement == follow) return;
+        if (activeMovement == follow) {
+            if (follow.isResetting()) {
+                follow.resumeOutPhase(client, camera);
+                isOut = false;
+            }
+            return;
+        }
 
         // Override any current movement immediately
         if (activeMovementSlot != null) {
@@ -219,6 +229,20 @@ public class CameraMovementManager {
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         follow.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(follow);
+    }
+
+    private boolean resumeOutPhaseIfReturning(MinecraftClient client, Camera camera) {
+        if (activeMovement instanceof LinearMovement linear && linear.isResetting()) {
+            linear.resumeOutPhase(client, camera);
+            isOut = false;
+            return true;
+        }
+        if (activeMovement instanceof BezierMovement bezier && bezier.isResetting()) {
+            bezier.resumeOutPhase(client, camera);
+            isOut = false;
+            return true;
+        }
+        return false;
     }
 
     public void stopFollowMovement(MinecraftClient client, Camera camera) {

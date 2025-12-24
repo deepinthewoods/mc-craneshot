@@ -280,6 +280,43 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         }
     }
 
+    public boolean isResetting() {
+        return resetting;
+    }
+
+    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+        if (!resetting) {
+            return;
+        }
+        resetting = false;
+        finalInterpActive = false;
+        finalInterpT = 0.0;
+        finalInterpStart = null;
+        if (camera != null) {
+            current = CameraTarget.fromCamera(camera);
+        }
+
+        Vec3d stickPos = CameraController.controlStick.getPosition();
+        start = new CameraTarget(
+                stickPos,
+                CameraController.controlStick.getYaw(),
+                CameraController.controlStick.getPitch(),
+                start.getFovMultiplier()
+        );
+
+        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        end = new CameraTarget(
+                targetPos,
+                CameraController.controlStick.getYaw(),
+                CameraController.controlStick.getPitch(),
+                fovMultiplier
+        );
+
+        double remaining = current.getPosition().distanceTo(end.getPosition());
+        double totalDistance = start.getPosition().distanceTo(end.getPosition());
+        alpha = totalDistance != 0 ? remaining / totalDistance : 0.0;
+    }
+
     @Override
     public void adjustDistance(boolean increase, MinecraftClient client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
