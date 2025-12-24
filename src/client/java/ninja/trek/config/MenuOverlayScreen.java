@@ -196,10 +196,11 @@ public class MenuOverlayScreen extends Screen {
         int totalWidth = guiWidth - 40;
         int labelWidth = Math.min(200, totalWidth / 3);
         int controlWidth = Math.min(200, totalWidth / 2);
+        int baseY = centerY - scrollOffset;
 
         // Auto Advance Checkbox
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Auto Advance"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isAutoAdvance())
                 .callback((checkbox, checked) -> GeneralMenuSettings.setAutoAdvance(checked))
                 .build());
@@ -208,7 +209,7 @@ public class MenuOverlayScreen extends Screen {
 
         // Show/Hide Vanilla Crosshair
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Vanilla Crosshair"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isShowVanillaCrosshair())
                 .callback((checkbox, checked) -> {
                     GeneralMenuSettings.setShowVanillaCrosshair(checked);
@@ -220,7 +221,7 @@ public class MenuOverlayScreen extends Screen {
 
         // Show/Hide Camera Crosshair
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Camera Crosshair"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isShowCameraCrosshair())
                 .callback((checkbox, checked) -> {
                     GeneralMenuSettings.setShowCameraCrosshair(checked);
@@ -232,7 +233,7 @@ public class MenuOverlayScreen extends Screen {
 
         // Camera Crosshair Shape
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Camera Crosshair: Square"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isCameraCrosshairSquare())
                 .callback((checkbox, checked) -> {
                     GeneralMenuSettings.setCameraCrosshairSquare(checked);
@@ -244,11 +245,11 @@ public class MenuOverlayScreen extends Screen {
 
         // Camera Crosshair Size slider
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Camera Crosshair Size"), button -> {})
-                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
         this.addDrawableChild(SettingWidget.createSlider(
                 buttonX + labelWidth + 10,
-                centerY + yOffset,
+                baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
                 Text.literal("Camera Crosshair Size"),
@@ -271,7 +272,7 @@ public class MenuOverlayScreen extends Screen {
 
         // Show/Hide Node Overlays outside edit mode
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Nodes Outside Edit"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isShowNodesOutsideEdit())
                 .callback((checkbox, checked) -> {
                     GeneralMenuSettings.setShowNodesOutsideEdit(checked);
@@ -283,7 +284,7 @@ public class MenuOverlayScreen extends Screen {
 
         // Use Default Movement When Idle Checkbox
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
-                .pos(buttonX, centerY + yOffset)
+                .pos(buttonX, baseY + yOffset)
                 .checked(GeneralMenuSettings.isUseDefaultIdleMovement())
                 .callback((checkbox, checked) -> {
                     GeneralMenuSettings.setUseDefaultIdleMovement(checked);
@@ -295,11 +296,11 @@ public class MenuOverlayScreen extends Screen {
 
         // Node Editor sensitivity slider
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Node Edit Sensitivity"), button -> {})
-                .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
         this.addDrawableChild(SettingWidget.createSlider(
                 buttonX + labelWidth + 10,
-                centerY + yOffset,
+                baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
                 Text.literal("Node Edit Sensitivity"),
@@ -330,14 +331,14 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(spectatorFollowKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
         yOffset += spacing;
 
         if (spectatorFollowExpanded) {
             // Enable/Disable Spectator Follow
             this.addDrawableChild(CheckboxWidget.builder(Text.literal("Enable Spectator Follow"), this.textRenderer)
-                    .pos(buttonX + 10, centerY + yOffset)
+                    .pos(buttonX + 10, baseY + yOffset)
                     .checked(GeneralMenuSettings.isSpectatorFollowEnabled())
                     .callback((checkbox, checked) -> {
                         GeneralMenuSettings.setSpectatorFollowEnabled(checked);
@@ -349,14 +350,14 @@ public class MenuOverlayScreen extends Screen {
 
             // Target Player Name Label
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Target Player Name:"), button -> {})
-                    .dimensions(buttonX + 10, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX + 10, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
 
             // Target Player Name Text Field
             targetPlayerNameField = new TextFieldWidget(
                     this.textRenderer,
                     buttonX + labelWidth + 20,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Player name")
@@ -379,7 +380,7 @@ public class MenuOverlayScreen extends Screen {
             this.addDrawableChild(ButtonWidget.builder(
                     Text.literal("Status: " + statusText).formatted(statusColor),
                     button -> {})
-                    .dimensions(buttonX + 10, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX + 10, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                     .build());
 
             yOffset += spacing;
@@ -394,7 +395,7 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(freeCamKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
         yOffset += spacing;
         
@@ -402,11 +403,11 @@ public class MenuOverlayScreen extends Screen {
             // Move Speed Slider
             float currentSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Free Camera Speed"),
@@ -429,11 +430,11 @@ public class MenuOverlayScreen extends Screen {
             // Acceleration Slider
             float currentAcceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Acceleration"),
@@ -456,11 +457,11 @@ public class MenuOverlayScreen extends Screen {
             // Deceleration Slider
             float currentDeceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Deceleration"),
@@ -491,7 +492,7 @@ public class MenuOverlayScreen extends Screen {
                                 GeneralMenuSettings.getFreeCamSettings().setMovementMode(modes[nextOrdinal]);
                                 button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
                             })
-                    .dimensions(buttonX, centerY + yOffset, buttonWidth, 20)
+                    .dimensions(buttonX, baseY + yOffset, buttonWidth, 20)
                     .build()
             );
         }
@@ -506,7 +507,7 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(defaultIdleKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (defaultIdleExpanded) {
@@ -530,7 +531,7 @@ public class MenuOverlayScreen extends Screen {
                     int column = fieldIndex / settingsPerColumn;
                     int row = fieldIndex % settingsPerColumn;
                     int settingX = centerX + 20 + column * (settingWidth + 20);
-                    int settingY = centerY + yOffset + (row * BUTTON_HEIGHT) - scrollOffset;
+                    int settingY = baseY + yOffset + (row * BUTTON_HEIGHT);
 
                     createSettingControl(defaultIdle, field, annotation, settingX, settingY,
                             labelWidth, controlWidth, BUTTON_HEIGHT);
@@ -551,7 +552,7 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(followKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (followExpanded) {
@@ -573,7 +574,7 @@ public class MenuOverlayScreen extends Screen {
                     int column = fieldIndex / settingsPerColumn;
                     int row = fieldIndex % settingsPerColumn;
                     int settingX = centerX + 20 + column * (settingWidth + 20);
-                    int settingY = centerY + yOffset + (row * BUTTON_HEIGHT) - scrollOffset;
+                    int settingY = baseY + yOffset + (row * BUTTON_HEIGHT);
 
                     createSettingControl(follow, field, annotation, settingX, settingY,
                             labelWidth, controlWidth, BUTTON_HEIGHT);
@@ -593,7 +594,7 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(zoomKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (zoomExpanded) {
@@ -615,7 +616,7 @@ public class MenuOverlayScreen extends Screen {
                     int column = fieldIndex / settingsPerColumn;
                     int row = fieldIndex % settingsPerColumn;
                     int settingX = centerX + 20 + column * (settingWidth + 20);
-                    int settingY = centerY + yOffset + (row * BUTTON_HEIGHT) - scrollOffset;
+                    int settingY = baseY + yOffset + (row * BUTTON_HEIGHT);
 
                     createSettingControl(zoom, field, annotation, settingX, settingY,
                             labelWidth, controlWidth, BUTTON_HEIGHT);
@@ -635,7 +636,7 @@ public class MenuOverlayScreen extends Screen {
                     toggleSettingsExpanded(freeCamReturnKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, centerY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
                 
         if (freeCamReturnExpanded) {
@@ -645,7 +646,7 @@ public class MenuOverlayScreen extends Screen {
             
             // Position Easing slider
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Easing"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -660,7 +661,7 @@ public class MenuOverlayScreen extends Screen {
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Position Easing"),
@@ -674,7 +675,7 @@ public class MenuOverlayScreen extends Screen {
             // Position Speed Limit slider
             yOffset += spacing;
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Speed Limit"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -689,7 +690,7 @@ public class MenuOverlayScreen extends Screen {
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Position Speed Limit"),
@@ -703,7 +704,7 @@ public class MenuOverlayScreen extends Screen {
             // Rotation Easing slider
             yOffset += spacing;
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -718,7 +719,7 @@ public class MenuOverlayScreen extends Screen {
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Rotation Easing"),
@@ -732,7 +733,7 @@ public class MenuOverlayScreen extends Screen {
             // Rotation Speed Limit slider
             yOffset += spacing;
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Speed Limit"), button -> {})
-                    .dimensions(buttonX, centerY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -747,7 +748,7 @@ public class MenuOverlayScreen extends Screen {
             
             this.addDrawableChild(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
-                    centerY + yOffset,
+                    baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
                     Text.literal("Rotation Speed Limit"),
