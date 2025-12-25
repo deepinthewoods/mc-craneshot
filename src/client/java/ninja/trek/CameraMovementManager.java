@@ -304,15 +304,24 @@ public class CameraMovementManager {
                 // Capture the latest freecam transform before disabling the camera system
                 // so the return movement starts exactly from the current freecam state
                 try {
-                    ninja.trek.camera.CameraSystem camSys = ninja.trek.camera.CameraSystem.getInstance();
-                    if (camSys.isCameraActive()) {
-                        ninja.trek.CameraController.freeCamPosition = camSys.getCameraPosition();
-                        ninja.trek.CameraController.freeCamYaw = camSys.getCameraYaw();
-                        ninja.trek.CameraController.freeCamPitch = camSys.getCameraPitch();
-                    } else if (camera != null) {
-                        ninja.trek.CameraController.freeCamPosition = camera.getPos();
-                        ninja.trek.CameraController.freeCamYaw = camera.getYaw();
-                        ninja.trek.CameraController.freeCamPitch = camera.getPitch();
+                    // Check CameraEntity first - when using the dedicated camera entity,
+                    // it holds the actual position, not CameraSystem
+                    ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+                    if (camEnt != null) {
+                        ninja.trek.CameraController.freeCamPosition = new Vec3d(camEnt.getX(), camEnt.getY(), camEnt.getZ());
+                        ninja.trek.CameraController.freeCamYaw = camEnt.getYaw();
+                        ninja.trek.CameraController.freeCamPitch = camEnt.getPitch();
+                    } else {
+                        ninja.trek.camera.CameraSystem camSys = ninja.trek.camera.CameraSystem.getInstance();
+                        if (camSys.isCameraActive()) {
+                            ninja.trek.CameraController.freeCamPosition = camSys.getCameraPosition();
+                            ninja.trek.CameraController.freeCamYaw = camSys.getCameraYaw();
+                            ninja.trek.CameraController.freeCamPitch = camSys.getCameraPitch();
+                        } else if (camera != null) {
+                            ninja.trek.CameraController.freeCamPosition = camera.getPos();
+                            ninja.trek.CameraController.freeCamYaw = camera.getYaw();
+                            ninja.trek.CameraController.freeCamPitch = camera.getPitch();
+                        }
                     }
                 } catch (Throwable ignore) { }
 
