@@ -9,8 +9,10 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -467,42 +469,108 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         }
 
         BlockPos hitPos = hit.getBlockPos();
-        if (hitPos == null || hitPos.getY() != groundPos.getY() + 1) {
+        if (hitPos == null) {
             return best;
         }
 
-        try {
-            BlockState hitState = client.world.getBlockState(hitPos);
-            if (!isAutoJumpStepBlock(client, hitPos, hitState)) {
-                return best;
-            }
-        } catch (Throwable t) {
+        // For horizontal raycasts, check obstacle height at the same horizontal position
+        // but starting from the player's ground level (handles partial blocks at any Y level)
+        BlockPos checkPosAtGround = new BlockPos(hitPos.getX(), groundPos.getY(), hitPos.getZ());
+
+        // Calculate the total height of obstacles from ground level
+        // This handles partial blocks (slabs, hoppers, chests) and stacked blocks (slab on slab)
+        double obstacleHeight = getObstacleHeightAboveGround(client, groundPos, checkPosAtGround);
+
+        // Only jump if obstacle is taller than vanilla player step height (0.6 blocks)
+        // This matches Minecraft's automatic step-up mechanic: players can walk up blocks ≤0.6 without jumping
+        // Examples: slabs (0.5) = walk up, hoppers (0.625) = need jump, chests (0.875) = need jump
+        if (obstacleHeight <= 0.6) {
             return best;
         }
 
-        if (hasCollision(client, hitPos.up(1)) || hasCollision(client, hitPos.up(2))) {
+        // Check that there's enough headroom to jump over the obstacle
+        // We need 2 blocks of clearance above the top of the obstacle
+        int obstacleTopBlockY = groundPos.getY() + (int) Math.ceil(obstacleHeight);
+        BlockPos aboveObstacle1 = new BlockPos(hitPos.getX(), obstacleTopBlockY + 1, hitPos.getZ());
+        BlockPos aboveObstacle2 = new BlockPos(hitPos.getX(), obstacleTopBlockY + 2, hitPos.getZ());
+
+        if (hasCollision(client, aboveObstacle1) || hasCollision(client, aboveObstacle2)) {
             return best;
         }
 
         double hitDist = hit.getPos().distanceTo(rayStart);
-        AutoJumpDecision candidate = new AutoJumpDecision("full_block_step_" + side, hitDist, hitPos);
+        String reason = String.format("step_%s_h%.2f", side, obstacleHeight);
+        AutoJumpDecision candidate = new AutoJumpDecision(reason, hitDist, hitPos);
+
         if (best == null || hitDist < best.distance) {
             return candidate;
         }
         return best;
     }
 
-    private static boolean isAutoJumpStepBlock(MinecraftClient client, BlockPos pos, BlockState state) {
-        if (client == null || client.world == null || state == null || pos == null) {
-            return false;
+    /**
+     * Calculates the total height of obstacles above the ground position.
+     * Scans upward from ground level to detect stacked blocks (e.g., slab on slab, chest on hopper).
+     * Uses actual collision shape heights for accuracy with partial blocks.
+     *
+     * @param client Minecraft client
+     * @param groundPos Player's current ground position
+     * @param checkPos Position to check for obstacles (at ground Y level)
+     * @return Height in blocks above ground level, or 0.0 if no obstacle
+     */
+    private static double getObstacleHeightAboveGround(
+            MinecraftClient client,
+            BlockPos groundPos,
+            BlockPos checkPos) {
+        if (client == null || client.world == null || groundPos == null || checkPos == null) {
+            return 0.0;
         }
-        if (state.isOf(Blocks.DIRT_PATH)) {
-            return true;
+
+        double groundY = groundPos.getY();
+        double maxObstacleY = groundY;
+
+        // Scan upward from ground level to 3 blocks high (handles stacked blocks like slab+slab+slab)
+        for (int dy = 1; dy <= 3; dy++) {
+            BlockPos scanPos = new BlockPos(checkPos.getX(), groundPos.getY() + dy, checkPos.getZ());
+            BlockState state = client.world.getBlockState(scanPos);
+
+            if (state.isAir()) {
+                // No obstacle at this height, continue checking above in case of floating blocks
+                continue;
+            }
+
+            try {
+                VoxelShape collisionShape = state.getCollisionShape(client.world, scanPos);
+
+                if (collisionShape.isEmpty()) {
+                    // Block exists but has no collision (e.g., torch, flower, wheat)
+                    continue;
+                }
+
+                // Get the maximum Y value of the collision shape (top surface)
+                double shapeMaxY = collisionShape.getMax(Direction.Axis.Y);
+
+                // Collision shapes are relative to block position, so add block's Y coordinate
+                double absoluteMaxY = scanPos.getY() + shapeMaxY;
+
+                // Update the maximum obstacle height found
+                if (absoluteMaxY > maxObstacleY) {
+                    maxObstacleY = absoluteMaxY;
+                }
+
+                // If this block is a full cube or reaches block ceiling, stop scanning up
+                // (no point checking above a solid block)
+                if (shapeMaxY >= 0.99) {
+                    break;
+                }
+            } catch (Throwable t) {
+                // If we can't get collision shape, assume no obstacle and continue
+                continue;
+            }
         }
-        if (state.getBlock() instanceof CarpetBlock) {
-            return true;
-        }
-        return state.isFullCube(client.world, pos);
+
+        // Return height difference from ground level
+        return maxObstacleY - groundY;
     }
 
     private static String format3(double v) {

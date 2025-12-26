@@ -32,6 +32,10 @@ public class GeneralMenuSettings {
     private static String targetPlayerName = "";  // Empty = use local player
     private static boolean spectatorFollowEnabled = true;  // Master toggle
 
+    // Minimum speed enforcement settings
+    private static boolean enforceMinimumSpeed = false;
+    private static double minimumSpeedMultiplier = 1.5;  // Default: 1.5x player speed
+
     public static boolean isAutoAdvance() {
         return autoAdvance;
     }
@@ -107,5 +111,15 @@ public class GeneralMenuSettings {
     public static boolean isSpectatorFollowEnabled() { return spectatorFollowEnabled; }
     public static void setSpectatorFollowEnabled(boolean enabled) {
         spectatorFollowEnabled = enabled;
+    }
+
+    // Minimum speed enforcement settings
+    public static boolean isEnforceMinimumSpeed() { return enforceMinimumSpeed; }
+    public static void setEnforceMinimumSpeed(boolean value) { enforceMinimumSpeed = value; }
+
+    public static double getMinimumSpeedMultiplier() { return minimumSpeedMultiplier; }
+    public static void setMinimumSpeedMultiplier(double value) {
+        // Clamp to range 1.0x - 3.0x
+        minimumSpeedMultiplier = Math.max(1.0, Math.min(3.0, value));
     }
 }

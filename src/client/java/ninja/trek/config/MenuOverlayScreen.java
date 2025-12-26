@@ -282,6 +282,45 @@ public class MenuOverlayScreen extends Screen {
 
         yOffset += spacing;
 
+        // Enforce Minimum Speed Checkbox
+        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Enforce Minimum Speed During Return"), this.textRenderer)
+                .pos(buttonX, baseY + yOffset)
+                .checked(GeneralMenuSettings.isEnforceMinimumSpeed())
+                .callback((checkbox, checked) -> {
+                    GeneralMenuSettings.setEnforceMinimumSpeed(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
+        // Minimum Speed Multiplier slider
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Minimum Speed Multiplier"), button -> {})
+                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+        this.addDrawableChild(SettingWidget.createSlider(
+                buttonX + labelWidth + 10,
+                baseY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Minimum Speed Multiplier"),
+                1.0f,
+                3.0f,
+                GeneralMenuSettings.getMinimumSpeedMultiplier(),
+                "minimumSpeedMultiplier",
+                new AbstractMovementSettings() {
+                    @Override
+                    public void updateSetting(String key, Object value) {
+                        if (key.equals("minimumSpeedMultiplier") && value instanceof Number) {
+                            GeneralMenuSettings.setMinimumSpeedMultiplier(((Number) value).doubleValue());
+                            GeneralSettingsIO.saveSettings();
+                        }
+                    }
+                }
+        ));
+
+        yOffset += spacing;
+
         // Use Default Movement When Idle Checkbox
         this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
                 .pos(buttonX, baseY + yOffset)
@@ -695,7 +734,7 @@ public class MenuOverlayScreen extends Screen {
                     BUTTON_HEIGHT,
                     Text.literal("Position Speed Limit"),
                     0.1f,
-                    20.0f,
+                    200.0f,
                     positionSpeedLimit,
                     "positionSpeedLimit",
                     (AbstractMovementSettings)freeCamReturn

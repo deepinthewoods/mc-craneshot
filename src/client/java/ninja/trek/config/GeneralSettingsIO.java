@@ -135,6 +135,10 @@ public class GeneralSettingsIO {
                 settingsObj.addProperty("spectatorFollowEnabled", GeneralMenuSettings.isSpectatorFollowEnabled());
                 settingsObj.addProperty("targetPlayerName", GeneralMenuSettings.getTargetPlayerName());
 
+                // Save minimum speed enforcement settings
+                settingsObj.addProperty("enforceMinimumSpeed", GeneralMenuSettings.isEnforceMinimumSpeed());
+                settingsObj.addProperty("minimumSpeedMultiplier", GeneralMenuSettings.getMinimumSpeedMultiplier());
+
                 // Save expanded settings state
                 JsonArray expandedSettingsArray = new JsonArray();
                 for (String key : MenuOverlayScreen.getExpandedSettings()) {
@@ -355,6 +359,23 @@ public class GeneralSettingsIO {
                 try {
                     GeneralMenuSettings.setTargetPlayerName(
                         settingsObj.get("targetPlayerName").getAsString()
+                    );
+                } catch (Exception ignored) {}
+            }
+
+            // Load minimum speed enforcement settings
+            if (settingsObj.has("enforceMinimumSpeed")) {
+                try {
+                    GeneralMenuSettings.setEnforceMinimumSpeed(
+                        settingsObj.get("enforceMinimumSpeed").getAsBoolean()
+                    );
+                } catch (Exception ignored) {}
+            }
+
+            if (settingsObj.has("minimumSpeedMultiplier")) {
+                try {
+                    GeneralMenuSettings.setMinimumSpeedMultiplier(
+                        settingsObj.get("minimumSpeedMultiplier").getAsDouble()
                     );
                 } catch (Exception ignored) {}
             }
