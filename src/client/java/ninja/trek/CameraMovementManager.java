@@ -644,9 +644,18 @@ public class CameraMovementManager {
         }
 
         // Always update perspective based on distance threshold
-        // This ensures player model renders correctly in all camera modes including freecam
-        double dist = adjustedTarget.getPosition().distanceTo(client.player.getEyePos());
+        // Use render camera position when custom camera is active to avoid stale targets.
         CameraSystem cs = CameraSystem.getInstance();
+        Vec3d perspectivePos = adjustedTarget.getPosition();
+        if (cs.isCameraActive()) {
+            Camera renderCamera = client.gameRenderer.getCamera();
+            if (renderCamera != null) {
+                perspectivePos = renderCamera.getPos();
+            } else {
+                perspectivePos = cs.getCameraPosition();
+            }
+        }
+        double dist = perspectivePos.distanceTo(client.player.getEyePos());
         if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
 //                cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
