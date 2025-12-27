@@ -643,23 +643,17 @@ public class CameraMovementManager {
             }
         }
 
-        // Third-person display switching (hands/body) centralized here
-        // Only when not in freecam/key-rotation modes
-        boolean freeCamKeys = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                              CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
-        boolean freeCamMouse = CameraController.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.ROTATE_CAMERA ||
-                               CameraController.currentMouseMoveMode == AbstractMovementSettings.POST_MOVE_MOUSE.NODE_EDIT;
-        if (!freeCamKeys && !freeCamMouse) {
-            double dist = adjustedTarget.getPosition().distanceTo(client.player.getEyePos());
-            CameraSystem cs = CameraSystem.getInstance();
-            if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
-                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+        // Always update perspective based on distance threshold
+        // This ensures player model renders correctly in all camera modes including freecam
+        double dist = adjustedTarget.getPosition().distanceTo(client.player.getEyePos());
+        CameraSystem cs = CameraSystem.getInstance();
+        if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
+            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
 //                cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
-            } else {
-                client.options.setPerspective(Perspective.FIRST_PERSON);
+        } else {
+            client.options.setPerspective(Perspective.FIRST_PERSON);
 
 //                cs.activateCamera(CameraSystem.CameraMode.FIRST_PERSON);
-            }
         }
 
         // Remove per-frame status logging to reduce noise; rely on targeted Diag logs.
