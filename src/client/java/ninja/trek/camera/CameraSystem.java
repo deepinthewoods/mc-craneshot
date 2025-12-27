@@ -398,7 +398,7 @@ public class CameraSystem {
             this.disableChunkCulling = disableChunkCulling;
         }
         public static final CameraMode THIRD_PERSON = new CameraMode(true, true, true);
-        public static final CameraMode FREE_CAMERA = new CameraMode(true, false, true);
+        public static final CameraMode FREE_CAMERA = new CameraMode(true, true, true);
         public static final CameraMode FIRST_PERSON = new CameraMode(false, false, false);
         public static final CameraMode NODE_DRIVEN = new CameraMode(true, true, true);
     }

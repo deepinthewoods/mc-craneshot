@@ -40,7 +40,6 @@ public class GeneralSettingsIO {
                 freeCamObj.addProperty("moveSpeed", freeCam.getMoveSpeed());
                 freeCamObj.addProperty("acceleration", freeCam.getAcceleration());
                 freeCamObj.addProperty("deceleration", freeCam.getDeceleration());
-                freeCamObj.addProperty("movementMode", freeCam.getMovementMode().name());
                 freeCamObj.addProperty("rotationEasing", freeCam.getRotationEasing());
                 freeCamObj.addProperty("rotationSpeedLimit", freeCam.getRotationSpeedLimit());
                 settingsObj.add("freeCam", freeCamObj);
@@ -201,13 +200,7 @@ public class GeneralSettingsIO {
                 if (freeCamObj.has("deceleration")) {
                     freeCam.setDeceleration(freeCamObj.get("deceleration").getAsFloat());
                 }
-                if (freeCamObj.has("movementMode")) {
-                    freeCam.setMovementMode(
-                            FreeCamSettings.MovementMode.valueOf(
-                                    freeCamObj.get("movementMode").getAsString()
-                            )
-                    );
-                }
+                // Ignore old movementMode field for backwards compatibility
                 if (freeCamObj.has("rotationEasing")) {
                     freeCam.setRotationEasing(freeCamObj.get("rotationEasing").getAsFloat());
                 }

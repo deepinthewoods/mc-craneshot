@@ -520,23 +520,6 @@ public class MenuOverlayScreen extends Screen {
 
             yOffset += spacing;
 
-            // Movement Mode Button
-            FreeCamSettings.MovementMode currentMode = GeneralMenuSettings.getFreeCamSettings().getMovementMode();
-            this.addDrawableChild(ButtonWidget.builder(
-                            Text.literal("Movement Mode: " + currentMode.name()),
-                            button -> {
-                                FreeCamSettings.MovementMode[] modes =
-                                        FreeCamSettings.MovementMode.values();
-                                int nextOrdinal = (currentMode.ordinal() + 1) % modes.length;
-                                GeneralMenuSettings.getFreeCamSettings().setMovementMode(modes[nextOrdinal]);
-                                button.setMessage(Text.literal("Movement Mode: " + modes[nextOrdinal].name()));
-                            })
-                    .dimensions(buttonX, baseY + yOffset, buttonWidth, 20)
-                    .build()
-            );
-
-            yOffset += spacing;
-
             // Rotation Easing Slider
             float currentRotationEasing = GeneralMenuSettings.getFreeCamSettings().getRotationEasing();
             this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})

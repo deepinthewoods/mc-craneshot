@@ -96,8 +96,7 @@ public class CameraEntity extends ClientPlayerEntity {
      */
     private static Vec3d calculatePlayerMotionWithDeceleration(Vec3d motion, float acceleration, float deceleration) {
         MinecraftClient mc = MinecraftClient.getInstance();
-        FreeCamSettings.MovementMode movementMode = GeneralMenuSettings.getFreeCamSettings().getMovementMode();
-        
+
         double x = 0;
         double y = 0;
         double z = 0;
@@ -167,26 +166,33 @@ public class CameraEntity extends ClientPlayerEntity {
     private void handleMotion(double forward, double up, double strafe) {
         float yaw = this.getYaw();
         double scale = getMoveSpeed();
-        
-        if (GeneralMenuSettings.getFreeCamSettings().getMovementMode() == FreeCamSettings.MovementMode.CAMERA) {
+
+        // Use POST_MOVE_KEYS setting from CameraController to determine movement mode
+        // MOVE_CAMERA_FLAT and MOVE_CAMERA_FREE both use camera-relative movement
+        boolean useCameraRelative = (ninja.trek.CameraController.currentKeyMoveMode ==
+                ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                ninja.trek.CameraController.currentKeyMoveMode ==
+                ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+
+        if (useCameraRelative) {
             // Camera-relative movement
             double xFactor = Math.sin(yaw * Math.PI / 180.0);
             double zFactor = Math.cos(yaw * Math.PI / 180.0);
-            
+
             double x = (strafe * zFactor - forward * xFactor) * scale;
             double y = up * scale;
             double z = (forward * zFactor + strafe * xFactor) * scale;
-            
+
             this.setVelocity(new Vec3d(x, y, z));
         } else {
-            // Axis-aligned movement
+            // Axis-aligned movement (fallback for other modes or NONE)
             double x = strafe * scale;
             double y = up * scale;
             double z = forward * scale;
-            
+
             this.setVelocity(new Vec3d(x, y, z));
         }
-        
+
         this.move(MovementType.SELF, this.getVelocity());
     }
 

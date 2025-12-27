@@ -4,14 +4,8 @@ public class FreeCamSettings {
     private float moveSpeed = 0.2f;
     private float acceleration = 0.1f;
     private float deceleration = 0.2f;
-    private MovementMode movementMode = MovementMode.CAMERA;
     private float rotationEasing = 0.1f;
     private float rotationSpeedLimit = 500.0f;
-
-    public enum MovementMode {
-        CAMERA,    // Movement relative to camera direction
-        AXIS_ALIGNED  // Movement along world axes
-    }
 
     public float getMoveSpeed() {
         return moveSpeed;
@@ -35,14 +29,6 @@ public class FreeCamSettings {
 
     public void setDeceleration(float dec) {
         deceleration = dec;
-    }
-
-    public MovementMode getMovementMode() {
-        return movementMode;
-    }
-
-    public void setMovementMode(MovementMode mode) {
-        movementMode = mode;
     }
 
     public float getRotationEasing() {
