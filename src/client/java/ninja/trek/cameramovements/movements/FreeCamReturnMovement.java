@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ninja.trek.CameraController;
+import ninja.trek.CraneshotClient;
  
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -46,6 +47,10 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
+        // Force return target to player's head rotation for consistent return
+        endTarget = END_TARGET.HEAD_BACK;
+        CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(this);
+
         // Start from the exact freecam state tracked by controller
         Vec3d startPos = CameraController.freeCamPosition;
         float startYaw = CameraController.freeCamYaw;
@@ -136,8 +141,6 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         boolean positionComplete = posRemaining < 0.005 || (finalInterpActive && finalInterpT >= 0.9999);
         boolean fovComplete = Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
         isComplete = positionComplete && fovComplete;
-        // No completion log
-
         return new MovementState(current, isComplete);
     }
 
