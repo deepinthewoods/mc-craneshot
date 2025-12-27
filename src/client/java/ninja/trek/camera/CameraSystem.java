@@ -31,7 +31,11 @@ public class CameraSystem {
     private boolean disableChunkCulling = false;
     private Entity originalCameraEntity = null;
     private boolean originalChunkCulling = true;
-    
+
+    // Rotation easing state
+    private float targetYaw = 0f;      // Where mouse wants us to look
+    private float targetPitch = 0f;
+
     // Movement state
     private Vec3d cameraVelocity = Vec3d.ZERO;
     
@@ -83,11 +87,15 @@ public class CameraSystem {
                 cameraPosition = currentCameraPos;
                 cameraYaw = currentYaw;
                 cameraPitch = currentPitch;
+                targetYaw = currentYaw;      // Initialize target to current
+                targetPitch = currentPitch;  // Initialize target to current
             } else if (originalCameraEntity != null) {
                 // Fallback to entity position
                 cameraPosition = originalCameraEntity.getEyePos();
                 cameraYaw = originalCameraEntity.getYaw();
                 cameraPitch = originalCameraEntity.getPitch();
+                targetYaw = cameraYaw;       // Initialize target to current
+                targetPitch = cameraPitch;   // Initialize target to current
             }
             
             // Set camera flags based on mode
@@ -101,6 +109,8 @@ public class CameraSystem {
             // Use a dedicated camera entity for free camera, otherwise detach
             if (mode == CameraMode.FREE_CAMERA) {
                 ninja.trek.util.CameraEntity.setCameraState(true);
+                // Immediately sync the ghost to our position
+                syncCameraEntity();
             } else {
                 mc.setCameraEntity(null);
             }
@@ -166,13 +176,8 @@ public class CameraSystem {
             return;
         }
 
-        // When using the dedicated camera entity, vanilla handles transform; skip manual override
-        if (ninja.trek.util.CameraEntity.getCamera() != null) {
-            // Dedicated camera entity drives pose; skip manual override
-            return;
-        }
-        // Apply immediate transform when actively controlling Camera
-        // (no per-frame logs; only unexpected conditions are logged)
+        // Always apply our state to the Camera object
+        // CameraEntity is just a ghost for chunk rendering
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
     }
@@ -260,27 +265,72 @@ public class CameraSystem {
     }
 
     /**
-     * Mouse rotation update.
+     * Mouse rotation update - accumulates into target angles for easing.
      */
     public void updateRotation(double deltaX, double deltaY, double sensitivity) {
         if (!cameraActive) return;
-        cameraYaw += deltaX * sensitivity;
+
+        // Accumulate into target angles (not current angles)
+        targetYaw += deltaX * sensitivity;
+        targetPitch = (float) MathHelper.clamp(targetPitch - deltaY * sensitivity, -90.0f, 90.0f);
+
+        // Normalize targetYaw
+        while (targetYaw > 360.0f) targetYaw -= 360.0f;
+        while (targetYaw < 0.0f) targetYaw += 360.0f;
+    }
+
+    /**
+     * Applies rotation easing from current angles toward target angles.
+     * Similar to FollowMovement.easedAngle() - calculates error and applies easing factor.
+     */
+    public void applyRotationEasing(float deltaSeconds) {
+        if (!cameraActive) return;
+
+        ninja.trek.config.FreeCamSettings settings = ninja.trek.config.GeneralMenuSettings.getFreeCamSettings();
+        float easingFactor = settings.getRotationEasing();
+        float speedLimit = settings.getRotationSpeedLimit();
+
+        // Ease yaw toward target
+        float yawError = targetYaw - cameraYaw;
+        // Normalize error to [-180, 180] for shortest rotation path
+        while (yawError > 180) yawError -= 360;
+        while (yawError < -180) yawError += 360;
+
+        float yawSpeed = yawError * easingFactor;
+        float maxYawChange = speedLimit * deltaSeconds;
+        if (Math.abs(yawSpeed) > maxYawChange) {
+            yawSpeed = Math.signum(yawSpeed) * maxYawChange;
+        }
+        cameraYaw += yawSpeed;
+
+        // Normalize cameraYaw
         while (cameraYaw > 360.0f) cameraYaw -= 360.0f;
         while (cameraYaw < 0.0f) cameraYaw += 360.0f;
-        cameraPitch = (float) MathHelper.clamp(cameraPitch - deltaY * sensitivity, -90.0f, 90.0f);
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc != null) {
-            Camera camera = mc.gameRenderer.getCamera();
-            if (camera != null) updateCamera(camera);
+
+        // Ease pitch toward target
+        float pitchError = targetPitch - cameraPitch;
+        float pitchSpeed = pitchError * easingFactor;
+        float maxPitchChange = speedLimit * deltaSeconds;
+        if (Math.abs(pitchSpeed) > maxPitchChange) {
+            pitchSpeed = Math.signum(pitchSpeed) * maxPitchChange;
+        }
+        cameraPitch += pitchSpeed;
+    }
+
+    /**
+     * Syncs the ghost CameraEntity to match CameraSystem's state.
+     * CameraEntity is just a dummy for chunk rendering.
+     */
+    public void syncCameraEntity() {
+        ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+        if (camEnt != null) {
+            camEnt.setPos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            camEnt.setCameraRotations(cameraYaw, cameraPitch);
+            camEnt.setVelocity(Vec3d.ZERO); // Prevent physics interference
         }
     }
 
     public void setCameraPosition(Vec3d position) {
-        if (ninja.trek.util.CameraEntity.getCamera() != null) {
-            // When using dedicated camera entity, let vanilla handle camera transform
-            this.cameraPosition = position;
-            return;
-        }
         if (position == null) return;
         this.cameraPosition = position;
         if (cameraActive) {
@@ -293,13 +343,11 @@ public class CameraSystem {
     }
 
     public void setCameraRotation(float yaw, float pitch) {
-        if (ninja.trek.util.CameraEntity.getCamera() != null) {
-            this.cameraYaw = yaw;
-            this.cameraPitch = pitch;
-            return;
-        }
         this.cameraYaw = yaw;
         this.cameraPitch = pitch;
+        this.targetYaw = yaw;      // Keep target in sync when setting rotation
+        this.targetPitch = pitch;  // Keep target in sync when setting rotation
+
         if (cameraActive) {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc != null) {

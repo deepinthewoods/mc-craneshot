@@ -592,7 +592,8 @@ public class CameraController {
                 }
                 // Avoid per-frame logs; rely on Diag guards inside CameraSystem
                 else if (entityFreecam) {
-                    // If using the dedicated camera entity: do not push manual camera pos/rot
+                    // Route mouse input to CameraSystem (not CameraEntity)
+                    // CameraEntity is just a ghost for chunk rendering
                     if (rotating && client.mouse instanceof IMouseMixin) {
                         IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
                         double deltaX = mouseMixin.getCapturedDeltaX();
@@ -604,11 +605,12 @@ public class CameraController {
                             if (baseTarget != null) {
                                 calculatedSensitivity *= baseTarget.getFovMultiplier();
                             }
-                            ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
-                            if (camEnt != null) {
-                                // Invert Y like vanilla: moving mouse up should decrease pitch
-                                camEnt.updateCameraRotations((float)(deltaX * calculatedSensitivity), (float)(-deltaY * calculatedSensitivity));
-                            }
+                            // Route to CameraSystem instead of CameraEntity
+                            cameraSystem.updateRotation(
+                                deltaX * calculatedSensitivity * 0.55D,
+                                deltaY * calculatedSensitivity * 0.55D,
+                                1.0
+                            );
                         }
                     }
                 } else {
@@ -636,10 +638,12 @@ public class CameraController {
                     }
                 }
 
-                // Let the camera system update the camera (if not using CameraEntity)
-                if (!entityFreecam || cameraActivatedByNodes) {
-                    cameraSystem.updateCamera(camera);
-                }
+                // Apply rotation easing and update camera
+                cameraSystem.applyRotationEasing(deltaSeconds);
+                cameraSystem.updateCamera(camera);
+
+                // Sync the ghost CameraEntity to match CameraSystem
+                cameraSystem.syncCameraEntity();
 
                 // Update our tracking variables for legacy code support
                 freeCamPosition = cameraSystem.getCameraPosition();

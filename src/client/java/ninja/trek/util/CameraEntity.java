@@ -213,24 +213,17 @@ public class CameraEntity extends ClientPlayerEntity {
         this.targetPitch = pitch;
     }
 
+    /**
+     * Updates camera rotations by applying deltas directly.
+     * NOTE: This is a legacy method. CameraEntity is now a "ghost" that mirrors
+     * CameraSystem's state. Rotation easing is handled in CameraSystem, not here.
+     */
     public void updateCameraRotations(float yawChange, float pitchChange) {
-        FreeCamSettings settings = GeneralMenuSettings.getFreeCamSettings();
-        float easingFactor = settings.getRotationEasing();
-
-        // Apply easing: interpolate between no change and full change
-        float easedYawChange = yawChange * easingFactor;
-        float easedPitchChange = pitchChange * easingFactor;
-
-        float newYaw = this.getYaw() + easedYawChange;
-        float newPitch = MathHelper.clamp(this.getPitch() + easedPitchChange, -90F, 90F);
-
-        this.setYaw(newYaw);
-        this.setPitch(newPitch);
-        this.headYaw = newYaw;
-
-        // Keep targets in sync
-        this.targetYaw = newYaw;
-        this.targetPitch = newPitch;
+        // No easing - just apply directly
+        // CameraSystem handles all easing logic now
+        float newYaw = this.getYaw() + yawChange;
+        float newPitch = MathHelper.clamp(this.getPitch() + pitchChange, -90F, 90F);
+        setCameraRotations(newYaw, newPitch);
     }
 
     private static CameraEntity createCameraEntity(MinecraftClient mc) {
