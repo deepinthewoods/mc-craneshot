@@ -534,6 +534,60 @@ public class MenuOverlayScreen extends Screen {
                     .dimensions(buttonX, baseY + yOffset, buttonWidth, 20)
                     .build()
             );
+
+            yOffset += spacing;
+
+            // Rotation Easing Slider
+            float currentRotationEasing = GeneralMenuSettings.getFreeCamSettings().getRotationEasing();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    baseY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Rotation Easing"),
+                    0.01f,
+                    1.0f,
+                    currentRotationEasing,
+                    "rotationEasing",
+                    new AbstractMovementSettings() {
+                        @Override
+                        public void updateSetting(String key, Object value) {
+                            if (key.equals("rotationEasing") && value instanceof Number) {
+                                GeneralMenuSettings.getFreeCamSettings().setRotationEasing(((Number)value).floatValue());
+                            }
+                        }
+                    }
+            ));
+
+            yOffset += spacing;
+
+            // Rotation Speed Limit Slider
+            float currentRotationSpeedLimit = GeneralMenuSettings.getFreeCamSettings().getRotationSpeedLimit();
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Speed Limit"), button -> {})
+                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+                    .build());
+            this.addDrawableChild(SettingWidget.createSlider(
+                    buttonX + labelWidth + 10,
+                    baseY + yOffset,
+                    controlWidth,
+                    BUTTON_HEIGHT,
+                    Text.literal("Rotation Speed Limit"),
+                    0.1f,
+                    1000.0f,
+                    currentRotationSpeedLimit,
+                    "rotationSpeedLimit",
+                    new AbstractMovementSettings() {
+                        @Override
+                        public void updateSetting(String key, Object value) {
+                            if (key.equals("rotationSpeedLimit") && value instanceof Number) {
+                                GeneralMenuSettings.getFreeCamSettings().setRotationSpeedLimit(((Number)value).floatValue());
+                            }
+                        }
+                    }
+            ));
         }
         
         // Add collapsible Default Idle Movement Settings section

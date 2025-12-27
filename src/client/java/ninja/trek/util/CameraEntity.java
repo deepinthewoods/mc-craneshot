@@ -33,6 +33,9 @@ public class CameraEntity extends ClientPlayerEntity {
     private static boolean sprinting;
     private static boolean originalCameraWasPlayer;
 
+    private float targetYaw = 0f;
+    private float targetPitch = 0f;
+
     private CameraEntity(MinecraftClient mc, ClientWorld world,
                          ClientPlayNetworkHandler netHandler, StatHandler stats,
                          ClientRecipeBook recipeBook) {
@@ -206,16 +209,28 @@ public class CameraEntity extends ClientPlayerEntity {
         this.setYaw(yaw);
         this.setPitch(pitch);
         this.headYaw = yaw;
+        this.targetYaw = yaw;
+        this.targetPitch = pitch;
     }
 
     public void updateCameraRotations(float yawChange, float pitchChange) {
-        float yaw = this.getYaw() + yawChange * 0.15F;
-        float pitch = MathHelper.clamp(this.getPitch() + pitchChange * 0.15F, -90F, 90F);
+        FreeCamSettings settings = GeneralMenuSettings.getFreeCamSettings();
+        float easingFactor = settings.getRotationEasing();
 
-        this.setYaw(yaw);
-        this.setPitch(pitch);
+        // Apply easing: interpolate between no change and full change
+        float easedYawChange = yawChange * easingFactor;
+        float easedPitchChange = pitchChange * easingFactor;
 
-        this.setCameraRotations(yaw, pitch);
+        float newYaw = this.getYaw() + easedYawChange;
+        float newPitch = MathHelper.clamp(this.getPitch() + easedPitchChange, -90F, 90F);
+
+        this.setYaw(newYaw);
+        this.setPitch(newPitch);
+        this.headYaw = newYaw;
+
+        // Keep targets in sync
+        this.targetYaw = newYaw;
+        this.targetPitch = newPitch;
     }
 
     private static CameraEntity createCameraEntity(MinecraftClient mc) {
@@ -254,6 +269,8 @@ public class CameraEntity extends ClientPlayerEntity {
         camera.setPos(entityPos.getX(), entityPos.getY(), entityPos.getZ());
         camera.setYaw(yaw);
         camera.setPitch(pitch);
+        camera.targetYaw = yaw;
+        camera.targetPitch = pitch;
         camera.setVelocity(Vec3d.ZERO);
 
         return camera;

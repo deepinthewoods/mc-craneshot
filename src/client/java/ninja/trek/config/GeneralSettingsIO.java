@@ -41,6 +41,8 @@ public class GeneralSettingsIO {
                 freeCamObj.addProperty("acceleration", freeCam.getAcceleration());
                 freeCamObj.addProperty("deceleration", freeCam.getDeceleration());
                 freeCamObj.addProperty("movementMode", freeCam.getMovementMode().name());
+                freeCamObj.addProperty("rotationEasing", freeCam.getRotationEasing());
+                freeCamObj.addProperty("rotationSpeedLimit", freeCam.getRotationSpeedLimit());
                 settingsObj.add("freeCam", freeCamObj);
 
                 // Save Node Editor sensitivity
@@ -205,6 +207,12 @@ public class GeneralSettingsIO {
                                     freeCamObj.get("movementMode").getAsString()
                             )
                     );
+                }
+                if (freeCamObj.has("rotationEasing")) {
+                    freeCam.setRotationEasing(freeCamObj.get("rotationEasing").getAsFloat());
+                }
+                if (freeCamObj.has("rotationSpeedLimit")) {
+                    freeCam.setRotationSpeedLimit(freeCamObj.get("rotationSpeedLimit").getAsFloat());
                 }
             }
             
