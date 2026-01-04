@@ -89,13 +89,13 @@ public class CameraSystem {
     public void activateCamera(CameraMode mode) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null) return;
-        
+
         // Get the current camera if available
         Camera currentCamera = mc.gameRenderer.getCamera();
         Vec3d currentCameraPos = null;
         float currentYaw = 0;
         float currentPitch = 0;
-        
+
         // Capture current camera position if possible
         if (currentCamera != null) {
             currentCameraPos = currentCamera.getPos();
@@ -103,7 +103,7 @@ public class CameraSystem {
             currentPitch = currentCamera.getPitch();
             // logging removed
         }
-        
+
         // Only activate if not already active
         if (!cameraActive) {
             // Store original state
@@ -446,9 +446,11 @@ public class CameraSystem {
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null) {
-            // Use interpolated position for consistent rendering
-            double distance = getVisualDistanceToPlayer();
-            return distance < PLAYER_RENDER_THRESHOLD;
+            // Hands and player model are mutually exclusive states:
+            // - First person (close): Show hands, hide player model
+            // - Third person (far): Hide hands, show player model
+            // Use the OPPOSITE of player model visibility for consistency with hysteresis
+            return !isPlayerModelCurrentlyVisible;
         }
         return shouldRenderHands;
     }

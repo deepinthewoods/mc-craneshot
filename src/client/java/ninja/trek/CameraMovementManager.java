@@ -28,6 +28,11 @@ public class CameraMovementManager {
     private CameraTarget baseTarget;
     private boolean isOut;
 
+    // Perspective hysteresis - prevents flickering when distance oscillates near threshold
+    private boolean isCurrentlyThirdPerson = false;
+    private static final float DISTANCE_SWITCH_TO_THIRD_PERSON = 1.2f;  // Show player model, hide hands
+    private static final float DISTANCE_SWITCH_TO_FIRST_PERSON = 0.8f;  // Hide player model, show hands
+
     // For handling free camera return
     private boolean inFreeCamReturnPhase = false;
 
@@ -129,12 +134,18 @@ public class CameraMovementManager {
         isOut = false;
         baseTarget = null;
 
+        // Deactivate camera system when cancelling movements
+        ninja.trek.camera.CameraSystem.getInstance().deactivateCamera();
+
         isZoomActive = false;
         zoomOverlay = null;
 
         toggledStates.clear();
         hasScrolledDuringPress.clear();
         keyPressStartTimes.clear();
+
+        // Reset perspective hysteresis state
+        isCurrentlyThirdPerson = false;
 
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         CraneshotClient.CAMERA_CONTROLLER.onComplete();
@@ -598,6 +609,10 @@ public class CameraMovementManager {
                 activeMovement = idle;
                 activeMovementSlot = null;
                 isOut = false;
+
+                // Activate CameraSystem for rendering control
+                // Use THIRD_PERSON mode (shows player model) since default idle can have varying distance
+                ninja.trek.camera.CameraSystem.getInstance().activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
             } else {
                 // When no active movement and feature disabled, release control
                 return null;
@@ -634,14 +649,28 @@ public class CameraMovementManager {
             }
         }
 
-        // Always update perspective based on distance threshold
-        // Use the new target position to avoid one-frame lag during rapid movement (e.g., falling)
-        Vec3d perspectivePos = adjustedTarget.getPosition();
-        double dist = perspectivePos.distanceTo(client.player.getEyePos());
-        if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
-            client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+        // Update perspective based on distance threshold using interpolated positions
+        // Use CameraSystem's visual distance which uses interpolated player position
+        // to match what's actually rendered on screen (prevents flickering at high speeds)
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        double dist = cameraSystem.getVisualDistanceToPlayer();
+
+        // Apply hysteresis: use different thresholds depending on current state
+        // This prevents rapid switching when distance oscillates around a single threshold
+        if (isCurrentlyThirdPerson) {
+            // Currently in third-person - only switch to first-person if we get close enough
+            if (dist < DISTANCE_SWITCH_TO_FIRST_PERSON) {
+                isCurrentlyThirdPerson = false;
+                client.options.setPerspective(Perspective.FIRST_PERSON);
+            }
+            // else: stay in third-person
         } else {
-            client.options.setPerspective(Perspective.FIRST_PERSON);
+            // Currently in first-person - only switch to third-person if we get far enough
+            if (dist >= DISTANCE_SWITCH_TO_THIRD_PERSON) {
+                isCurrentlyThirdPerson = true;
+                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+            }
+            // else: stay in first-person
         }
 
         // Remove per-frame status logging to reduce noise; rely on targeted Diag logs.
