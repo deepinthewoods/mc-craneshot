@@ -4,6 +4,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.registry.RegistryKey;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -120,7 +121,7 @@ public class CraneShotEventHandler {
     }
 
     private static void handleDimensionChange(MinecraftClient client, Camera camera) {
-        if (client == null || client.world == null) {
+        if (client == null || client.world == null || client.player == null) {
             lastDimension = null;
             return;
         }
@@ -128,8 +129,30 @@ public class CraneShotEventHandler {
         RegistryKey<World> currentDimension = client.world.getRegistryKey();
 
         if (lastDimension != null && !lastDimension.equals(currentDimension)) {
-            // Dimension changed - cancel all camera movements
-            CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+            // Dimension changed - snap camera to player's new position
+            // This prevents the camera from having to travel massive distances
+            Vec3d playerEyePos = client.player.getEyePos();
+            float playerYaw = client.player.getYaw();
+            float playerPitch = client.player.getPitch();
+
+            // Snap CameraEntity if it exists
+            ninja.trek.util.CameraEntity cameraEntity = ninja.trek.util.CameraEntity.getCamera();
+            if (cameraEntity != null) {
+                cameraEntity.setPos(playerEyePos.x, playerEyePos.y, playerEyePos.z);
+                cameraEntity.setYaw(playerYaw);
+                cameraEntity.setPitch(playerPitch);
+            }
+
+            // Snap CameraSystem position if active
+            ninja.trek.camera.CameraSystem cameraSystem = ninja.trek.camera.CameraSystem.getInstance();
+            if (cameraSystem.isCameraActive()) {
+                cameraSystem.setCameraPosition(playerEyePos);
+                cameraSystem.setCameraRotation(playerYaw, playerPitch);
+                cameraSystem.resetVelocity(); // Reset any residual velocity from before portal
+            }
+
+            // Reset the movement manager's base target to prevent it from targeting the old position
+            CraneshotClient.MOVEMENT_MANAGER.resetBaseTarget();
         }
 
         lastDimension = currentDimension;

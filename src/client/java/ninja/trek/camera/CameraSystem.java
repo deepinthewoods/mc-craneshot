@@ -399,6 +399,10 @@ public class CameraSystem {
     public float getCameraPitch() { return cameraPitch; }
     public boolean isCameraActive() { return cameraActive; }
 
+    public void resetVelocity() {
+        this.cameraVelocity = Vec3d.ZERO;
+    }
+
     /**
      * Updates the cached interpolated player position.
      * This should be called once per frame BEFORE any rendering decisions are made.

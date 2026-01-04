@@ -151,6 +151,14 @@ public class CameraMovementManager {
         CraneshotClient.CAMERA_CONTROLLER.onComplete();
     }
 
+    /**
+     * Resets the base target without deactivating the camera or canceling movements.
+     * Used during dimension changes to prevent the camera from targeting old positions.
+     */
+    public void resetBaseTarget() {
+        baseTarget = null;
+    }
+
     public List<ICameraMovement> getAvailableMovementsForSlot(int slotIndex) {
         if (slotIndex >= 0 && slotIndex < slots.size()) {
             return new ArrayList<>(slots.get(slotIndex));
