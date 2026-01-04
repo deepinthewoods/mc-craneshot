@@ -14,13 +14,37 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Central class that manages all camera behavior.
  * This class coordinates camera position, rotation, rendering, and collision.
+ *
+ * IMPORTANT: Position Coordinate System Convention
+ * ================================================
+ * This codebase uses TWO types of positions:
+ *
+ * 1. RAW positions (entity.getPos(), entity.getEyePos()):
+ *    - Updated 20 times per second (game tick)
+ *    - Used for game logic (collision, AI, physics)
+ *    - NOT suitable for rendering or visual decisions
+ *
+ * 2. INTERPOLATED positions (entity.getCameraPosVec(tickDelta)):
+ *    - Interpolated between ticks for smooth 60fps+ rendering
+ *    - Used for ALL rendering and visual decisions
+ *    - REQUIRED for camera calculations and distance checks
+ *
+ * RULE: If a value is used for rendering decisions (like shouldRenderPlayerModel),
+ *       it MUST use interpolated positions to match what's visually on screen.
+ *
+ * Mixing raw and interpolated positions causes visual glitches during fast
+ * movement (falling, sprinting, elytra flight).
  */
 public class CameraSystem {
     private static CameraSystem instance;
-    
-    // Rendering threshold constant - if camera is closer than this, render arms; otherwise render body model
+
+    // Rendering threshold constants with hysteresis to prevent flickering
+    // Hysteresis: Use different thresholds for showing vs hiding to create a buffer zone
+    private static final float DISTANCE_SHOW_PLAYER_MODEL = 1.2f;  // Switch from first-person to third-person
+    private static final float DISTANCE_HIDE_PLAYER_MODEL = 0.8f;  // Switch from third-person to first-person
+    // Legacy threshold (kept for reference, but hysteresis values are used in logic)
     public static final float PLAYER_RENDER_THRESHOLD = 1.0f;
-    
+
     // Camera state
     private boolean cameraActive = false;
     private Vec3d cameraPosition = Vec3d.ZERO;
@@ -31,6 +55,12 @@ public class CameraSystem {
     private boolean disableChunkCulling = false;
     private Entity originalCameraEntity = null;
     private boolean originalChunkCulling = true;
+
+    // Interpolated player position (updated once per frame for consistent rendering decisions)
+    private Vec3d interpolatedPlayerPosition = null;
+
+    // Hysteresis state for player model visibility
+    private boolean isPlayerModelCurrentlyVisible = true;
 
     // Rotation easing state
     private float targetYaw = 0f;      // Where mouse wants us to look
@@ -165,6 +195,8 @@ public class CameraSystem {
         shouldRenderPlayerModel = true;
         disableChunkCulling = false;
         originalCameraEntity = null;
+        interpolatedPlayerPosition = null;
+        isPlayerModelCurrentlyVisible = true;
     }
 
     /**
@@ -367,22 +399,84 @@ public class CameraSystem {
     public float getCameraPitch() { return cameraPitch; }
     public boolean isCameraActive() { return cameraActive; }
 
+    /**
+     * Updates the cached interpolated player position.
+     * This should be called once per frame BEFORE any rendering decisions are made.
+     *
+     * @param position The player's interpolated eye position from getCameraPosVec(tickDelta)
+     */
+    public void updateInterpolatedPlayerPosition(Vec3d position) {
+        this.interpolatedPlayerPosition = position;
+    }
+
+    /**
+     * Gets the player position for rendering decisions.
+     * ALWAYS uses interpolated position to match what's visually on screen.
+     *
+     * @return The interpolated player position, or a fallback if not available
+     */
+    private Vec3d getPlayerPositionForRendering() {
+        if (interpolatedPlayerPosition != null) {
+            return interpolatedPlayerPosition;
+        }
+
+        // Fallback: use raw position (should rarely happen)
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player != null) {
+            return mc.player.getEyePos();
+        }
+
+        return Vec3d.ZERO;
+    }
+
+    /**
+     * Gets the visual distance from camera to player (using interpolated positions).
+     * Use this for any distance-based rendering decisions.
+     *
+     * @return The distance in blocks between camera and player
+     */
+    public double getVisualDistanceToPlayer() {
+        Vec3d playerPos = getPlayerPositionForRendering();
+        return cameraPosition.distanceTo(playerPos);
+    }
+
     public boolean shouldRenderHands() {
         if (!shouldRenderHands) return false;
+        if (!cameraActive) return shouldRenderHands;
+
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null && cameraActive) {
-            double d = cameraPosition.distanceTo(mc.player.getEyePos());
-            return d < PLAYER_RENDER_THRESHOLD;
+        if (mc.player != null) {
+            // Use interpolated position for consistent rendering
+            double distance = getVisualDistanceToPlayer();
+            return distance < PLAYER_RENDER_THRESHOLD;
         }
         return shouldRenderHands;
     }
 
     public boolean shouldRenderPlayerModel() {
         if (!shouldRenderPlayerModel) return false;
+        if (!cameraActive) return shouldRenderPlayerModel;
+
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player != null && cameraActive) {
-            double d = cameraPosition.distanceTo(mc.player.getEyePos());
-            return d >= PLAYER_RENDER_THRESHOLD;
+        if (mc.player != null) {
+            // Use interpolated position for consistent rendering
+            double distance = getVisualDistanceToPlayer();
+
+            // Hysteresis: Use different thresholds depending on current state
+            // This prevents flickering when distance oscillates around the threshold
+            if (isPlayerModelCurrentlyVisible) {
+                // Currently showing model - only hide if we get very close
+                if (distance < DISTANCE_HIDE_PLAYER_MODEL) {
+                    isPlayerModelCurrentlyVisible = false;
+                }
+            } else {
+                // Currently hiding model - only show if we get far enough away
+                if (distance >= DISTANCE_SHOW_PLAYER_MODEL) {
+                    isPlayerModelCurrentlyVisible = true;
+                }
+            }
+
+            return isPlayerModelCurrentlyVisible;
         }
         return shouldRenderPlayerModel;
     }

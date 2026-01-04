@@ -516,6 +516,14 @@ public class CameraController {
     public void updateCamera(MinecraftClient client, Camera camera, float tickDelta, float deltaSeconds) {
         updateControlStick(client, tickDelta);
 
+        // Cache interpolated player position for consistent rendering decisions
+        // This must be done BEFORE any rendering decisions (like shouldRenderPlayerModel)
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (client.player != null) {
+            Vec3d interpolatedEyePos = client.player.getCameraPosVec(tickDelta);
+            cameraSystem.updateInterpolatedPlayerPosition(interpolatedEyePos);
+        }
+
         // Get the base camera state from movement manager - always update to track state
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
 
@@ -529,7 +537,6 @@ public class CameraController {
         baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, skipNodeInfluence);
 
         // Handle node-based camera activation/deactivation
-        CameraSystem cameraSystem = CameraSystem.getInstance();
         double currentNodeInfluence = 0.0;
         if (!skipNodeInfluence && client.player != null) {
             currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(client.player.getEyePos());
