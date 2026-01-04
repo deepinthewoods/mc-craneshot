@@ -73,11 +73,6 @@ public abstract class AbstractMovementSettings {
 
     public enum PROJECTION {PERSPECTIVE, ORTHO};
 
-    // Final approach behavior constants
-    // When within this distance, linearly interpolate to target over a fixed time
-    public static final double FINAL_INTERP_DISTANCE_THRESHOLD = 0.2; // blocks
-    public static final double FINAL_INTERP_TIME_SECONDS = 0.25;       // seconds
-
     protected PROJECTION projection = PROJECTION.PERSPECTIVE;
     
     // Ortho scale retained for legacy internal math; no longer exposed in UI
@@ -177,6 +172,12 @@ public abstract class AbstractMovementSettings {
     protected boolean headLockedToCamera = true;
     public boolean isHeadLockedToCamera() {
         return headLockedToCamera;
+    }
+
+    protected Vec3d lastReturnTargetPos = null;
+
+    protected void resetReturnTargetTracking() {
+        lastReturnTargetPos = null;
     }
 
 
@@ -299,6 +300,20 @@ public abstract class AbstractMovementSettings {
             Vec3d targetPos,
             float deltaSeconds,
             MinecraftClient client) {
+        Vec3d toTarget = targetPos.subtract(currentPos);
+        double distToTarget = toTarget.length();
+
+        // If we're extremely close, just snap to target
+        if (distToTarget < 1e-9) {
+            return targetPos;
+        }
+
+        double targetSpeedPerSecond = 0.0;
+        if (deltaSeconds > 1e-6f && lastReturnTargetPos != null) {
+            targetSpeedPerSecond = targetPos.distanceTo(lastReturnTargetPos) / deltaSeconds;
+        }
+        lastReturnTargetPos = targetPos;
+
         if (!GeneralMenuSettings.isEnforceMinimumSpeed()) {
             return desiredPos;
         }
@@ -306,26 +321,28 @@ public abstract class AbstractMovementSettings {
             return desiredPos;
         }
 
-        double playerSpeed = client.player.getVelocity().length();
-        if (playerSpeed < 0.001) {
+        // Use only HORIZONTAL velocity to avoid overly aggressive minimum speeds when falling
+        Vec3d playerVel = client.player.getVelocity();
+        double playerSpeedPerSecond = new Vec3d(playerVel.x, 0, playerVel.z).length() * 20.0;
+        double baseSpeedPerSecond = Math.max(playerSpeedPerSecond, targetSpeedPerSecond);
+        if (baseSpeedPerSecond < 0.001) {
             return desiredPos;
         }
 
-        double minSpeed = playerSpeed * GeneralMenuSettings.getMinimumSpeedMultiplier();
+        double minSpeed = baseSpeedPerSecond * GeneralMenuSettings.getMinimumSpeedMultiplier();
         double minMoveDistance = minSpeed * deltaSeconds;
-        double moveDistance = desiredPos.distanceTo(currentPos);
 
+        // If minimum speed would overshoot the target, just snap to it and complete
+        if (minMoveDistance >= distToTarget) {
+            return targetPos;
+        }
+
+        double moveDistance = desiredPos.distanceTo(currentPos);
         if (moveDistance >= minMoveDistance) {
             return desiredPos;
         }
 
-        Vec3d toTarget = targetPos.subtract(currentPos);
-        double distToTarget = toTarget.length();
-        if (distToTarget < FINAL_INTERP_DISTANCE_THRESHOLD || distToTarget < 0.001) {
-            return desiredPos;
-        }
-
-        double actualMoveDistance = Math.min(minMoveDistance, distToTarget);
-        return currentPos.add(toTarget.normalize().multiply(actualMoveDistance));
+        // Apply minimum speed movement toward target
+        return currentPos.add(toTarget.normalize().multiply(minMoveDistance));
     }
 }

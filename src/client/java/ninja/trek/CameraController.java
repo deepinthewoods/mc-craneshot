@@ -846,6 +846,6 @@ public class CameraController {
         player.setPitch(lockedPlayerPitch);
         player.setHeadYaw(lockedPlayerHeadYaw);
         player.setBodyYaw(lockedPlayerBodyYaw);
-       
+         
     }
 }

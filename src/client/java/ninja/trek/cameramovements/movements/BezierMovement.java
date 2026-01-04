@@ -55,10 +55,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private float baseFov;
     // Prevent orthoFactor from dipping during OUT phase when mouse input retargets end
     private float orthoOutLock = -1.0f;
-    // Final interpolation state
-    private boolean finalInterpActive = false;
-    private double finalInterpT = 0.0;
-    private Vec3d finalInterpStart = null;
 
     // Jitter suppression state
     private float lastTargetYaw = 0f;
@@ -93,10 +89,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         weight = 1.0f;
         alpha = 1;
         // Orthographic handling removed
-        // Reset final interpolation state
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
 
         // Reset jitter suppression tracking
         jitterStateInit = false;
@@ -161,19 +153,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         
         Vec3d desiredPos;
 
-        // Determine if we should switch to final time-based interpolation
-        double remainingDistanceForFinal = current.getPosition().distanceTo(b.getPosition());
-        if (resetting && !finalInterpActive && remainingDistanceForFinal <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
-            finalInterpActive = true;
-            finalInterpT = 0.0;
-            finalInterpStart = current.getPosition();
-        }
-
-        if (finalInterpActive) {
-            double step = deltaSeconds / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS);
-            finalInterpT = Math.min(1.0, finalInterpT + step);
-            desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
-        } else if (!linearMode) {
+        if (!linearMode) {
             // Bezier movement mode
             double potentialDelta;
             
@@ -222,7 +202,19 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             desiredPos = current.getPosition().add(move);
         }
 
+        // Apply minimum speed snap logic
         if (resetting) {
+            // During return phase - always apply
+            desiredPos = applyMinimumSpeedDuringReturn(
+                    current.getPosition(),
+                    desiredPos,
+                    b.getPosition(),
+                    deltaSeconds,
+                    client
+            );
+        } else if (positionEasing >= 0.9) {
+            // During out phase with high position easing (user wants instant follow)
+            // Apply snap logic to prevent camera lag when player moves rapidly (e.g., falling)
             desiredPos = applyMinimumSpeedDuringReturn(
                     current.getPosition(),
                     desiredPos,
@@ -444,13 +436,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (!resetting) {
             resetting = true;
+            resetReturnTargetTracking();
             linearMode = false;
             progress = 0.0;
-            // Reset final interpolation state upon starting reset
-            finalInterpActive = false;
-            finalInterpT = 0.0;
-            finalInterpStart = null;
-            
+
             // Always target the player head position/rotation during return phase
             if (client.player != null) {
                 // Always return to player's head rotation regardless of END_TARGET
@@ -505,9 +494,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             return;
         }
         resetting = false;
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
         if (camera != null) {
             current = CameraTarget.fromCamera(camera);
         }

@@ -43,11 +43,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private boolean distanceChanged = false;
     private float weight = 1.0f;
 
-    // Final interpolation state to guarantee arrival
-    private boolean finalInterpActive = false;
-    private double finalInterpT = 0.0;
-    private Vec3d finalInterpStart = null;
-
     // Jitter suppression state (for tiny oscillations when fully out)
     private float lastTargetYaw = 0f;
     private float lastTargetPitch = 0f;
@@ -68,10 +63,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         distanceChanged = false;
         weight = 1.0f;
         alpha = 1;
-
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
 
         // Reset jitter suppression tracking
         lastPlayerEyePos = null;
@@ -121,43 +112,34 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
-        Vec3d desiredPos;
-
-        // Switch to fixed-time interpolation when very close to target while returning
-        double remainingDistanceForFinal = current.getPosition().distanceTo(b.getPosition());
-        if (resetting && !finalInterpActive && remainingDistanceForFinal <= AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
-            finalInterpActive = true;
-            finalInterpT = 0.0;
-            finalInterpStart = current.getPosition();
-            // No log needed
-        }
-
-        String stepBranch;
-        double deltaLength = 0.0;
-        if (finalInterpActive) {
-            double step = deltaSeconds / (AbstractMovementSettings.FINAL_INTERP_TIME_SECONDS);
-            finalInterpT = Math.min(1.0, finalInterpT + step);
-            desiredPos = finalInterpStart.lerp(b.getPosition(), finalInterpT);
-            stepBranch = "finalInterp";
-        } else {
-            // Straight-line eased movement towards target with speed cap
-            Vec3d delta = b.getPosition().subtract(current.getPosition());
-            deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (deltaSeconds);
-            Vec3d move;
-            if (deltaLength > 0) {
-                move = delta.multiply(positionEasing);
-                if (move.length() > maxMove) {
-                    move = move.normalize().multiply(maxMove);
-                }
-            } else {
-                move = Vec3d.ZERO;
+        // Straight-line eased movement towards target with speed cap
+        Vec3d delta = b.getPosition().subtract(current.getPosition());
+        double deltaLength = delta.length();
+        double maxMove = positionSpeedLimit * (deltaSeconds);
+        Vec3d move;
+        if (deltaLength > 0) {
+            move = delta.multiply(positionEasing);
+            if (move.length() > maxMove) {
+                move = move.normalize().multiply(maxMove);
             }
-            desiredPos = current.getPosition().add(move);
-            stepBranch = "eased";
+        } else {
+            move = Vec3d.ZERO;
         }
+        Vec3d desiredPos = current.getPosition().add(move);
 
+        // Apply minimum speed snap logic
         if (resetting) {
+            // During return phase - always apply
+            desiredPos = applyMinimumSpeedDuringReturn(
+                    current.getPosition(),
+                    desiredPos,
+                    b.getPosition(),
+                    deltaSeconds,
+                    client
+            );
+        } else if (positionEasing >= 0.9) {
+            // During out phase with high position easing (user wants instant follow)
+            // Apply snap logic to prevent camera lag when player moves rapidly (e.g., falling)
             desiredPos = applyMinimumSpeedDuringReturn(
                     current.getPosition(),
                     desiredPos,
@@ -252,7 +234,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         lastYawError = yawError;
         lastPitchError = pitchError;
 
-        boolean complete = resetting && (remaining < 0.007 || finalInterpActive && finalInterpT >= 0.9999);
+        boolean complete = resetting && remaining < 0.007;
         // No completion log; controller/diag will handle return phase logging
         return new MovementState(current, complete);
     }
@@ -262,9 +244,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (!resetting) {
             resetting = true;
-            finalInterpActive = false;
-            finalInterpT = 0.0;
-            finalInterpStart = null;
+            resetReturnTargetTracking();
             current = CameraTarget.fromCamera(camera);
 
             if (client.player != null) {
@@ -300,9 +280,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             return;
         }
         resetting = false;
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
         if (camera != null) {
             current = CameraTarget.fromCamera(camera);
         }

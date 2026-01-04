@@ -39,14 +39,11 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private CameraTarget end = new CameraTarget();
     private CameraTarget current = new CameraTarget();
 
-    private boolean finalInterpActive = false;
-    private double finalInterpT = 0.0;
-    private Vec3d finalInterpStart = null;
-
     private boolean isComplete = false;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
+        resetReturnTargetTracking();
         // Force return target to player's head rotation for consistent return
         endTarget = END_TARGET.HEAD_BACK;
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(this);
@@ -65,9 +62,6 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         // No startup log
 
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
         isComplete = false;
     }
 
@@ -84,27 +78,12 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
 
         // Position step with LinearMovement-like speed-capped easing
-        Vec3d desiredPos;
-        double remainingForFinal = current.getPosition().distanceTo(end.getPosition());
-        if (!finalInterpActive && remainingForFinal <= FINAL_INTERP_DISTANCE_THRESHOLD) {
-            finalInterpActive = true;
-            finalInterpT = 0.0;
-            finalInterpStart = current.getPosition();
-            // No log needed
-        }
-
-        if (finalInterpActive) {
-            double step = deltaSeconds / (FINAL_INTERP_TIME_SECONDS);
-            finalInterpT = Math.min(1.0, finalInterpT + step);
-            desiredPos = finalInterpStart.lerp(end.getPosition(), finalInterpT);
-        } else {
-            Vec3d delta = end.getPosition().subtract(current.getPosition());
-            double deltaLength = delta.length();
-            double maxMove = positionSpeedLimit * (deltaSeconds);
-            Vec3d move = deltaLength > 0 ? delta.multiply(positionEasing) : Vec3d.ZERO;
-            if (move.length() > maxMove) move = move.normalize().multiply(maxMove);
-            desiredPos = current.getPosition().add(move);
-        }
+        Vec3d delta = end.getPosition().subtract(current.getPosition());
+        double deltaLength = delta.length();
+        double maxMove = positionSpeedLimit * (deltaSeconds);
+        Vec3d move = deltaLength > 0 ? delta.multiply(positionEasing) : Vec3d.ZERO;
+        if (move.length() > maxMove) move = move.normalize().multiply(maxMove);
+        Vec3d desiredPos = current.getPosition().add(move);
 
         desiredPos = applyMinimumSpeedDuringReturn(
                 current.getPosition(),
@@ -144,9 +123,9 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
         }
 
-        // Completion when very close (or final interp done) and FOV near 1.0
+        // Completion when very close and FOV near 1.0
         double posRemaining = current.getPosition().distanceTo(end.getPosition());
-        boolean positionComplete = posRemaining < 0.005 || (finalInterpActive && finalInterpT >= 0.9999);
+        boolean positionComplete = posRemaining < 0.005;
         boolean fovComplete = Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
         isComplete = positionComplete && fovComplete;
         return new MovementState(current, isComplete);

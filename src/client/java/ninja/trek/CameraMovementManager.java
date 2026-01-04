@@ -635,25 +635,13 @@ public class CameraMovementManager {
         }
 
         // Always update perspective based on distance threshold
-        // Use render camera position when custom camera is active to avoid stale targets.
-        CameraSystem cs = CameraSystem.getInstance();
+        // Use the new target position to avoid one-frame lag during rapid movement (e.g., falling)
         Vec3d perspectivePos = adjustedTarget.getPosition();
-        if (cs.isCameraActive()) {
-            Camera renderCamera = client.gameRenderer.getCamera();
-            if (renderCamera != null) {
-                perspectivePos = renderCamera.getPos();
-            } else {
-                perspectivePos = cs.getCameraPosition();
-            }
-        }
         double dist = perspectivePos.distanceTo(client.player.getEyePos());
         if (dist >= CameraSystem.PLAYER_RENDER_THRESHOLD) {
             client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
-//                cs.activateCamera(CameraSystem.CameraMode.THIRD_PERSON);
         } else {
             client.options.setPerspective(Perspective.FIRST_PERSON);
-
-//                cs.activateCamera(CameraSystem.CameraMode.FIRST_PERSON);
         }
 
         // Remove per-frame status logging to reduce noise; rely on targeted Diag logs.

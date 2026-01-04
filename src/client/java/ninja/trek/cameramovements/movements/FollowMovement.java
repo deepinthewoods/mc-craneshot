@@ -100,10 +100,6 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     private Vec3d orbitTargetXZ = null;
     private boolean resetting = false;
 
-    private boolean finalInterpActive = false;
-    private double finalInterpT = 0.0;
-    private Vec3d finalInterpStart = null;
-
     public boolean isAutoRunAndJump() {
         return autoRunAndJump;
     }
@@ -600,10 +596,6 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         resetting = false;
         alpha = 1.0;
 
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
-
         // Reset assist runtime state (setting persists)
         jumpPressTicksRemaining = 0;
         jumpCooldownTicksRemaining = 0;
@@ -634,20 +626,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             targetPitch = (float) (client.player.getPitch() + pitchOffset);
             targetFovDelta = 1.0f;
 
-            double remainingDistanceForFinal = current.getPosition().distanceTo(playerPos);
-            if (!finalInterpActive && remainingDistanceForFinal <= FINAL_INTERP_DISTANCE_THRESHOLD) {
-                finalInterpActive = true;
-                finalInterpT = 0.0;
-                finalInterpStart = current.getPosition();
-            }
-
-            if (finalInterpActive) {
-                double step = deltaSeconds / FINAL_INTERP_TIME_SECONDS;
-                finalInterpT = Math.min(1.0, finalInterpT + step);
-                desiredPos = finalInterpStart.lerp(playerPos, finalInterpT);
-            } else {
-                desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
-            }
+            desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
 
             desiredPos = applyMinimumSpeedDuringReturn(
                     current.getPosition(),
@@ -800,9 +779,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     public void queueReset(MinecraftClient client, Camera camera) {
         if (!resetting) {
             resetting = true;
-            finalInterpActive = false;
-            finalInterpT = 0.0;
-            finalInterpStart = null;
+            resetReturnTargetTracking();
             current = CameraTarget.fromCamera(camera);
         }
     }
@@ -816,9 +793,6 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return;
         }
         resetting = false;
-        finalInterpActive = false;
-        finalInterpT = 0.0;
-        finalInterpStart = null;
         if (camera != null) {
             current = CameraTarget.fromCamera(camera);
         }
@@ -854,7 +828,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         Vec3d playerPos = MinecraftClient.getInstance().player.getEyePos();
         double positionDistance = current.getPosition().distanceTo(playerPos);
         float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
-        boolean positionComplete = positionDistance < 0.005 || (finalInterpActive && finalInterpT >= 0.9999);
+        boolean positionComplete = positionDistance < 0.005;
         boolean fovComplete = fovDifference < 0.01f;
         return positionComplete && fovComplete;
     }
