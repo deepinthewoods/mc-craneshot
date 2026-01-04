@@ -106,6 +106,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             desiredPos = current.getPosition().add(move);
         }
 
+        desiredPos = applyMinimumSpeedDuringReturn(
+                current.getPosition(),
+                desiredPos,
+                end.getPosition(),
+                deltaSeconds,
+                client
+        );
+
         // Rotation step with speed limits
         float yawError = targetYaw - current.getYaw();
         while (yawError > 180) yawError -= 360;
@@ -143,6 +151,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         isComplete = positionComplete && fovComplete;
         return new MovementState(current, isComplete);
     }
+
 
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {

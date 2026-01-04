@@ -1,8 +1,9 @@
 package ninja.trek.cameramovements;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.Vec3d;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
+import ninja.trek.config.GeneralMenuSettings;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -290,5 +291,41 @@ public abstract class AbstractMovementSettings {
                 return null;
             }
         }
+    }
+
+    protected Vec3d applyMinimumSpeedDuringReturn(
+            Vec3d currentPos,
+            Vec3d desiredPos,
+            Vec3d targetPos,
+            float deltaSeconds,
+            MinecraftClient client) {
+        if (!GeneralMenuSettings.isEnforceMinimumSpeed()) {
+            return desiredPos;
+        }
+        if (client == null || client.player == null) {
+            return desiredPos;
+        }
+
+        double playerSpeed = client.player.getVelocity().length();
+        if (playerSpeed < 0.001) {
+            return desiredPos;
+        }
+
+        double minSpeed = playerSpeed * GeneralMenuSettings.getMinimumSpeedMultiplier();
+        double minMoveDistance = minSpeed * deltaSeconds;
+        double moveDistance = desiredPos.distanceTo(currentPos);
+
+        if (moveDistance >= minMoveDistance) {
+            return desiredPos;
+        }
+
+        Vec3d toTarget = targetPos.subtract(currentPos);
+        double distToTarget = toTarget.length();
+        if (distToTarget < FINAL_INTERP_DISTANCE_THRESHOLD || distToTarget < 0.001) {
+            return desiredPos;
+        }
+
+        double actualMoveDistance = Math.min(minMoveDistance, distToTarget);
+        return currentPos.add(toTarget.normalize().multiply(actualMoveDistance));
     }
 }

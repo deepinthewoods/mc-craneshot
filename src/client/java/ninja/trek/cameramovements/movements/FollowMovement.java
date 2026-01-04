@@ -648,6 +648,14 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             } else {
                 desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
             }
+
+            desiredPos = applyMinimumSpeedDuringReturn(
+                    current.getPosition(),
+                    desiredPos,
+                    playerPos,
+                    deltaSeconds,
+                    client
+            );
         } else {
             targetYaw = stickYaw;
             targetPitch = stickPitch;
@@ -696,6 +704,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         boolean complete = resetting && isComplete();
         return new MovementState(current, complete);
     }
+
 
     private Vec3d rotateAroundY(Vec3d centerXZ, Vec3d pointXZ, float deltaYawDegrees) {
         if (Math.abs(deltaYawDegrees) < 1e-6f) return pointXZ;

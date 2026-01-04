@@ -247,16 +247,21 @@ public class CameraSystem {
             double moveZ = (z * zFactor + x * xFactor);
             velocity = new Vec3d(moveX, y, moveZ);
         } else if (isFreeMode) {
-            double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
-            double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
-            double pitchFactor = Math.sin(cameraPitch * Math.PI / 180.0);
-            double moveX = (x * zFactor - z * xFactor);
-            double moveY = y;
-            double moveZ = (z * zFactor + x * xFactor);
-            if (Math.abs(cameraPitch) > 30) {
-                moveY -= z * pitchFactor * 0.5;
+            double yawRad = Math.toRadians(cameraYaw);
+            double pitchRad = Math.toRadians(cameraPitch);
+            Vec3d forward = new Vec3d(
+                -MathHelper.sin((float) yawRad) * MathHelper.cos((float) pitchRad),
+                -MathHelper.sin((float) pitchRad),
+                MathHelper.cos((float) yawRad) * MathHelper.cos((float) pitchRad)
+            );
+            Vec3d right = forward.crossProduct(new Vec3d(0.0, 1.0, 0.0));
+            if (right.lengthSquared() < 1.0E-6) {
+                right = new Vec3d(-MathHelper.cos((float) yawRad), 0.0, -MathHelper.sin((float) yawRad));
+            } else {
+                right = right.normalize();
             }
-            velocity = new Vec3d(moveX, moveY, moveZ);
+            Vec3d up = right.crossProduct(forward).normalize();
+            velocity = forward.multiply(z).add(right.multiply(-x)).add(up.multiply(y));
         } else {
             velocity = new Vec3d(x, y, z);
         }

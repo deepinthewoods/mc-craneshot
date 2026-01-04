@@ -5,6 +5,7 @@
 	"client": [
 		"CameraAccessor",
 		"CameraMixin",
+		"EntityMixin",
 		"FovAccessor",
 		"GameRendererFovAccessor",
 		"KeyboardInputMixin",

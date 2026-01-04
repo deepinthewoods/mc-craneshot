@@ -44,8 +44,6 @@ public class CameraMovementManager {
     // Throttled logging when a movement is active
     private long lastMovementLogTimeMs = 0L;
 
-    // Minimum speed enforcement tracking
-    private Vec3d previousCameraPosition = null;
 
     public CameraMovementManager() {
         slots = new ArrayList<>();
@@ -137,9 +135,6 @@ public class CameraMovementManager {
         toggledStates.clear();
         hasScrolledDuringPress.clear();
         keyPressStartTimes.clear();
-
-        // Reset minimum speed enforcement tracking
-        previousCameraPosition = null;
 
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         CraneshotClient.CAMERA_CONTROLLER.onComplete();
@@ -565,13 +560,9 @@ public class CameraMovementManager {
             return new MovementState(finalTarget, true);
         }
 
-        // Apply minimum speed enforcement before collision adjustment
+        // Apply collision adjustment to the movement target
         CameraTarget rawTarget = state.getCameraTarget();
-        CameraTarget enforcedTarget = applyMinimumSpeedEnforcement(rawTarget, deltaSeconds, client);
-        baseTarget = enforcedTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
-
-        // Update previous position for next frame's enforcement calculation
-        previousCameraPosition = enforcedTarget.getPosition();
+        baseTarget = rawTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
 
         // Apply zoom overlay if active (modifies FOV only)
         if (isZoomActive && zoomOverlay != null) {
@@ -779,83 +770,6 @@ public class CameraMovementManager {
         }
 
         return false;
-    }
-
-    /**
-     * Applies minimum speed enforcement during return phase.
-     * Ensures camera moves at least minimumSpeedMultiplier * playerSpeed toward player.
-     * @param calculatedTarget The target calculated by the movement
-     * @param deltaSeconds Time since last frame
-     * @param client Minecraft client instance
-     * @return Modified target with enforced minimum speed, or original target if not applicable
-     */
-    private CameraTarget applyMinimumSpeedEnforcement(
-            CameraTarget calculatedTarget,
-            float deltaSeconds,
-            MinecraftClient client) {
-
-        if (!ninja.trek.config.GeneralMenuSettings.isEnforceMinimumSpeed()) {
-            return calculatedTarget;
-        }
-
-        if (!isMovementReturning()) {
-            return calculatedTarget;
-        }
-
-        if (client.player == null) {
-            return calculatedTarget;
-        }
-
-        Vec3d newPos = calculatedTarget.getPosition();
-
-        // Initialize previous position on first frame
-        if (previousCameraPosition == null) {
-            previousCameraPosition = newPos;
-            return calculatedTarget;
-        }
-
-        // Calculate how far camera moved this frame
-        Vec3d movement = newPos.subtract(previousCameraPosition);
-        double moveDistance = movement.length();
-
-        // Calculate minimum required movement based on player speed
-        Vec3d playerVelocity = client.player.getVelocity();
-        double playerSpeed = playerVelocity.length();
-        double minSpeed = playerSpeed * ninja.trek.config.GeneralMenuSettings.getMinimumSpeedMultiplier();
-        double minMoveDistance = minSpeed * deltaSeconds;
-
-        // Only enforce if player is moving and camera is moving too slowly
-        if (playerSpeed < 0.001 || moveDistance >= minMoveDistance) {
-            return calculatedTarget;
-        }
-
-        // Get direction to player (return target)
-        Vec3d playerPos = client.player.getEyePos();
-        Vec3d toPlayer = playerPos.subtract(previousCameraPosition);
-        double distToPlayer = toPlayer.length();
-
-        // Respect final interpolation threshold to avoid overshooting
-        if (distToPlayer < ninja.trek.cameramovements.AbstractMovementSettings.FINAL_INTERP_DISTANCE_THRESHOLD) {
-            return calculatedTarget;
-        }
-
-        // Calculate boosted position
-        if (distToPlayer > 0.001) {
-            Vec3d direction = toPlayer.normalize();
-            // Move at minimum speed, but don't overshoot the target
-            double actualMoveDistance = Math.min(minMoveDistance, distToPlayer);
-            Vec3d boostedPos = previousCameraPosition.add(direction.multiply(actualMoveDistance));
-
-            // Create new target with boosted position but same rotation/FOV
-            return new CameraTarget(
-                boostedPos,
-                calculatedTarget.getYaw(),
-                calculatedTarget.getPitch(),
-                calculatedTarget.getFovMultiplier()
-            );
-        }
-
-        return calculatedTarget;
     }
 
     /**

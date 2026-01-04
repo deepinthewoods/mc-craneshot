@@ -50,6 +50,11 @@ public class CameraController {
     private static final double FULL_ROTATE_DISTANCE = 2.0; // Blocks to move for full rotation
 
     private Vec3d currentVelocity = Vec3d.ZERO;
+    private boolean lockPlayerHead = false;
+    private float lockedPlayerYaw = 0f;
+    private float lockedPlayerPitch = 0f;
+    private float lockedPlayerHeadYaw = 0f;
+    private float lockedPlayerBodyYaw = 0f;
 
     /**
      * Attempts to resolve the target player entity from the configured name.
@@ -247,6 +252,7 @@ public class CameraController {
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
             currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
             MouseInterceptor.setIntercepting(false);
+            clearPlayerHeadLock();
             
             // Reset tracking variables
             lastPlayerPos = Vec3d.ZERO;
@@ -291,6 +297,10 @@ public class CameraController {
             // Enable mouse interception for camera rotation
             if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA) {
                 MouseInterceptor.setIntercepting(true);
+                capturePlayerHeadLock(client);
+            }
+            if (currentMouseMoveMode != POST_MOVE_MOUSE.ROTATE_CAMERA) {
+                clearPlayerHeadLock();
             }
             // Handle node edit overlay activation
             if (currentMouseMoveMode == POST_MOVE_MOUSE.NODE_EDIT) {
@@ -409,16 +419,21 @@ public class CameraController {
             }
             
             // Convert to camera-relative movement
-            float yaw = freeCamYaw;
-            float pitch = freeCamPitch;
-            double xFactor = Math.sin(yaw * Math.PI / 180.0);
-            double zFactor = Math.cos(yaw * Math.PI / 180.0);
-            
-            targetVelocity = new Vec3d(
-                (x * zFactor - z * xFactor), 
-                y, 
-                (z * zFactor + x * xFactor)
+            double yawRad = Math.toRadians(freeCamYaw);
+            double pitchRad = Math.toRadians(freeCamPitch);
+            Vec3d forward = new Vec3d(
+                -Math.sin(yawRad) * Math.cos(pitchRad),
+                -Math.sin(pitchRad),
+                Math.cos(yawRad) * Math.cos(pitchRad)
             );
+            Vec3d right = forward.crossProduct(new Vec3d(0.0, 1.0, 0.0));
+            if (right.lengthSquared() < 1.0E-6) {
+                right = new Vec3d(-Math.cos(yawRad), 0.0, -Math.sin(yawRad));
+            } else {
+                right = right.normalize();
+            }
+            Vec3d up = right.crossProduct(forward).normalize();
+            targetVelocity = forward.multiply(z).add(right.multiply(-x)).add(up.multiply(y));
             
         } else if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             // Y-axis locked camera movement
@@ -699,6 +714,8 @@ public class CameraController {
             handleKeyboardMovement(client, camera);
         }
 
+        applyPlayerHeadLock(client);
+
         updateMessageTimer();
     }
 
@@ -770,6 +787,7 @@ public class CameraController {
         // Reset all movement modes completely
         currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
         currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        clearPlayerHeadLock();
 
         // Reset the keyboard movement tracking flag
         hasMovedWithKeyboard = false;
@@ -805,5 +823,29 @@ public class CameraController {
         if (client != null && client.gameRenderer instanceof FovAccessor) {
             ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
         }
+    }
+
+    private void capturePlayerHeadLock(MinecraftClient client) {
+        if (client == null || client.player == null) return;
+        PlayerEntity player = client.player;
+        lockPlayerHead = true;
+        lockedPlayerYaw = player.getYaw();
+        lockedPlayerPitch = player.getPitch();
+        lockedPlayerHeadYaw = player.getHeadYaw();
+        lockedPlayerBodyYaw = player.getBodyYaw();
+    }
+
+    private void clearPlayerHeadLock() {
+        lockPlayerHead = false;
+    }
+
+    private void applyPlayerHeadLock(MinecraftClient client) {
+        if (!lockPlayerHead || client == null || client.player == null) return;
+        PlayerEntity player = client.player;
+        player.setYaw(lockedPlayerYaw);
+        player.setPitch(lockedPlayerPitch);
+        player.setHeadYaw(lockedPlayerHeadYaw);
+        player.setBodyYaw(lockedPlayerBodyYaw);
+       
     }
 }

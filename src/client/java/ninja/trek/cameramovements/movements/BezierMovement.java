@@ -222,6 +222,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             desiredPos = current.getPosition().add(move);
         }
 
+        if (resetting) {
+            desiredPos = applyMinimumSpeedDuringReturn(
+                    current.getPosition(),
+                    desiredPos,
+                    b.getPosition(),
+                    deltaSeconds,
+                    client
+            );
+        }
+
         // Calculate target rotation and FOV
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
@@ -393,6 +403,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         boolean complete = resetting && (remaining < 0.007 || progress >= 0.9999);
         return new MovementState(current, complete);
     }
+
 
     private Vec3d quadraticBezier(Vec3d p0, Vec3d p1, Vec3d p2, double t) {
         double oneMinusT = 1.0 - t;

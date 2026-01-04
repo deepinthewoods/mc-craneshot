@@ -157,6 +157,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             stepBranch = "eased";
         }
 
+        if (resetting) {
+            desiredPos = applyMinimumSpeedDuringReturn(
+                    current.getPosition(),
+                    desiredPos,
+                    b.getPosition(),
+                    deltaSeconds,
+                    client
+            );
+        }
+
         // Target rotation and FOV
         float targetYaw = b.getYaw();
         float targetPitch = b.getPitch();
@@ -246,6 +256,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // No completion log; controller/diag will handle return phase logging
         return new MovementState(current, complete);
     }
+
 
     @Override
     public void queueReset(MinecraftClient client, Camera camera) {
