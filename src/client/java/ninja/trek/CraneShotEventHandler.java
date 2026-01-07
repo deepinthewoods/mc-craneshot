@@ -26,6 +26,8 @@ public class CraneShotEventHandler {
     private static boolean lastSleeping = false;
     private static java.util.UUID lastPlayerUuid = null;
     private static RegistryKey<World> lastDimension = null;
+    private static Vec3d lastPlayerPos = null;
+    private static final double LARGE_POSITION_JUMP_THRESHOLD = 50.0; // blocks
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -43,6 +45,7 @@ public class CraneShotEventHandler {
             Camera camera = client.gameRenderer.getCamera();
             handleRespawnAndWakeReset(client, camera);
             handleDimensionChange(client, camera);
+            handleLargePositionJumps(client, camera);
 
             boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
             if (followPressed != followWasPressed) {
@@ -143,19 +146,77 @@ public class CraneShotEventHandler {
                 cameraEntity.setPitch(playerPitch);
             }
 
-            // Snap CameraSystem position if active
+            // Snap CameraSystem position if active (BEFORE canceling movements)
             ninja.trek.camera.CameraSystem cameraSystem = ninja.trek.camera.CameraSystem.getInstance();
-            if (cameraSystem.isCameraActive()) {
+            boolean wasCameraActive = cameraSystem.isCameraActive();
+            Vec3d snappedCameraPos = null;
+            float snappedYaw = 0;
+            float snappedPitch = 0;
+
+            if (wasCameraActive) {
                 cameraSystem.setCameraPosition(playerEyePos);
                 cameraSystem.setCameraRotation(playerYaw, playerPitch);
-                cameraSystem.resetVelocity(); // Reset any residual velocity from before portal
+                cameraSystem.resetVelocity();
+                snappedCameraPos = playerEyePos;
+                snappedYaw = playerYaw;
+                snappedPitch = playerPitch;
             }
 
-            // Reset the movement manager's base target to prevent it from targeting the old position
-            CraneshotClient.MOVEMENT_MANAGER.resetBaseTarget();
+            // Cancel movements to clear old world references
+            CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+
+            // If camera was active, reactivate it at the snapped position
+            if (wasCameraActive && snappedCameraPos != null) {
+                cameraSystem.activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
+                cameraSystem.setCameraPosition(snappedCameraPos);
+                cameraSystem.setCameraRotation(snappedYaw, snappedPitch);
+                cameraSystem.resetVelocity();
+            }
         }
 
         lastDimension = currentDimension;
+    }
+
+    private static void handleLargePositionJumps(MinecraftClient client, Camera camera) {
+        if (client == null || client.player == null) {
+            lastPlayerPos = null;
+            return;
+        }
+
+        Vec3d currentPlayerPos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
+
+        // Check for large position jumps (teleports, respawns, portals we missed, etc.)
+        if (lastPlayerPos != null) {
+            double distanceMoved = currentPlayerPos.distanceTo(lastPlayerPos);
+
+            if (distanceMoved > LARGE_POSITION_JUMP_THRESHOLD) {
+                // Player jumped a large distance - snap camera to prevent long travel
+                Vec3d playerEyePos = client.player.getEyePos();
+                float playerYaw = client.player.getYaw();
+                float playerPitch = client.player.getPitch();
+
+                // Snap CameraEntity if it exists
+                ninja.trek.util.CameraEntity cameraEntity = ninja.trek.util.CameraEntity.getCamera();
+                if (cameraEntity != null) {
+                    cameraEntity.setPos(playerEyePos.x, playerEyePos.y, playerEyePos.z);
+                    cameraEntity.setYaw(playerYaw);
+                    cameraEntity.setPitch(playerPitch);
+                }
+
+                // Snap CameraSystem position if active
+                ninja.trek.camera.CameraSystem cameraSystem = ninja.trek.camera.CameraSystem.getInstance();
+                if (cameraSystem.isCameraActive()) {
+                    cameraSystem.setCameraPosition(playerEyePos);
+                    cameraSystem.setCameraRotation(playerYaw, playerPitch);
+                    cameraSystem.resetVelocity();
+                }
+
+                // Reset base target
+                CraneshotClient.MOVEMENT_MANAGER.resetBaseTarget();
+            }
+        }
+
+        lastPlayerPos = currentPlayerPos;
     }
 
     /**

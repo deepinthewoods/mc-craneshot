@@ -159,6 +159,30 @@ public class CameraMovementManager {
         baseTarget = null;
     }
 
+    /**
+     * Snaps the camera to the player if it's very far away.
+     * Prevents long camera travel when starting movements after teleports/portals.
+     */
+    private void snapCameraIfFarFromPlayer(MinecraftClient client) {
+        if (client == null || client.player == null) return;
+
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        if (!cameraSystem.isCameraActive()) return;
+
+        Vec3d cameraPos = cameraSystem.getCameraPosition();
+        Vec3d playerPos = client.player.getEyePos();
+        double distance = cameraPos.distanceTo(playerPos);
+
+        // If camera is more than 500 blocks from player, snap it
+        final double SNAP_THRESHOLD = 500.0;
+        if (distance > SNAP_THRESHOLD) {
+            cameraSystem.setCameraPosition(playerPos);
+            cameraSystem.setCameraRotation(client.player.getYaw(), client.player.getPitch());
+            cameraSystem.resetVelocity();
+            baseTarget = null;
+        }
+    }
+
     public List<ICameraMovement> getAvailableMovementsForSlot(int slotIndex) {
         if (slotIndex >= 0 && slotIndex < slots.size()) {
             return new ArrayList<>(slots.get(slotIndex));
@@ -237,6 +261,13 @@ public class CameraMovementManager {
         activeMovementSlot = slotIndex;
         activeMovement = movement;
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+
+        // If camera is very far from player, snap it first to prevent long travel
+        // BUT don't snap for FreeCamReturnMovement - that's designed to return from far away
+        if (!(movement instanceof FreeCamReturnMovement)) {
+            snapCameraIfFarFromPlayer(client);
+        }
+
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
 
