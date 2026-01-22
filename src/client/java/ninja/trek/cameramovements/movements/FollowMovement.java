@@ -590,6 +590,19 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         current = CameraTarget.fromCamera(camera);
         lastStickYaw = CameraController.controlStick.getYaw();
         Vec3d stickPos = CameraController.controlStick.getPosition();
+
+        // Safety check: if captured camera position is unreasonably far from player,
+        // snap to a reasonable starting position to prevent glitchy far-away camera
+        if (client != null && client.player != null) {
+            Vec3d playerPos = client.player.getEyePos();
+            double distFromPlayer = current.getPosition().distanceTo(playerPos);
+            double maxReasonableDistance = followHeight + xzThreshold + 10.0; // Some margin
+            if (distFromPlayer > maxReasonableDistance) {
+                // Snap to player position - the movement will ease out to follow height
+                current = new CameraTarget(playerPos, client.player.getYaw(), client.player.getPitch(), 1.0f);
+            }
+        }
+
         startPlayerPosXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);
         orbitTargetXZ = new Vec3d(current.getPosition().x, 0.0, current.getPosition().z);
         clampArmed = false;
@@ -780,7 +793,9 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         if (!resetting) {
             resetting = true;
             resetReturnTargetTracking();
-            current = CameraTarget.fromCamera(camera);
+            // Keep existing 'current' position - it already tracks where the camera is.
+            // Using CameraTarget.fromCamera(camera) can capture stale/wrong positions
+            // if there's any timing mismatch between our movement and the game's camera.
         }
     }
 
@@ -793,9 +808,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return;
         }
         resetting = false;
-        if (camera != null) {
-            current = CameraTarget.fromCamera(camera);
-        }
+        // Keep existing 'current' position - it already tracks the camera during return.
+        // Using CameraTarget.fromCamera(camera) can capture stale/wrong positions.
         Vec3d stickPos = CameraController.controlStick.getPosition();
         lastStickYaw = CameraController.controlStick.getYaw();
         startPlayerPosXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);

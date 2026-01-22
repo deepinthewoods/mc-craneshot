@@ -163,22 +163,38 @@ public class CameraMovementManager {
      * Snaps the camera to the player if it's very far away.
      * Prevents long camera travel when starting movements after teleports/portals.
      */
-    private void snapCameraIfFarFromPlayer(MinecraftClient client) {
+    private void snapCameraIfFarFromPlayer(MinecraftClient client, Camera camera) {
         if (client == null || client.player == null) return;
 
-        CameraSystem cameraSystem = CameraSystem.getInstance();
-        if (!cameraSystem.isCameraActive()) return;
-
-        Vec3d cameraPos = cameraSystem.getCameraPosition();
         Vec3d playerPos = client.player.getEyePos();
+        float playerYaw = client.player.getYaw();
+        float playerPitch = client.player.getPitch();
+
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        Vec3d cameraPos = null;
+        if (cameraSystem.isCameraActive()) {
+            cameraPos = cameraSystem.getCameraPosition();
+        } else if (camera != null) {
+            cameraPos = camera.getPos();
+        }
+
+        if (cameraPos == null) return;
+
         double distance = cameraPos.distanceTo(playerPos);
 
         // If camera is more than 500 blocks from player, snap it
         final double SNAP_THRESHOLD = 500.0;
         if (distance > SNAP_THRESHOLD) {
             cameraSystem.setCameraPosition(playerPos);
-            cameraSystem.setCameraRotation(client.player.getYaw(), client.player.getPitch());
+            cameraSystem.setCameraRotation(playerYaw, playerPitch);
             cameraSystem.resetVelocity();
+            CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = playerPos;
+            CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = playerYaw;
+            CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = playerPitch;
+            if (camera != null) {
+                ((CameraAccessor) camera).invokesetPos(playerPos);
+                ((CameraAccessor) camera).invokeSetRotation(playerYaw, playerPitch);
+            }
             baseTarget = null;
         }
     }
@@ -265,7 +281,7 @@ public class CameraMovementManager {
         // If camera is very far from player, snap it first to prevent long travel
         // BUT don't snap for FreeCamReturnMovement - that's designed to return from far away
         if (!(movement instanceof FreeCamReturnMovement)) {
-            snapCameraIfFarFromPlayer(client);
+            snapCameraIfFarFromPlayer(client, camera);
         }
 
         movement.start(client, camera);
@@ -641,6 +657,7 @@ public class CameraMovementManager {
         if ((activeMovement == null) && client.player != null) {
             if (ninja.trek.config.GeneralMenuSettings.isUseDefaultIdleMovement()) {
                 ICameraMovement idle = ninja.trek.config.GeneralMenuSettings.getDefaultIdleMovement();
+                snapCameraIfFarFromPlayer(client, camera);
                 // Reset any post-move states before starting a fresh movement
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                 idle.start(client, camera);
@@ -791,6 +808,14 @@ public class CameraMovementManager {
             return ((AbstractMovementSettings) activeMovement).mouseWheel;
         }
         return AbstractMovementSettings.SCROLL_WHEEL.NONE;
+    }
+
+    public void syncPerspectiveState(Perspective perspective) {
+        if (perspective == null) {
+            isCurrentlyThirdPerson = false;
+            return;
+        }
+        isCurrentlyThirdPerson = perspective != Perspective.FIRST_PERSON;
     }
 
     /**

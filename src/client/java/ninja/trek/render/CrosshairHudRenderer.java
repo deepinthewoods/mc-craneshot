@@ -44,7 +44,7 @@ public class CrosshairHudRenderer {
         BlockHitResult hit = client.world.raycast(new RaycastContext(
                 eye,
                 end,
-                RaycastContext.ShapeType.VISUAL,
+                RaycastContext.ShapeType.OUTLINE,
                 RaycastContext.FluidHandling.NONE,
                 player
         ));

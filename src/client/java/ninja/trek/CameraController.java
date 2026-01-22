@@ -820,10 +820,31 @@ public class CameraController {
 
         // Reset the camera position to follow the player
         if (client != null && client.player != null) {
-            freeCamPosition = client.player.getEyePos();
-            freeCamYaw = client.player.getYaw();
-            freeCamPitch = client.player.getPitch();
+            Vec3d eyePos = client.player.getEyePos();
+            float yaw = client.player.getYaw();
+            float pitch = client.player.getPitch();
 
+            freeCamPosition = eyePos;
+            freeCamYaw = yaw;
+            freeCamPitch = pitch;
+
+            Camera camera = client.gameRenderer.getCamera();
+            if (camera != null) {
+                ((CameraAccessor) camera).invokesetPos(eyePos);
+                ((CameraAccessor) camera).invokeSetRotation(yaw, pitch);
+            }
+
+            // Keep internal camera state aligned so reactivation doesn't snap to stale positions.
+            cameraSystem.setCameraPosition(eyePos);
+            cameraSystem.setCameraRotation(yaw, pitch);
+            cameraSystem.resetVelocity();
+
+            ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
+            if (camEnt != null) {
+                camEnt.setPos(eyePos.x, eyePos.y, eyePos.z);
+                camEnt.setCameraRotations(yaw, pitch);
+                camEnt.setVelocity(Vec3d.ZERO);
+            }
         }
 
         // Reset FOV to default

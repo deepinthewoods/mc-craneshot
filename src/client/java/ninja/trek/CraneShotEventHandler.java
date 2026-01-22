@@ -3,6 +3,7 @@ package ninja.trek;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.option.Perspective;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -28,6 +29,7 @@ public class CraneShotEventHandler {
     private static RegistryKey<World> lastDimension = null;
     private static Vec3d lastPlayerPos = null;
     private static final double LARGE_POSITION_JUMP_THRESHOLD = 50.0; // blocks
+    private static Perspective lastPerspective = null;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -130,6 +132,7 @@ public class CraneShotEventHandler {
         }
 
         RegistryKey<World> currentDimension = client.world.getRegistryKey();
+        Perspective currentPerspective = client.options.getPerspective();
 
         if (lastDimension != null && !lastDimension.equals(currentDimension)) {
             // Dimension changed - snap camera to player's new position
@@ -172,9 +175,17 @@ public class CraneShotEventHandler {
                 cameraSystem.setCameraRotation(snappedYaw, snappedPitch);
                 cameraSystem.resetVelocity();
             }
+
+            // Restore the previous perspective to avoid getting stuck in third-person after the snap.
+            Perspective restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
+            if (restorePerspective != null) {
+                client.options.setPerspective(restorePerspective);
+                CraneshotClient.MOVEMENT_MANAGER.syncPerspectiveState(restorePerspective);
+            }
         }
 
         lastDimension = currentDimension;
+        lastPerspective = currentPerspective;
     }
 
     private static void handleLargePositionJumps(MinecraftClient client, Camera camera) {

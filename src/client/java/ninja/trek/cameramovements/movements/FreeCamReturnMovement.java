@@ -15,6 +15,7 @@ import ninja.trek.mixin.client.FovAccessor;
         description = "Return from freecam to stick target using Linear easing"
 )
 public class FreeCamReturnMovement extends AbstractMovementSettings implements ICameraMovement {
+    private static final double MAX_RETURN_TARGET_DISTANCE = 256.0;
 
     // Linear-like parameters
     @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
@@ -55,11 +56,8 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         start = new CameraTarget(startPos, startYaw, startPitch, 1.0f);
         current = new CameraTarget(startPos, startYaw, startPitch, 1.0f);
 
-        // Initial end target from stick controller (will be updated every frame)
-        Vec3d targetPos = CameraController.controlStick.getPosition();
-        float targetYaw = CameraController.controlStick.getYaw();
-        float targetPitch = CameraController.controlStick.getPitch();
-        end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
+        // Initial end target (will be updated every frame)
+        end = resolveReturnTarget(client);
         // No startup log
 
         isComplete = false;
@@ -72,10 +70,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         }
 
         // End follows live stick controller pose (player can move during return)
-        Vec3d targetPos = CameraController.controlStick.getPosition();
-        float targetYaw = CameraController.controlStick.getYaw();
-        float targetPitch = CameraController.controlStick.getPitch();
-        end = new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
+        end = resolveReturnTarget(client);
 
         // Position step with LinearMovement-like speed-capped easing
         Vec3d delta = end.getPosition().subtract(current.getPosition());
@@ -94,10 +89,10 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         );
 
         // Rotation step with speed limits
-        float yawError = targetYaw - current.getYaw();
+        float yawError = end.getYaw() - current.getYaw();
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
-        float pitchError = targetPitch - current.getPitch();
+        float pitchError = end.getPitch() - current.getPitch();
         float desiredYawSpeed = (float) (yawError * rotationEasing);
         float desiredPitchSpeed = (float) (pitchError * rotationEasing);
         float maxRot = (float) (rotationSpeedLimit * (deltaSeconds));
@@ -162,5 +157,23 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     public RaycastType getRaycastType() {
         // Let manager handle collision against the end position if needed
         return RaycastType.NONE;
+    }
+
+    private CameraTarget resolveReturnTarget(MinecraftClient client) {
+        Vec3d targetPos = CameraController.controlStick.getPosition();
+        float targetYaw = CameraController.controlStick.getYaw();
+        float targetPitch = CameraController.controlStick.getPitch();
+
+        if (client == null || client.player == null) {
+            return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
+        }
+
+        Vec3d playerEye = client.player.getEyePos();
+        double distance = targetPos.distanceTo(playerEye);
+        if (Double.isNaN(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
+            return new CameraTarget(playerEye, client.player.getYaw(), client.player.getPitch(), 1.0f);
+        }
+
+        return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
     }
 }
