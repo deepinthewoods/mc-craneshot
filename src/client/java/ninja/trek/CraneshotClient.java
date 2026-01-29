@@ -6,6 +6,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import ninja.trek.cameramovements.ICameraMovement;
 import net.minecraft.util.Identifier;
+import ninja.trek.config.FollowerMode;
 import ninja.trek.config.GeneralSettingsIO;
 import ninja.trek.config.MenuOverlayScreen;
 import ninja.trek.config.SlotSettingsIO;
@@ -81,6 +82,9 @@ public class CraneshotClient implements ClientModInitializer {
             ));
         }
         CameraMovementRegistry.initialize();
+        // Detect follower mode from launch args (--craneshot-follower=N or -Dcraneshot.follower=N)
+        FollowerMode.init();
+
         // Load camera nodes from client config
         ninja.trek.nodes.NodeManager.get().load();
         GeneralSettingsIO.loadSettings();

@@ -10,6 +10,8 @@ import net.minecraft.world.World;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.FollowMovement;
+import ninja.trek.config.FollowerConfig;
+import ninja.trek.config.FollowerMode;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 
@@ -48,6 +50,13 @@ public class CraneShotEventHandler {
             handleRespawnAndWakeReset(client, camera);
             handleDimensionChange(client, camera);
             handleLargePositionJumps(client, camera);
+
+            // Follower mode: auto-activate assigned movement, skip manual keybinds
+            if (FollowerMode.isFollower()) {
+                handleFollowerMode(client, camera);
+                // Skip all manual keybind processing for follower instances
+                return;
+            }
 
             boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
             if (followPressed != followWasPressed) {
@@ -257,6 +266,94 @@ public class CraneShotEventHandler {
             }
         } catch (Exception e) {
             // logging removed
+        }
+    }
+
+    private static ICameraMovement followerMovementInstance = null;
+    private static String lastFollowerMovementType = null;
+
+    private static void handleFollowerMode(MinecraftClient client, Camera camera) {
+        if (client.player == null) return;
+
+        // Periodically check if the config file was changed by the primary instance
+        boolean configChanged = ninja.trek.config.FollowerMode.checkForConfigChange();
+
+        FollowerConfig config = ninja.trek.config.FollowerMode.getConfig();
+        if (config == null) return;
+
+        // Set target player name from shared config
+        String targetName = config.getTargetPlayerName();
+        if (targetName != null && !targetName.isEmpty()) {
+            GeneralMenuSettings.setTargetPlayerName(targetName);
+            GeneralMenuSettings.setSpectatorFollowEnabled(true);
+        }
+
+        int index = ninja.trek.config.FollowerMode.getFollowerIndex();
+        FollowerConfig.FollowerEntry entry = config.getFollower(index);
+
+        // If our follower index no longer exists (entry removed), stop the movement
+        if (entry == null) {
+            if (followerMovementInstance != null) {
+                CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+                followerMovementInstance = null;
+                lastFollowerMovementType = null;
+                ninja.trek.config.FollowerMode.setFollowerMovementStarted(false);
+            }
+            return;
+        }
+
+        if (entry.getMode() == FollowerConfig.FollowerMode.MOVEMENT) {
+            ICameraMovement newMovement = entry.getMovement();
+
+            // Detect if the movement type or settings changed
+            if (configChanged && newMovement != null) {
+                String newType = newMovement.getClass().getName();
+                boolean typeChanged = !newType.equals(lastFollowerMovementType);
+
+                if (typeChanged || followerMovementInstance == null) {
+                    // Movement type changed or first start - restart with new movement
+                    CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+                    followerMovementInstance = newMovement;
+                    lastFollowerMovementType = newType;
+                    CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
+                    ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
+                    return;
+                } else {
+                    // Same type but settings may have changed - update the instance
+                    // Since the config was reloaded, entry.getMovement() is a fresh instance
+                    // with the new settings. Replace the active movement.
+                    CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+                    followerMovementInstance = newMovement;
+                    CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
+                    ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
+                    return;
+                }
+            }
+
+            // Auto-start the assigned movement if not already running
+            if (!ninja.trek.config.FollowerMode.isFollowerMovementStarted() || CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) {
+                if (newMovement != null) {
+                    followerMovementInstance = newMovement;
+                    lastFollowerMovementType = newMovement.getClass().getName();
+                    CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
+                    ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
+                }
+            }
+
+            // Auto-restart if the movement completed
+            if (followerMovementInstance != null) {
+                CraneshotClient.MOVEMENT_MANAGER.restartFollowerMovementIfComplete(followerMovementInstance, client, camera);
+            }
+        } else if (entry.getMode() == FollowerConfig.FollowerMode.ZONES) {
+            // If switching from MOVEMENT to ZONES mode, stop the movement
+            if (followerMovementInstance != null) {
+                CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
+                followerMovementInstance = null;
+                lastFollowerMovementType = null;
+                ninja.trek.config.FollowerMode.setFollowerMovementStarted(false);
+            }
+            // Zones mode: just ensure spectator follow is enabled
+            // Node influence is already applied via NodeManager.applyInfluence() in CameraController
         }
     }
 

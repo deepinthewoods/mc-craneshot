@@ -17,6 +17,8 @@ import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.lang.reflect.Field;
 import java.util.*;
+import ninja.trek.config.FollowerConfig.FollowerEntry;
+import ninja.trek.config.FollowerConfig.FollowerMode;
 
 public class MenuOverlayScreen extends Screen {
     private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>();
@@ -35,11 +37,16 @@ public class MenuOverlayScreen extends Screen {
     private int centerX;
     private int centerY;
     private int selectedMovementTypeIndex = 0;
+    private int followerMovementTypeIndex = 0;
     private TextFieldWidget targetPlayerNameField;
+    private TextFieldWidget followerTargetPlayerNameField;
+    private FollowerConfig followerConfig;
+    private static final Map<Integer, Boolean> expandedFollowers = new HashMap<>();
 
     public MenuOverlayScreen() {
         super(Text.literal("CraneShot Settings"));
         isMenuOpen = false;
+        followerConfig = FollowerSettingsIO.loadFollowers();
     }
 
     @Override
@@ -58,23 +65,33 @@ public class MenuOverlayScreen extends Screen {
         int MOVEMENT_ROW_HEIGHT = BUTTON_HEIGHT + 5;
         int SETTING_HEIGHT = BUTTON_HEIGHT + 5;
 
-        if (selectedTab > 0) {
-            int slotIndex = selectedTab - 1;
+        if (selectedTab == 0) {
+            addGeneralSettings();
+        } else if (selectedTab == 1) {
+            addFollowerSettings();
+        } else if (selectedTab > 1) {
+            int slotIndex = selectedTab - 2;
             createControlsBar(slotIndex, visibleStartY, BUTTON_HEIGHT);
             createMovementList(slotIndex, visibleStartY, visibleEndY, BUTTON_HEIGHT,
                     MOVEMENT_ROW_HEIGHT, MOVEMENT_SPACING, SETTING_HEIGHT);
-        } else if (selectedTab == 0) {
-            addGeneralSettings();
         }
     }
 
     private void createTabButtons() {
-        int tabCount = CraneshotClient.MOVEMENT_MANAGER.getMovementCount() + 1;
+        // Tab 0 = General, Tab 1 = Followers, Tabs 2..7 = Slots 1..6
+        int tabCount = CraneshotClient.MOVEMENT_MANAGER.getMovementCount() + 2; // +2 for General and Followers
         int tabWidth = Math.min(100, (guiWidth - 20) / tabCount);
 
-        for (int i = 0; i <= CraneshotClient.MOVEMENT_MANAGER.getMovementCount(); i++) {
+        for (int i = 0; i < tabCount; i++) {
             int tabIndex = i;
-            String tabName = (i == 0) ? "General" : String.valueOf(i);
+            String tabName;
+            if (i == 0) {
+                tabName = "General";
+            } else if (i == 1) {
+                tabName = "Followers";
+            } else {
+                tabName = String.valueOf(i - 1); // Slot number
+            }
             Text buttonText = Text.literal(tabName);
             if (i != selectedTab) {
                 buttonText = buttonText.copy().formatted(Formatting.GRAY);
@@ -839,6 +856,194 @@ public class MenuOverlayScreen extends Screen {
         // Update max scroll to handle the expanded/collapsed sections
         updateScrollBounds(yOffset + spacing);
     }
+    private void addFollowerSettings() {
+        int yOffset = CONTENT_START_Y + 20;
+        int buttonWidth = 200;
+        int buttonX = centerX + 20;
+        int spacing = 25;
+        int BUTTON_HEIGHT = 20;
+        int totalWidth = guiWidth - 40;
+        int labelWidth = Math.min(200, totalWidth / 3);
+        int controlWidth = Math.min(200, totalWidth / 2);
+        int baseY = centerY - scrollOffset;
+
+        // Target Player Name
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Target Player Name:"), button -> {})
+                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+                .build());
+
+        followerTargetPlayerNameField = new TextFieldWidget(
+                this.textRenderer,
+                buttonX + labelWidth + 20,
+                baseY + yOffset,
+                controlWidth,
+                BUTTON_HEIGHT,
+                Text.literal("Player name")
+        );
+        followerTargetPlayerNameField.setMaxLength(16);
+        followerTargetPlayerNameField.setText(followerConfig.getTargetPlayerName());
+        followerTargetPlayerNameField.setChangedListener(text -> {
+            followerConfig.setTargetPlayerName(text);
+            FollowerSettingsIO.saveFollowers(followerConfig);
+        });
+        this.addDrawableChild(followerTargetPlayerNameField);
+
+        yOffset += spacing + 10;
+
+        // Follower entries header
+        this.addDrawableChild(ButtonWidget.builder(
+                Text.literal("Follower Entries").formatted(Formatting.YELLOW), button -> {})
+                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .build());
+
+        // Add follower button
+        int addBtnX = buttonX + buttonWidth + 10;
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("+ Add Follower"), button -> {
+            followerConfig.addFollower(new FollowerEntry());
+            FollowerSettingsIO.saveFollowers(followerConfig);
+            reinitialize();
+        }).dimensions(addBtnX, baseY + yOffset, 100, BUTTON_HEIGHT).build());
+
+        yOffset += spacing + 5;
+
+        // Render each follower entry
+        List<FollowerEntry> followers = followerConfig.getFollowers();
+        for (int i = 0; i < followers.size(); i++) {
+            final int followerIndex = i;
+            FollowerEntry entry = followers.get(i);
+
+            // Follower index label
+            int controlX = buttonX;
+            this.addDrawableChild(ButtonWidget.builder(
+                    Text.literal("Follower " + i).formatted(Formatting.WHITE), button -> {})
+                    .dimensions(controlX, baseY + yOffset, 80, BUTTON_HEIGHT)
+                    .build());
+            controlX += 85;
+
+            // Mode toggle button
+            String modeLabel = entry.getMode() == FollowerMode.MOVEMENT ? "Mode: MOVEMENT" : "Mode: ZONES";
+            this.addDrawableChild(ButtonWidget.builder(Text.literal(modeLabel), button -> {
+                if (entry.getMode() == FollowerMode.MOVEMENT) {
+                    entry.setMode(FollowerMode.ZONES);
+                } else {
+                    entry.setMode(FollowerMode.MOVEMENT);
+                }
+                FollowerSettingsIO.saveFollowers(followerConfig);
+                reinitialize();
+            }).dimensions(controlX, baseY + yOffset, 120, BUTTON_HEIGHT).build());
+            controlX += 125;
+
+            // Remove button
+            this.addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> {
+                followerConfig.removeFollower(followerIndex);
+                expandedFollowers.remove(followerIndex);
+                FollowerSettingsIO.saveFollowers(followerConfig);
+                reinitialize();
+            }).dimensions(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
+            controlX += 25;
+
+            yOffset += spacing;
+
+            // Movement settings (only shown when mode=MOVEMENT)
+            if (entry.getMode() == FollowerMode.MOVEMENT) {
+                // Movement type selector
+                String movementTypeName = "None";
+                if (entry.getMovement() != null) {
+                    movementTypeName = entry.getMovement() instanceof AbstractMovementSettings
+                            ? ((AbstractMovementSettings) entry.getMovement()).getDisplayName()
+                            : entry.getMovement().getName();
+                }
+
+                // Movement type cycle button
+                List<CameraMovementRegistry.MovementInfo> allMovements = CameraMovementRegistry.getAllMovements();
+                this.addDrawableChild(ButtonWidget.builder(
+                        Text.literal("Type: " + movementTypeName), button -> {
+                    if (allMovements.isEmpty()) return;
+                    // Find current type index
+                    int currentIdx = 0;
+                    if (entry.getMovement() != null) {
+                        for (int mi = 0; mi < allMovements.size(); mi++) {
+                            if (allMovements.get(mi).getMovementClass().equals(entry.getMovement().getClass())) {
+                                currentIdx = mi;
+                                break;
+                            }
+                        }
+                    }
+                    int nextIdx = (currentIdx + 1) % allMovements.size();
+                    try {
+                        ICameraMovement newMovement = allMovements.get(nextIdx).getMovementClass()
+                                .getDeclaredConstructor().newInstance();
+                        entry.setMovement(newMovement);
+                        FollowerSettingsIO.saveFollowers(followerConfig);
+                        reinitialize();
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }).dimensions(buttonX + 20, baseY + yOffset, 200, BUTTON_HEIGHT).build());
+
+                // Expand/collapse settings button
+                if (entry.getMovement() != null) {
+                    boolean expanded = expandedFollowers.getOrDefault(followerIndex, false);
+                    this.addDrawableChild(ButtonWidget.builder(
+                            Text.literal(expanded ? "▼ Settings" : "▶ Settings"), button -> {
+                        expandedFollowers.put(followerIndex, !expandedFollowers.getOrDefault(followerIndex, false));
+                        reinitialize();
+                    }).dimensions(buttonX + 225, baseY + yOffset, 80, BUTTON_HEIGHT).build());
+                }
+
+                yOffset += spacing;
+
+                // Show movement settings if expanded
+                if (entry.getMovement() instanceof AbstractMovementSettings settings
+                        && expandedFollowers.getOrDefault(followerIndex, false)) {
+                    List<Field> settingFields = new ArrayList<>();
+                    collectSettingFields(settings, settingFields);
+
+                    int settingWidth = labelWidth + controlWidth + 10;
+                    int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+                    int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+                    for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                        Field field = settingFields.get(fieldIndex);
+                        MovementSetting annotation = field.getAnnotation(MovementSetting.class);
+                        field.setAccessible(true);
+                        try {
+                            int column = fieldIndex / settingsPerColumn;
+                            int row = fieldIndex % settingsPerColumn;
+                            int settingX = centerX + 40 + column * (settingWidth + 20);
+                            int settingY = baseY + yOffset + (row * BUTTON_HEIGHT);
+
+                            createSettingControl(settings, field, annotation, settingX, settingY,
+                                    labelWidth, controlWidth, BUTTON_HEIGHT);
+                        } catch (IllegalAccessException ignored) {}
+                    }
+
+                    yOffset += settingsPerColumn * BUTTON_HEIGHT + 5;
+
+                    // Save after any setting change - add a manual save button
+                    this.addDrawableChild(ButtonWidget.builder(
+                            Text.literal("Save Settings").formatted(Formatting.GREEN), button -> {
+                        FollowerSettingsIO.saveFollowers(followerConfig);
+                    }).dimensions(buttonX + 40, baseY + yOffset, 100, BUTTON_HEIGHT).build());
+
+                    yOffset += spacing;
+                }
+            }
+
+            yOffset += 5; // Extra spacing between followers
+        }
+
+        if (followers.isEmpty()) {
+            this.addDrawableChild(ButtonWidget.builder(
+                    Text.literal("No followers configured").formatted(Formatting.GRAY), button -> {})
+                    .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                    .build());
+            yOffset += spacing;
+        }
+
+        updateScrollBounds(yOffset + spacing);
+    }
+
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,
                                     int BUTTON_HEIGHT, int MOVEMENT_ROW_HEIGHT, int MOVEMENT_SPACING, int SETTING_HEIGHT) {
         List<ICameraMovement> movements = CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex);
@@ -1187,6 +1392,9 @@ public class MenuOverlayScreen extends Screen {
         }
         SlotSettingsIO.saveSlots(slots);
         GeneralSettingsIO.saveSettings();
+        if (followerConfig != null) {
+            FollowerSettingsIO.saveFollowers(followerConfig);
+        }
 
         if (this.client != null) {
             this.client.setScreen(null);

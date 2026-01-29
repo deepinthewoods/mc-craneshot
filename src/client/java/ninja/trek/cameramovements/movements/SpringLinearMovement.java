@@ -15,12 +15,17 @@ import ninja.trek.mixin.client.FovAccessor;
 )
 public class SpringLinearMovement extends AbstractMovementSettings implements ICameraMovement {
 
+    // === Spring Settings ===
     @MovementSetting(label = "Position Halflife", min = 0.01, max = 1.0)
     private double positionHalflife = 0.15;
 
     @MovementSetting(label = "Rotation Halflife", min = 0.01, max = 1.0)
     private double rotationHalflife = 0.15;
 
+    @MovementSetting(label = "FOV Halflife", min = 0.01, max = 1.0)
+    private double fovHalflife = 0.15;
+
+    // === Distance Settings ===
     @MovementSetting(label = "Target Distance", min = 0.0, max = 50.0)
     private double targetDistance = 10.0;
 
@@ -30,9 +35,23 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
     @MovementSetting(label = "Max Distance", min = 10.0, max = 50.0)
     private double maxDistance = 20.0;
 
-    @MovementSetting(label = "FOV Halflife", min = 0.01, max = 1.0)
-    private double fovHalflife = 0.15;
+    // === Final Return Settings ===
+    public enum ReturnMode {
+        SPRING_ONLY,      // Basic spring - will lag behind moving targets
+        VELOCITY_MATCH,   // Spring that matches target velocity on arrival
+        PREDICTIVE        // Spring that targets predicted future position
+    }
 
+    @MovementSetting(label = "Return Mode", description = "How to handle returning to a moving player")
+    private ReturnMode returnMode = ReturnMode.VELOCITY_MATCH;
+
+    @MovementSetting(label = "Velocity Influence", min = 0.0, max = 2.0, description = "How strongly to match player velocity (Velocity Match mode)")
+    private double velocityInfluence = 1.0;
+
+    @MovementSetting(label = "Prediction Time", min = 0.0, max = 0.5, description = "How far ahead to predict player position in seconds (Predictive mode)")
+    private double predictionTime = 0.15;
+
+    // === State ===
     public CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
     public CameraTarget current = new CameraTarget();
@@ -45,6 +64,14 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
     private float yawVelocity = 0f;
     private float pitchVelocity = 0f;
     private float fovVelocity = 0f;
+
+    // For tracking player velocity
+    private Vec3d lastPlayerPos = null;
+    private float lastPlayerYaw = 0f;
+    private float lastPlayerPitch = 0f;
+
+    // For overshoot detection
+    private double lastDistanceToPlayer = Double.MAX_VALUE;
 
     @Override
     public void start(MinecraftClient client, Camera camera) {
@@ -64,6 +91,14 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         yawVelocity = 0f;
         pitchVelocity = 0f;
         fovVelocity = 0f;
+
+        // Reset player tracking
+        lastPlayerPos = null;
+        lastPlayerYaw = 0f;
+        lastPlayerPitch = 0f;
+
+        // Reset overshoot detection
+        lastDistanceToPlayer = Double.MAX_VALUE;
     }
 
     private Vec3d calculateTargetPosition(CameraTarget stick) {
@@ -76,13 +111,9 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
     }
 
     /**
-     * Critically damped spring using exact solution.
-     * Updates position and velocity atomically.
-     *
-     * Based on "Spring-It-On" by Daniel Holden.
-     * halflife = time for spring to move halfway to target
+     * Basic critically damped spring - converges to target with zero velocity.
      */
-    private Vec3d springDamperExact3D(Vec3d pos, Vec3d vel, Vec3d target, double halflife, double dt) {
+    private Vec3d springDamperBasic(Vec3d pos, Vec3d vel, Vec3d target, double halflife, double dt) {
         double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
         double y = damping / 2.0;
         double eydt = Math.exp(-y * dt);
@@ -91,8 +122,25 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         Vec3d j1 = vel.add(j0.multiply(y));
 
         Vec3d newPos = j0.add(j1.multiply(dt)).multiply(eydt).add(target);
-        // Update velocity for next frame
         positionVelocity = vel.subtract(j1.multiply(y * dt)).multiply(eydt);
+
+        return newPos;
+    }
+
+    /**
+     * Velocity-matching critically damped spring - converges to target position AND velocity.
+     * This allows the camera to arrive at the player already moving at the player's speed.
+     */
+    private Vec3d springDamperVelocityMatch(Vec3d pos, Vec3d vel, Vec3d targetPos, Vec3d targetVel, double halflife, double dt) {
+        double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
+        double y = damping / 2.0;
+        double eydt = Math.exp(-y * dt);
+
+        Vec3d j0 = pos.subtract(targetPos);
+        Vec3d j1 = vel.subtract(targetVel).add(j0.multiply(y));
+
+        Vec3d newPos = j0.add(j1.multiply(dt)).multiply(eydt).add(targetPos);
+        positionVelocity = vel.subtract(targetVel).subtract(j1.multiply(y * dt)).multiply(eydt).add(targetVel);
 
         return newPos;
     }
@@ -101,7 +149,6 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
      * 1D spring for scalar values (rotation, fov)
      */
     private float springDamperExact1D(float pos, float vel, float target, double halflife, double dt, boolean isAngle) {
-        // Handle angle wrapping
         float error = target - pos;
         if (isAngle) {
             while (error > 180) error -= 360;
@@ -115,6 +162,27 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
 
         float j0 = pos - target;
         float j1 = vel + j0 * (float)y;
+
+        return (float)((j0 + j1 * dt) * eydt + target);
+    }
+
+    /**
+     * 1D velocity-matching spring for rotation
+     */
+    private float springDamperVelocityMatch1D(float pos, float vel, float target, float targetVel, double halflife, double dt, boolean isAngle) {
+        float error = target - pos;
+        if (isAngle) {
+            while (error > 180) error -= 360;
+            while (error < -180) error += 360;
+            target = pos + error;
+        }
+
+        double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
+        double y = damping / 2.0;
+        double eydt = Math.exp(-y * dt);
+
+        float j0 = pos - target;
+        float j1 = (vel - targetVel) + j0 * (float)y;
 
         return (float)((j0 + j1 * dt) * eydt + target);
     }
@@ -137,21 +205,79 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         return (float)((vel - j1 * y * dt) * eydt);
     }
 
+    private float springVelocityUpdate1DVelMatch(float vel, float pos, float target, float targetVel, double halflife, double dt, boolean isAngle) {
+        float error = target - pos;
+        if (isAngle) {
+            while (error > 180) error -= 360;
+            while (error < -180) error += 360;
+            target = pos + error;
+        }
+
+        double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
+        double y = damping / 2.0;
+        double eydt = Math.exp(-y * dt);
+
+        float j0 = pos - target;
+        float j1 = (vel - targetVel) + j0 * (float)y;
+
+        return (float)(((vel - targetVel) - j1 * y * dt) * eydt + targetVel);
+    }
+
     @Override
     public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
+
+        // Calculate player velocity for return modes
+        Vec3d playerPos = client.player.getEyePos();
+        float playerYaw = client.player.getYaw();
+        float playerPitch = client.player.getPitch();
+
+        Vec3d playerVelocity = Vec3d.ZERO;
+        float playerYawVelocity = 0f;
+        float playerPitchVelocity = 0f;
+
+        if (lastPlayerPos != null && deltaSeconds > 0.0001f) {
+            playerVelocity = playerPos.subtract(lastPlayerPos).multiply(1.0 / deltaSeconds);
+            playerYawVelocity = (playerYaw - lastPlayerYaw) / deltaSeconds;
+            playerPitchVelocity = (playerPitch - lastPlayerPitch) / deltaSeconds;
+
+            // Normalize yaw velocity
+            while (playerYawVelocity > 180 / deltaSeconds) playerYawVelocity -= 360 / deltaSeconds;
+            while (playerYawVelocity < -180 / deltaSeconds) playerYawVelocity += 360 / deltaSeconds;
+        }
+
+        lastPlayerPos = playerPos;
+        lastPlayerYaw = playerYaw;
+        lastPlayerPitch = playerPitch;
 
         // Determine target based on phase
         Vec3d targetPos;
         float targetYaw;
         float targetPitch;
         float targetFov;
+        Vec3d targetVelocity = Vec3d.ZERO;
+        float targetYawVel = 0f;
+        float targetPitchVel = 0f;
 
         if (resetting) {
             // Return phase: target is player's head
-            targetPos = client.player.getEyePos();
-            targetYaw = client.player.getYaw();
-            targetPitch = client.player.getPitch();
+            if (returnMode == ReturnMode.PREDICTIVE) {
+                // Predict where player will be
+                targetPos = playerPos.add(playerVelocity.multiply(predictionTime));
+                targetYaw = playerYaw + playerYawVelocity * (float)predictionTime;
+                targetPitch = playerPitch + playerPitchVelocity * (float)predictionTime;
+            } else {
+                targetPos = playerPos;
+                targetYaw = playerYaw;
+                targetPitch = playerPitch;
+            }
+
+            if (returnMode == ReturnMode.VELOCITY_MATCH) {
+                targetVelocity = playerVelocity.multiply(velocityInfluence);
+                targetYawVel = playerYawVelocity * (float)velocityInfluence;
+                targetPitchVel = playerPitchVelocity * (float)velocityInfluence;
+            }
+
             targetFov = 1.0f;
         } else {
             // Out phase: target is offset position behind/around player
@@ -165,22 +291,43 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         }
 
         // Apply springs for position
-        Vec3d newPos = springDamperExact3D(
-            current.getPosition(),
-            positionVelocity,
-            targetPos,
-            positionHalflife,
-            deltaSeconds
-        );
+        Vec3d newPos;
+        if (resetting && returnMode == ReturnMode.VELOCITY_MATCH) {
+            newPos = springDamperVelocityMatch(
+                current.getPosition(),
+                positionVelocity,
+                targetPos,
+                targetVelocity,
+                positionHalflife,
+                deltaSeconds
+            );
+        } else {
+            newPos = springDamperBasic(
+                current.getPosition(),
+                positionVelocity,
+                targetPos,
+                positionHalflife,
+                deltaSeconds
+            );
+        }
 
         // Apply springs for rotation
-        float newYaw = springDamperExact1D(current.getYaw(), yawVelocity, targetYaw, rotationHalflife, deltaSeconds, true);
-        yawVelocity = springVelocityUpdate1D(yawVelocity, current.getYaw(), targetYaw, rotationHalflife, deltaSeconds, true);
+        float newYaw, newPitch;
+        if (resetting && returnMode == ReturnMode.VELOCITY_MATCH) {
+            newYaw = springDamperVelocityMatch1D(current.getYaw(), yawVelocity, targetYaw, targetYawVel, rotationHalflife, deltaSeconds, true);
+            yawVelocity = springVelocityUpdate1DVelMatch(yawVelocity, current.getYaw(), targetYaw, targetYawVel, rotationHalflife, deltaSeconds, true);
 
-        float newPitch = springDamperExact1D(current.getPitch(), pitchVelocity, targetPitch, rotationHalflife, deltaSeconds, false);
-        pitchVelocity = springVelocityUpdate1D(pitchVelocity, current.getPitch(), targetPitch, rotationHalflife, deltaSeconds, false);
+            newPitch = springDamperVelocityMatch1D(current.getPitch(), pitchVelocity, targetPitch, targetPitchVel, rotationHalflife, deltaSeconds, false);
+            pitchVelocity = springVelocityUpdate1DVelMatch(pitchVelocity, current.getPitch(), targetPitch, targetPitchVel, rotationHalflife, deltaSeconds, false);
+        } else {
+            newYaw = springDamperExact1D(current.getYaw(), yawVelocity, targetYaw, rotationHalflife, deltaSeconds, true);
+            yawVelocity = springVelocityUpdate1D(yawVelocity, current.getYaw(), targetYaw, rotationHalflife, deltaSeconds, true);
 
-        // Apply spring for FOV
+            newPitch = springDamperExact1D(current.getPitch(), pitchVelocity, targetPitch, rotationHalflife, deltaSeconds, false);
+            pitchVelocity = springVelocityUpdate1D(pitchVelocity, current.getPitch(), targetPitch, rotationHalflife, deltaSeconds, false);
+        }
+
+        // Apply spring for FOV (always basic - no velocity matching needed)
         float newFov = springDamperExact1D(current.getFovMultiplier(), fovVelocity, targetFov, fovHalflife, deltaSeconds, false);
         fovVelocity = springVelocityUpdate1D(fovVelocity, current.getFovMultiplier(), targetFov, fovHalflife, deltaSeconds, false);
 
@@ -191,6 +338,20 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
             ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
         }
 
+        // Calculate distance to player for completion/overshoot checks
+        double distanceToPlayer = current.getPosition().distanceTo(playerPos);
+
+        // Overshoot detection during return phase
+        // If distance is increasing and we're close, we've passed the player - clamp and complete
+        boolean overshot = false;
+        if (resetting && distanceToPlayer > lastDistanceToPlayer && lastDistanceToPlayer < 2.0) {
+            // We overshot - snap to player position
+            current = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+            positionVelocity = playerVelocity; // Match player velocity on completion
+            overshot = true;
+        }
+        lastDistanceToPlayer = distanceToPlayer;
+
         // Update alpha based on distance progress
         if (!resetting) {
             Vec3d startPos = CameraController.controlStick.getPosition();
@@ -198,14 +359,13 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
             double remaining = current.getPosition().distanceTo(end.getPosition());
             alpha = totalDistance > 0.001 ? remaining / totalDistance : 0.0;
         } else {
-            double remaining = current.getPosition().distanceTo(targetPos);
-            alpha = remaining;
+            alpha = distanceToPlayer;
         }
 
-        // Completion check
-        boolean complete = resetting &&
-            current.getPosition().distanceTo(targetPos) < 0.005 &&
-            Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
+        // Completion check - use actual player position, or overshot
+        boolean complete = overshot || (resetting &&
+            distanceToPlayer < 0.05 &&
+            Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f);
 
         return new MovementState(current, complete);
     }
@@ -217,8 +377,11 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
             resetReturnTargetTracking();
             current = CameraTarget.fromCamera(camera);
 
-            // Keep existing velocity for smooth transition into return phase
-            // The spring will naturally redirect toward the new target
+            // Reset player tracking for fresh velocity calculation
+            lastPlayerPos = null;
+
+            // Reset overshoot detection
+            lastDistanceToPlayer = Double.MAX_VALUE;
 
             if (client.player != null) {
                 float playerYaw = client.player.getYaw();
@@ -241,8 +404,6 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         if (camera != null) {
             current = CameraTarget.fromCamera(camera);
         }
-
-        // Keep velocity for smooth transition back to out phase
 
         Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(
@@ -289,7 +450,7 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         if (resetting) {
             double positionDistance = current.getPosition().distanceTo(end.getPosition());
             float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
-            return positionDistance < 0.005 && fovDifference < 0.01f;
+            return positionDistance < 0.05 && fovDifference < 0.01f;
         }
         return false;
     }

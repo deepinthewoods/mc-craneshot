@@ -798,6 +798,40 @@ public class CameraMovementManager {
         this.inFreeCamReturnPhase = true;
     }
 
+    /**
+     * Starts a follower movement that runs permanently (for secondary/follower instances).
+     * The movement auto-restarts on completion, creating a continuous loop.
+     */
+    public void startFollowerMovement(ICameraMovement movement, MinecraftClient client, Camera camera) {
+        if (movement == null) return;
+
+        // Cancel any existing movement
+        if (activeMovement != null) {
+            cancelAllMovements(client, camera);
+        }
+
+        activeMovement = movement;
+        activeMovementSlot = null;
+        isOut = false;
+        inFreeCamReturnPhase = false;
+
+        CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
+        snapCameraIfFarFromPlayer(client, camera);
+        movement.start(client, camera);
+        CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
+    }
+
+    /**
+     * Checks if the active follower movement has completed and restarts it.
+     * Called from the tick handler for follower instances.
+     */
+    public void restartFollowerMovementIfComplete(ICameraMovement followerMovement, MinecraftClient client, Camera camera) {
+        // If our follower movement completed (activeMovement went null), restart it
+        if (activeMovement == null && followerMovement != null) {
+            startFollowerMovement(followerMovement, client, camera);
+        }
+    }
+
     public AbstractMovementSettings.SCROLL_WHEEL getActiveMouseWheelMode() {
         // Zoom overlay takes priority for scroll wheel
         if (isZoomActive && zoomOverlay != null) {
