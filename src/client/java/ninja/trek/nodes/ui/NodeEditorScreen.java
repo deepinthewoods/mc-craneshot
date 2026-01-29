@@ -123,6 +123,20 @@ public class NodeEditorScreen extends Screen {
             }
         }).dimensions(rightX,y,w,h).build()); y+=h+sp;
 
+        addDrawableChild(ButtonWidget.builder(Text.literal("Add Timelapse"), b-> {
+            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+            if (cam != null) {
+                float fovMul = 1.0f;
+                try {
+                    fovMul = ((ninja.trek.mixin.client.FovAccessor) MinecraftClient.getInstance().gameRenderer).getFovModifier();
+                    if (fovMul == 0) fovMul = 1.0f;
+                } catch (Throwable ignored) {}
+                CameraNode n = NodeManager.get().addTimelapseNode(cam.getPos(), cam.getYaw(), cam.getPitch(), fovMul);
+                NodeManager.get().setSelected(n.id);
+                this.init(client, this.width, this.height);
+            }
+        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+
         addDrawableChild(ButtonWidget.builder(Text.literal("Delete Node"), b-> NodeManager.get().removeSelected())
                 .dimensions(rightX,y,w,h).build()); y+=h+sp;
 
@@ -139,13 +153,71 @@ public class NodeEditorScreen extends Screen {
         CameraNode selType = NodeManager.get().getSelected();
         if (selType != null) {
             addDrawableChild(ButtonWidget.builder(Text.literal("Type: "+selType.type), b-> {
-                selType.type = (selType.type == ninja.trek.nodes.model.NodeType.CAMERA_CONTROL)
-                        ? ninja.trek.nodes.model.NodeType.DRONE_SHOT
-                        : ninja.trek.nodes.model.NodeType.CAMERA_CONTROL;
+                ninja.trek.nodes.model.NodeType[] types = ninja.trek.nodes.model.NodeType.values();
+                int idx = selType.type.ordinal();
+                selType.type = types[(idx + 1) % types.length];
                 NodeManager.get().save();
                 this.init(client, this.width, this.height);
             }).dimensions(rightX, y, w, h).build());
             y += h + sp;
+
+            if (selType.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
+                // Update Camera button: re-capture current camera state into this timelapse node
+                addDrawableChild(ButtonWidget.builder(Text.literal("Update Camera"), b-> {
+                    Camera cam2 = MinecraftClient.getInstance().gameRenderer.getCamera();
+                    if (cam2 != null) {
+                        selType.position = cam2.getPos();
+                        selType.timelapseYaw = cam2.getYaw();
+                        selType.timelapsePitch = cam2.getPitch();
+                        try {
+                            float fov = ((ninja.trek.mixin.client.FovAccessor) MinecraftClient.getInstance().gameRenderer).getFovModifier();
+                            if (fov != 0) selType.timelapseFovMultiplier = fov;
+                        } catch (Throwable ignored) {}
+                        NodeManager.get().save();
+                        this.init(client, this.width, this.height);
+                    }
+                }).dimensions(rightX, y, w, h).build());
+                y += h + sp;
+
+                // Yaw +/- controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("Yaw -"), b-> {
+                    selType.timelapseYaw -= 5f;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.timelapseYaw += 5f;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+
+                // Pitch +/- controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("Pitch -"), b-> {
+                    selType.timelapsePitch = Math.max(-90f, selType.timelapsePitch - 5f);
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.timelapsePitch = Math.min(90f, selType.timelapsePitch + 5f);
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+
+                // FOV +/- controls
+                addDrawableChild(ButtonWidget.builder(Text.literal("FOV -"), b-> {
+                    selType.timelapseFovMultiplier = Math.max(0.1f, selType.timelapseFovMultiplier - 0.1f);
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX, y, (w/2)-2, h).build());
+                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    selType.timelapseFovMultiplier += 0.1f;
+                    NodeManager.get().save();
+                    this.init(client, this.width, this.height);
+                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                y += h + sp;
+            }
 
             if (selType.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
                 // Radius controls
@@ -261,6 +333,11 @@ public class NodeEditorScreen extends Screen {
             if (selNode.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
                 context.drawText(textRenderer, Text.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
                 context.drawText(textRenderer, Text.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
+            }
+            if (selNode.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
+                context.drawText(textRenderer, Text.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawText(textRenderer, Text.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawText(textRenderer, Text.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
             }
         } else {
             context.drawText(textRenderer, Text.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;

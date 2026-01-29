@@ -122,4 +122,5 @@ public class GeneralMenuSettings {
         // Clamp to range 1.0x - 3.0x
         minimumSpeedMultiplier = Math.max(1.0, Math.min(3.0, value));
     }
+
 }

@@ -133,6 +133,19 @@ public class NodeManager {
         return node;
     }
 
+    public CameraNode addTimelapseNode(Vec3d position, float yaw, float pitch, float fovMultiplier) {
+        CameraNode node = new CameraNode();
+        node.position = position;
+        node.type = NodeType.TIMELAPSE;
+        node.name = "Timelapse";
+        node.timelapseYaw = yaw;
+        node.timelapsePitch = pitch;
+        node.timelapseFovMultiplier = fovMultiplier;
+        nodes.add(node);
+        save();
+        return node;
+    }
+
     public void removeSelected() {
         if (selectedNodeId == null) return;
         nodes.removeIf(n -> n.id.equals(selectedNodeId));

@@ -16,4 +16,9 @@ public class CameraNode {
     public double droneRadius = 6.0; // blocks
     public double droneSpeedDegPerSec = 30.0; // degrees per second
     public double droneStartAngleDeg = 0.0;
+
+    // Timelapse params (used when type == TIMELAPSE)
+    public float timelapseYaw = 0f;
+    public float timelapsePitch = 0f;
+    public float timelapseFovMultiplier = 1.0f;
 }
