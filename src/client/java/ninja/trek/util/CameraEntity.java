@@ -121,7 +121,7 @@ public class CameraEntity extends ClientPlayerEntity {
             y += 1.0;
         }
         
-        if (mc.options.sneakKey.isPressed()) {
+        if (ninja.trek.CameraController.isKeyPhysicallyHeld(mc, mc.options.sneakKey)) {
             y -= 1.0;
         }
         

@@ -13,8 +13,11 @@ import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_MOUSE;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.mixin.client.KeyBindingAccessor;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -32,6 +35,14 @@ public class CameraController {
 
     // Track whether the camera has been moved with keyboard input
     public static boolean hasMovedWithKeyboard = false;
+
+    /**
+     * Check if a key is physically held down, ignoring toggle/hold settings.
+     */
+    public static boolean isKeyPhysicallyHeld(MinecraftClient client, KeyBinding keyBinding) {
+        InputUtil.Key boundKey = ((KeyBindingAccessor) keyBinding).getBoundKey();
+        return InputUtil.isKeyPressed(client.getWindow(), boundKey.getCode());
+    }
 
     // Track if camera was activated by node influence
     private static boolean cameraActivatedByNodes = false;
@@ -406,7 +417,7 @@ public class CameraController {
             if (client.options.jumpKey.isPressed()) {
                 y += 1.0;
             }
-            if (client.options.sneakKey.isPressed()) {
+            if (isKeyPhysicallyHeld(client, client.options.sneakKey)) {
                 y -= 1.0;
             }
             
@@ -457,7 +468,7 @@ public class CameraController {
             if (client.options.jumpKey.isPressed()) {
                 y += 1.0;
             }
-            if (client.options.sneakKey.isPressed()) {
+            if (isKeyPhysicallyHeld(client, client.options.sneakKey)) {
                 y -= 1.0;
             }
             

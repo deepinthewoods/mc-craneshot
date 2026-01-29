@@ -13,7 +13,8 @@
 		"MouseMixin",
 		"EntityRenderDispatcherMixin",
 		"WorldRendererMixin",
-		"InGameHudMixin"
+		"InGameHudMixin",
+		"KeyBindingAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

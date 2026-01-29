@@ -260,7 +260,7 @@ public class CameraSystem {
         if (mc.options.leftKey.isPressed()) x += 1.0;
         if (mc.options.rightKey.isPressed()) x -= 1.0;
         if (mc.options.jumpKey.isPressed()) y += 1.0;
-        if (mc.options.sneakKey.isPressed()) y -= 1.0;
+        if (CameraController.isKeyPhysicallyHeld(mc, mc.options.sneakKey)) y -= 1.0;
 
         if (x == 0 && y == 0 && z == 0) return Vec3d.ZERO;
 
