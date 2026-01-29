@@ -11,4 +11,5 @@ public @interface CameraMovementType {
     String name() default "";
     String description() default "";
     boolean enabled() default true;
+    boolean showInSlots() default true;
 }

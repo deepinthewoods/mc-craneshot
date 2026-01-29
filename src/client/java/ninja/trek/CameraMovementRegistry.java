@@ -117,7 +117,7 @@ public class CameraMovementRegistry {
         List<MovementInfo> movements = new ArrayList<>();
         for (Class<? extends ICameraMovement> cls : movementTypes) {
             CameraMovementType annotation = cls.getAnnotation(CameraMovementType.class);
-            if (annotation != null) {
+            if (annotation != null && annotation.showInSlots()) {
                 movements.add(new MovementInfo(
                         annotation.name().isEmpty() ? cls.getSimpleName() : annotation.name(),
                         annotation.description(),

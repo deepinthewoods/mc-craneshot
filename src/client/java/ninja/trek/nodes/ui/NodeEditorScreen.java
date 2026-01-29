@@ -81,7 +81,6 @@ public class NodeEditorScreen extends Screen {
                 n.type = sel.type;
                 n.position = sel.position.add(0.25, 0, 0.25);
                 n.colorARGB = sel.colorARGB;
-                ninja.trek.nodes.NodeManager.get().getNodes();
                 // add and select
                 NodeManager.get().setSelected(NodeManager.get().addNode(n.position).id);
                 // replace new node fields
@@ -90,6 +89,12 @@ public class NodeEditorScreen extends Screen {
                     added.name = n.name;
                     added.type = n.type;
                     added.colorARGB = n.colorARGB;
+                    added.droneRadius = sel.droneRadius;
+                    added.droneSpeedDegPerSec = sel.droneSpeedDegPerSec;
+                    added.droneStartAngleDeg = sel.droneStartAngleDeg;
+                    added.timelapseYaw = sel.timelapseYaw;
+                    added.timelapsePitch = sel.timelapsePitch;
+                    added.timelapseFovMultiplier = sel.timelapseFovMultiplier;
                     NodeManager.get().save();
                 }
                 this.init(client, this.width, this.height);
@@ -438,6 +443,13 @@ public class NodeEditorScreen extends Screen {
             if (handleAreaCoordinateRightClick(click)) {
                 return true;
             }
+        }
+        // Let buttons/widgets handle the click first
+        if (super.mouseClicked(click, fromInside)) {
+            return true;
+        }
+        // No widget consumed the click — start dragging
+        if (click != null) {
             dragging = true;
             mouseDownTime = System.currentTimeMillis();
             mouseDownX = click.x();
@@ -448,7 +460,7 @@ public class NodeEditorScreen extends Screen {
                 GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
             }
         }
-        return super.mouseClicked(click, fromInside);
+        return true;
     }
 
     @Override

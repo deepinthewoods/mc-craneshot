@@ -23,6 +23,11 @@ public class AreaSettingsModal extends Screen {
     private final Consumer<AreaInstance> onDone;
     private boolean showAdvanced;
 
+    // Tracked Y positions for click hit-testing (set during render)
+    private int posXRowY, posYRowY, posZRowY;
+    private int insideXRowY, insideYRowY, insideZRowY;
+    private int outsideXRowY, outsideYRowY, outsideZRowY;
+
     public AreaSettingsModal(AreaInstance area, Consumer<AreaInstance> onDone) {
         super(Text.literal("Area Settings"));
         this.area = area;
@@ -248,14 +253,25 @@ public class AreaSettingsModal extends Screen {
 
     @Override public boolean shouldPause() { return false; }
 
+    @Override
+    public void removed() {
+        NodeManager.get().markAreaDirty(area.id);
+        NodeManager.get().save();
+        if (onDone != null) onDone.accept(area);
+        super.removed();
+    }
+
     @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         int left = 20, top = 20 + 20*6; // below some buttons
         int y = top;
         // Draw center position labels with click-to-increment
         context.drawText(textRenderer, Text.literal("Position:"), left, y, 0xFFFFFF, true); y+=12;
+        posXRowY = y;
         y = drawLabeledVec3(context, left, y, "X", ()-> area.center.x, d-> area.center = new net.minecraft.util.math.Vec3d(d, area.center.y, area.center.z));
+        posYRowY = y;
         y = drawLabeledVec3(context, left, y, "Y", ()-> area.center.y, d-> area.center = new net.minecraft.util.math.Vec3d(area.center.x, d, area.center.z));
+        posZRowY = y;
         y = drawLabeledVec3(context, left, y, "Z", ()-> area.center.z, d-> area.center = new net.minecraft.util.math.Vec3d(area.center.x, area.center.y, d));
         y += 8;
         if (showAdvanced) {
@@ -263,13 +279,19 @@ public class AreaSettingsModal extends Screen {
             if (area.insideRadii == null) area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadius, area.insideRadius, area.insideRadius);
             if (area.outsideRadii == null) area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadius, area.outsideRadius, area.outsideRadius);
             context.drawText(textRenderer, Text.literal("Inside Radii:"), left, y, 0xFFFFFF, true); y+=12;
+            insideXRowY = y;
             y = drawLabeledVec3(context, left, y, "X", ()-> area.insideRadii.x, d-> area.insideRadii = new net.minecraft.util.math.Vec3d(Math.max(0,d), area.insideRadii.y, area.insideRadii.z));
+            insideYRowY = y;
             y = drawLabeledVec3(context, left, y, "Y", ()-> area.insideRadii.y, d-> area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadii.x, Math.max(0,d), area.insideRadii.z));
+            insideZRowY = y;
             y = drawLabeledVec3(context, left, y, "Z", ()-> area.insideRadii.z, d-> area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadii.x, area.insideRadii.y, Math.max(0,d)));
             y += 6;
             context.drawText(textRenderer, Text.literal("Outside Radii:"), left, y, 0xFFFFFF, true); y+=12;
+            outsideXRowY = y;
             y = drawLabeledVec3(context, left, y, "X", ()-> area.outsideRadii.x, d-> area.outsideRadii = new net.minecraft.util.math.Vec3d(Math.max(area.insideRadii!=null?area.insideRadii.x:0,d), area.outsideRadii.y, area.outsideRadii.z));
+            outsideYRowY = y;
             y = drawLabeledVec3(context, left, y, "Y", ()-> area.outsideRadii.y, d-> area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, Math.max(area.insideRadii!=null?area.insideRadii.y:0,d), area.outsideRadii.z));
+            outsideZRowY = y;
             y = drawLabeledVec3(context, left, y, "Z", ()-> area.outsideRadii.z, d-> area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, area.outsideRadii.y, Math.max(area.insideRadii!=null?area.insideRadii.z:0,d)));
         }
 
@@ -351,54 +373,47 @@ public class AreaSettingsModal extends Screen {
             int inc = shift ? 100 : (ctrl ? 10 : 1);
             boolean right = click.button() == 1;
             int sign = right ? -1 : 1;
-            int left = 20;
-            int yStart = 20 + 20*6 + 12; // start around first X label
-            int mouseX = (int)click.x();
             int mouseY = (int)click.y();
             boolean changed = false;
+            int rowH = 12;
 
             // helper to check if y within row
             java.util.function.BiPredicate<Integer,Integer> within = (yt, h)-> mouseY >= yt && mouseY < yt + h;
 
-            // Position X/Y/Z rows (3 rows)
-            int rowH = 12;
-            if (within.test(yStart, rowH)) {
+            // Position X/Y/Z rows — use tracked Y positions from render()
+            if (within.test(posXRowY, rowH)) {
                 double v = area.center.x + sign * inc;
                 area.center = new net.minecraft.util.math.Vec3d(v, area.center.y, area.center.z);
                 changed = true;
-            } else if (within.test(yStart+rowH, rowH)) {
+            } else if (within.test(posYRowY, rowH)) {
                 double v = area.center.y + sign * inc;
                 area.center = new net.minecraft.util.math.Vec3d(area.center.x, v, area.center.z);
                 changed = true;
-            } else if (within.test(yStart+rowH*2, rowH)) {
+            } else if (within.test(posZRowY, rowH)) {
                 double v = area.center.z + sign * inc;
                 area.center = new net.minecraft.util.math.Vec3d(area.center.x, area.center.y, v);
                 changed = true;
             } else if (showAdvanced) {
-                int y = yStart + rowH*3 + 8 + 12; // skip header and go to inside radii
                 if (area.insideRadii == null) area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadius, area.insideRadius, area.insideRadius);
                 if (area.outsideRadii == null) area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadius, area.outsideRadius, area.outsideRadius);
-                if (within.test(y, rowH)) {
+                if (within.test(insideXRowY, rowH)) {
                     area.insideRadii = new net.minecraft.util.math.Vec3d(Math.max(0, area.insideRadii.x + sign*inc), area.insideRadii.y, area.insideRadii.z);
                     changed = true;
-                } else if (within.test(y+rowH, rowH)) {
+                } else if (within.test(insideYRowY, rowH)) {
                     area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadii.x, Math.max(0, area.insideRadii.y + sign*inc), area.insideRadii.z);
                     changed = true;
-                } else if (within.test(y+rowH*2, rowH)) {
+                } else if (within.test(insideZRowY, rowH)) {
                     area.insideRadii = new net.minecraft.util.math.Vec3d(area.insideRadii.x, area.insideRadii.y, Math.max(0, area.insideRadii.z + sign*inc));
                     changed = true;
-                } else {
-                    y += rowH*2 + rowH + 6 + 12; // skip to outside radii header then first row
-                    if (within.test(y, rowH)) {
-                        area.outsideRadii = new net.minecraft.util.math.Vec3d(Math.max(area.insideRadii.x, area.outsideRadii.x + sign*inc), area.outsideRadii.y, area.outsideRadii.z);
-                        changed = true;
-                    } else if (within.test(y+rowH, rowH)) {
-                        area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, Math.max(area.insideRadii.y, area.outsideRadii.y + sign*inc), area.outsideRadii.z);
-                        changed = true;
-                    } else if (within.test(y+rowH*2, rowH)) {
-                        area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, area.outsideRadii.y, Math.max(area.insideRadii.z, area.outsideRadii.z + sign*inc));
-                        changed = true;
-                    }
+                } else if (within.test(outsideXRowY, rowH)) {
+                    area.outsideRadii = new net.minecraft.util.math.Vec3d(Math.max(area.insideRadii.x, area.outsideRadii.x + sign*inc), area.outsideRadii.y, area.outsideRadii.z);
+                    changed = true;
+                } else if (within.test(outsideYRowY, rowH)) {
+                    area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, Math.max(area.insideRadii.y, area.outsideRadii.y + sign*inc), area.outsideRadii.z);
+                    changed = true;
+                } else if (within.test(outsideZRowY, rowH)) {
+                    area.outsideRadii = new net.minecraft.util.math.Vec3d(area.outsideRadii.x, area.outsideRadii.y, Math.max(area.insideRadii.z, area.outsideRadii.z + sign*inc));
+                    changed = true;
                 }
             }
             if (changed) {

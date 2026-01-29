@@ -99,7 +99,7 @@ public class StaticMovement extends AbstractMovementSettings implements ICameraM
                 Vec3d dir = lookNode.position.subtract(position);
                 if (dir.lengthSquared() > 1e-6) {
                     dir = dir.normalize();
-                    yaw = (float) Math.toDegrees(Math.atan2(dir.x, dir.z));
+                    yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
                     pitch = (float) (-Math.toDegrees(Math.asin(MathHelper.clamp(dir.y, -1.0, 1.0))));
                 }
             }

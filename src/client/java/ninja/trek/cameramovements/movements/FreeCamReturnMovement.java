@@ -12,7 +12,8 @@ import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
         name = "FreeCamReturn",
-        description = "Return from freecam to stick target using Linear easing"
+        description = "Return from freecam to stick target using Linear easing",
+        showInSlots = false
 )
 public class FreeCamReturnMovement extends AbstractMovementSettings implements ICameraMovement {
     private static final double MAX_RETURN_TARGET_DISTANCE = 256.0;

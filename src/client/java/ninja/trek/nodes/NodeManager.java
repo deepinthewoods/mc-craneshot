@@ -155,9 +155,6 @@ public class NodeManager {
 
     public void setSelected(UUID id) {
         this.selectedNodeId = id;
-        if (id != null) {
-            this.selectedAreaId = null;
-        }
     }
     public CameraNode getSelected() {
         if (selectedNodeId == null) return null;
@@ -167,9 +164,6 @@ public class NodeManager {
 
     public void setSelectedArea(UUID id) {
         this.selectedAreaId = id;
-        if (id != null) {
-            this.selectedNodeId = null;
-        }
     }
     public AreaInstance getSelectedArea() {
         if (selectedAreaId == null) return null;
@@ -675,6 +669,7 @@ public class NodeManager {
     }
 
     private double influenceForSphereArea(Vec3d pos, Area area) {
+        if (area.center == null) return 0.0;
         Vec3d d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             // insideRadii = inner ellipsoid (100% influence), outsideRadii = outer ellipsoid (0% influence)
@@ -709,6 +704,7 @@ public class NodeManager {
     }
 
     private double influenceForBoxArea(Vec3d pos, Area area) {
+        if (area.center == null) return 0.0;
         Vec3d d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
@@ -726,15 +722,11 @@ public class NodeManager {
             double t = 1.0 - Math.max(nx, Math.max(ny, nz));
             return MathHelper.clamp(t, 0.0, 1.0);
         } else {
-            double dist = cubeDistance(pos, area.center, area.outsideRadius);
-            if (dist <= 0.0) return 1.0; // inside outer cube, approximate mapping
-            // fall back to scalar mapping relative to inner/outer
-            double inner = cubeDistance(pos, area.center, area.insideRadius);
-            if (inner <= 0.0) return 1.0;
-            // approximate fraction
-            double denom = (inner);
-            double t = 1.0 - Math.min(1.0, dist / Math.max(1e-6, denom));
-            return MathHelper.clamp(t, 0.0, 1.0);
+            double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
+            double maxDist = Math.max(ax, Math.max(ay, az));
+            if (maxDist <= area.insideRadius) return 1.0;
+            if (maxDist >= area.outsideRadius) return 0.0;
+            return 1.0 - (maxDist - area.insideRadius) / (area.outsideRadius - area.insideRadius);
         }
     }
 
