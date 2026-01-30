@@ -287,6 +287,15 @@ public class CameraMovementManager {
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
 
+        // Immediately disable player movement if post-move keys will use camera movement modes
+        AbstractMovementSettings startSettings = (AbstractMovementSettings) movement;
+        if (startSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+            startSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+            }
+        }
+
         // Show the toast when starting a new movement
         MovementToastRenderer.showToast(slotIndex);
     }
@@ -314,6 +323,14 @@ public class CameraMovementManager {
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         follow.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(follow);
+
+        // Immediately disable player movement if post-move keys will use camera movement modes
+        if (follow.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+            follow.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+            }
+        }
     }
 
     private boolean resumeOutPhaseIfReturning(MinecraftClient client, Camera camera) {
@@ -819,6 +836,15 @@ public class CameraMovementManager {
         snapCameraIfFarFromPlayer(client, camera);
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
+
+        // Immediately disable player movement if post-move keys will use camera movement modes
+        AbstractMovementSettings followerSettings = (AbstractMovementSettings) movement;
+        if (followerSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+            followerSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
+                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
+            }
+        }
     }
 
     /**
