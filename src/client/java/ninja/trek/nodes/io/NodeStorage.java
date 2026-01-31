@@ -2,14 +2,14 @@ package ninja.trek.nodes.io;
 
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.nodes.model.*;
 
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 
 public class NodeStorage {
     public static class Payload {
@@ -18,15 +18,15 @@ public class NodeStorage {
     }
 
     private static final Gson GSON = new GsonBuilder()
-            .registerTypeAdapter(Vec3d.class, new Vec3dAdapter())
+            .registerTypeAdapter(Vec3.class, new Vec3dAdapter())
             .setPrettyPrinting()
             .create();
     private static File getFile() {
         // Prefer per-world save under saves/<world>/craneshot_nodes.json when possible (singleplayer)
         try {
-            var mc = MinecraftClient.getInstance();
-            if (mc != null && mc.getServer() != null) {
-                java.nio.file.Path root = mc.getServer().getSavePath(net.minecraft.util.WorldSavePath.ROOT);
+            var mc = Minecraft.getInstance();
+            if (mc != null && mc.getSingleplayerServer() != null) {
+                java.nio.file.Path root = mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
                 if (root != null) {
                     File worldFile = root.toFile();
                     return new File(worldFile, "craneshot_nodes.json");
@@ -34,7 +34,7 @@ public class NodeStorage {
             }
         } catch (Throwable ignored) {}
         // Fallback to global config
-        File cfgDir = new File(MinecraftClient.getInstance().runDirectory, "config");
+        File cfgDir = new File(Minecraft.getInstance().gameDirectory, "config");
         if (!cfgDir.exists()) cfgDir.mkdirs();
         return new File(cfgDir, "craneshot_nodes.json");
     }
@@ -83,7 +83,7 @@ public class NodeStorage {
     }
 
     public static File getExportFile() {
-        File cfgDir = new File(MinecraftClient.getInstance().runDirectory, "config");
+        File cfgDir = new File(Minecraft.getInstance().gameDirectory, "config");
         if (!cfgDir.exists()) cfgDir.mkdirs();
         return new File(cfgDir, "craneshot_nodes_export.json");
     }
@@ -127,15 +127,15 @@ public class NodeStorage {
         return payload;
     }
 
-    static class Vec3dAdapter implements JsonSerializer<Vec3d>, JsonDeserializer<Vec3d> {
-        @Override public JsonElement serialize(Vec3d src, Type typeOfSrc, JsonSerializationContext context) {
+    static class Vec3dAdapter implements JsonSerializer<Vec3>, JsonDeserializer<Vec3> {
+        @Override public JsonElement serialize(Vec3 src, Type typeOfSrc, JsonSerializationContext context) {
             JsonArray a = new JsonArray();
             a.add(src.x); a.add(src.y); a.add(src.z);
             return a;
         }
-        @Override public Vec3d deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        @Override public Vec3 deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
             JsonArray a = json.getAsJsonArray();
-            return new Vec3d(a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble());
+            return new Vec3(a.get(0).getAsDouble(), a.get(1).getAsDouble(), a.get(2).getAsDouble());
         }
     }
 }

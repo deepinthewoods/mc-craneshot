@@ -1,14 +1,13 @@
 package ninja.trek.nodes.model;
 
-import net.minecraft.util.math.Vec3d;
-
 import java.util.UUID;
+import net.minecraft.world.phys.Vec3;
 
 public class CameraNode {
     public UUID id = UUID.randomUUID();
     public String name = "Node";
     public NodeType type = NodeType.CAMERA_CONTROL;
-    public Vec3d position = Vec3d.ZERO;
+    public Vec3 position = Vec3.ZERO;
     public Integer colorARGB = 0xFFFF8800; // default orange
     public UUID owner = null;
 

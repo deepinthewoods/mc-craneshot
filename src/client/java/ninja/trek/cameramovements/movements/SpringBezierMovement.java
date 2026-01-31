@@ -1,8 +1,8 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -67,23 +67,23 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     public CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
     public CameraTarget current = new CameraTarget();
-    private Vec3d controlPoint;
+    private Vec3 controlPoint;
     private double curveProgress;
     private boolean resetting = false;
     private float weight = 1.0f;
 
     // Spring velocity state
-    private Vec3d positionVelocity = Vec3d.ZERO;
+    private Vec3 positionVelocity = Vec3.ZERO;
     private float yawVelocity = 0f;
     private float pitchVelocity = 0f;
     private float fovVelocity = 0f;
 
     // Cached curve endpoints
-    private Vec3d curveStart;
-    private Vec3d curveEnd;
+    private Vec3 curveStart;
+    private Vec3 curveEnd;
 
     // For tracking player velocity
-    private Vec3d lastPlayerPos = null;
+    private Vec3 lastPlayerPos = null;
     private float lastPlayerYaw = 0f;
     private float lastPlayerPitch = 0f;
 
@@ -91,11 +91,11 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     private double lastDistanceToPlayer = Double.MAX_VALUE;
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
 
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), fovMultiplier);
 
@@ -108,7 +108,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         weight = 1.0f;
         alpha = 1;
 
-        positionVelocity = Vec3d.ZERO;
+        positionVelocity = Vec3.ZERO;
         yawVelocity = 0f;
         pitchVelocity = 0f;
         fovVelocity = 0f;
@@ -121,7 +121,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         lastDistanceToPlayer = Double.MAX_VALUE;
     }
 
-    private Vec3d calculateTargetPosition(CameraTarget stick) {
+    private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
         double pitch = Math.toRadians(stick.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
@@ -133,16 +133,16 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     /**
      * Basic critically damped spring - converges to target with zero velocity.
      */
-    private Vec3d springDamperBasic(Vec3d pos, Vec3d vel, Vec3d target, double halflife, double dt) {
+    private Vec3 springDamperBasic(Vec3 pos, Vec3 vel, Vec3 target, double halflife, double dt) {
         double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
         double y = damping / 2.0;
         double eydt = Math.exp(-y * dt);
 
-        Vec3d j0 = pos.subtract(target);
-        Vec3d j1 = vel.add(j0.multiply(y));
+        Vec3 j0 = pos.subtract(target);
+        Vec3 j1 = vel.add(j0.scale(y));
 
-        Vec3d newPos = j0.add(j1.multiply(dt)).multiply(eydt).add(target);
-        positionVelocity = vel.subtract(j1.multiply(y * dt)).multiply(eydt);
+        Vec3 newPos = j0.add(j1.scale(dt)).scale(eydt).add(target);
+        positionVelocity = vel.subtract(j1.scale(y * dt)).scale(eydt);
 
         return newPos;
     }
@@ -150,16 +150,16 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     /**
      * Velocity-matching critically damped spring - converges to target position AND velocity.
      */
-    private Vec3d springDamperVelocityMatch(Vec3d pos, Vec3d vel, Vec3d targetPos, Vec3d targetVel, double halflife, double dt) {
+    private Vec3 springDamperVelocityMatch(Vec3 pos, Vec3 vel, Vec3 targetPos, Vec3 targetVel, double halflife, double dt) {
         double damping = (4.0 * 0.69314718056) / Math.max(halflife, 0.001);
         double y = damping / 2.0;
         double eydt = Math.exp(-y * dt);
 
-        Vec3d j0 = pos.subtract(targetPos);
-        Vec3d j1 = vel.subtract(targetVel).add(j0.multiply(y));
+        Vec3 j0 = pos.subtract(targetPos);
+        Vec3 j1 = vel.subtract(targetVel).add(j0.scale(y));
 
-        Vec3d newPos = j0.add(j1.multiply(dt)).multiply(eydt).add(targetPos);
-        positionVelocity = vel.subtract(targetVel).subtract(j1.multiply(y * dt)).multiply(eydt).add(targetVel);
+        Vec3 newPos = j0.add(j1.scale(dt)).scale(eydt).add(targetPos);
+        positionVelocity = vel.subtract(targetVel).subtract(j1.scale(y * dt)).scale(eydt).add(targetVel);
 
         return newPos;
     }
@@ -236,56 +236,56 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         return (float)(((vel - targetVel) - j1 * y * dt) * eydt + targetVel);
     }
 
-    private Vec3d quadraticBezier(Vec3d p0, Vec3d p1, Vec3d p2, double t) {
+    private Vec3 quadraticBezier(Vec3 p0, Vec3 p1, Vec3 p2, double t) {
         double oneMinusT = 1.0 - t;
-        return p0.multiply(oneMinusT * oneMinusT)
-                .add(p1.multiply(2 * oneMinusT * t))
-                .add(p2.multiply(t * t));
+        return p0.scale(oneMinusT * oneMinusT)
+                .add(p1.scale(2 * oneMinusT * t))
+                .add(p2.scale(t * t));
     }
 
-    private Vec3d generateControlPoint(Vec3d start, Vec3d end) {
-        Vec3d mid = start.add(end).multiply(0.5);
-        Vec3d diff = end.subtract(start);
+    private Vec3 generateControlPoint(Vec3 start, Vec3 end) {
+        Vec3 mid = start.add(end).scale(0.5);
+        Vec3 diff = end.subtract(start);
 
-        if (diff.lengthSquared() < 1e-6) {
-            return mid.add(new Vec3d(0, controlPointDisplacement, 0));
+        if (diff.lengthSqr() < 1e-6) {
+            return mid.add(new Vec3(0, controlPointDisplacement, 0));
         }
 
-        Vec3d direction = diff.normalize();
-        Vec3d worldUp = new Vec3d(0, 1, 0);
-        Vec3d right = direction.crossProduct(worldUp).normalize();
-        Vec3d perpUp = direction.crossProduct(right).normalize();
+        Vec3 direction = diff.normalize();
+        Vec3 worldUp = new Vec3(0, 1, 0);
+        Vec3 right = direction.cross(worldUp).normalize();
+        Vec3 perpUp = direction.cross(right).normalize();
 
         if (perpUp.y < 0) {
-            perpUp = perpUp.multiply(-1);
+            perpUp = perpUp.scale(-1);
         }
 
         if (Math.abs(displacementAngle) > 0 || displacementAngleVariance > 0) {
             double angleOffset = displacementAngle +
                     (displacementAngleVariance > 0 ? (Math.random() * 2 - 1) * displacementAngleVariance : 0);
             double angleRadians = Math.toRadians(angleOffset);
-            perpUp = perpUp.multiply(Math.cos(angleRadians))
-                    .add(direction.crossProduct(perpUp).multiply(Math.sin(angleRadians)));
+            perpUp = perpUp.scale(Math.cos(angleRadians))
+                    .add(direction.cross(perpUp).scale(Math.sin(angleRadians)));
         }
 
-        return mid.add(perpUp.multiply(controlPointDisplacement));
+        return mid.add(perpUp.scale(controlPointDisplacement));
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Calculate player velocity for return modes
-        Vec3d playerPos = client.player.getEyePos();
-        float playerYaw = client.player.getYaw();
-        float playerPitch = client.player.getPitch();
+        Vec3 playerPos = client.player.getEyePosition();
+        float playerYaw = client.player.getYRot();
+        float playerPitch = client.player.getXRot();
 
-        Vec3d playerVelocity = Vec3d.ZERO;
+        Vec3 playerVelocity = Vec3.ZERO;
         float playerYawVelocity = 0f;
         float playerPitchVelocity = 0f;
 
         if (lastPlayerPos != null && deltaSeconds > 0.0001f) {
-            playerVelocity = playerPos.subtract(lastPlayerPos).multiply(1.0 / deltaSeconds);
+            playerVelocity = playerPos.subtract(lastPlayerPos).scale(1.0 / deltaSeconds);
             playerYawVelocity = (playerYaw - lastPlayerYaw) / deltaSeconds;
             playerPitchVelocity = (playerPitch - lastPlayerPitch) / deltaSeconds;
 
@@ -297,18 +297,18 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         lastPlayerYaw = playerYaw;
         lastPlayerPitch = playerPitch;
 
-        Vec3d targetPos;
+        Vec3 targetPos;
         float targetYaw;
         float targetPitch;
         float targetFov;
-        Vec3d targetVelocity = Vec3d.ZERO;
+        Vec3 targetVelocity = Vec3.ZERO;
         float targetYawVel = 0f;
         float targetPitchVel = 0f;
 
         if (resetting) {
             // Return phase: spring toward player's head
             if (returnMode == ReturnMode.PREDICTIVE) {
-                targetPos = playerPos.add(playerVelocity.multiply(predictionTime));
+                targetPos = playerPos.add(playerVelocity.scale(predictionTime));
                 targetYaw = playerYaw + playerYawVelocity * (float)predictionTime;
                 targetPitch = playerPitch + playerPitchVelocity * (float)predictionTime;
             } else {
@@ -318,7 +318,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             }
 
             if (returnMode == ReturnMode.VELOCITY_MATCH) {
-                targetVelocity = playerVelocity.multiply(velocityInfluence);
+                targetVelocity = playerVelocity.scale(velocityInfluence);
                 targetYawVel = playerYawVelocity * (float)velocityInfluence;
                 targetPitchVel = playerPitchVelocity * (float)velocityInfluence;
             }
@@ -345,7 +345,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         }
 
         // Apply spring for position
-        Vec3d newPos;
+        Vec3 newPos;
         if (resetting && returnMode == ReturnMode.VELOCITY_MATCH) {
             newPos = springDamperVelocityMatch(
                 current.getPosition(),
@@ -421,7 +421,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         if (!resetting) {
             resetting = true;
             resetReturnTargetTracking();
@@ -433,9 +433,9 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             lastDistanceToPlayer = Double.MAX_VALUE;
 
             if (client.player != null) {
-                float playerYaw = client.player.getYaw();
-                float playerPitch = client.player.getPitch();
-                Vec3d playerPos = client.player.getEyePos();
+                float playerYaw = client.player.getYRot();
+                float playerPitch = client.player.getXRot();
+                Vec3 playerPos = client.player.getEyePosition();
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
 
                 curveStart = current.getPosition();
@@ -451,7 +451,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         return resetting;
     }
 
-    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+    public void resumeOutPhase(Minecraft client, Camera camera) {
         if (!resetting) {
             return;
         }
@@ -477,7 +477,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
             double multiplier = increase ? 1.2 : 0.8;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
@@ -487,7 +487,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     }
 
     @Override
-    public void adjustFov(boolean increase, MinecraftClient client) {
+    public void adjustFov(boolean increase, Minecraft client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
         super.adjustFov(increase, client);
     }

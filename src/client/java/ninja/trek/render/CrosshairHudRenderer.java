@@ -1,14 +1,14 @@
 package ninja.trek.render;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.mixin.client.GameRendererFovAccessor;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -22,64 +22,64 @@ public class CrosshairHudRenderer {
         HudRenderCallback.EVENT.register(CrosshairHudRenderer::onHudRender);
     }
 
-    private static void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null) return;
-        PlayerEntity player = client.player;
+    private static void onHudRender(GuiGraphics ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null) return;
+        Player player = client.player;
         if (player == null) return;
 
         // Respect settings
         if (!ninja.trek.config.GeneralMenuSettings.isShowCameraCrosshair()) return;
 
         // Raycast from the PLAYER HEAD orientation (decoupled from camera)
-        float tickProgress = tickCounter.getTickProgress(false);
-        Vec3d lerpedPos = player.getLerpedPos(tickProgress);
-        Vec3d eye = new Vec3d(lerpedPos.x, lerpedPos.y + player.getStandingEyeHeight(), lerpedPos.z);
-        float yaw = player.getLerpedYaw(tickProgress);
-        float pitch = player.getLerpedPitch(tickProgress);
-        Vec3d headDir = Vec3d.fromPolar(pitch, yaw);
+        float tickProgress = tickCounter.getGameTimeDeltaPartialTick(false);
+        Vec3 lerpedPos = player.getPosition(tickProgress);
+        Vec3 eye = new Vec3(lerpedPos.x, lerpedPos.y + player.getEyeHeight(), lerpedPos.z);
+        float yaw = player.getYRot(tickProgress);
+        float pitch = player.getXRot(tickProgress);
+        Vec3 headDir = Vec3.directionFromRotation(pitch, yaw);
         double maxDistance = 128.0;
-        Vec3d end = eye.add(headDir.multiply(maxDistance));
+        Vec3 end = eye.add(headDir.scale(maxDistance));
 
-        BlockHitResult hit = client.world.raycast(new RaycastContext(
+        BlockHitResult hit = client.level.clip(new ClipContext(
                 eye,
                 end,
-                RaycastContext.ShapeType.OUTLINE,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
                 player
         ));
         if (hit == null || hit.getType() == HitResult.Type.MISS) return;
 
         // Project 3D point to screen space using camera basis/FOV
-        var camera = client.gameRenderer.getCamera();
-        Vec3d camPos = camera.getPos();
-        Vec3d world = hit.getPos();
-        Vec3d v = world.subtract(camPos);
+        var camera = client.gameRenderer.getMainCamera();
+        Vec3 camPos = camera.position();
+        Vec3 world = hit.getLocation();
+        Vec3 v = world.subtract(camPos);
 
-        Quaternionf rot = camera.getRotation();
+        Quaternionf rot = camera.rotation();
         // Camera axes in world space
         Vector3f rV = new Vector3f(1f, 0f, 0f).rotate(rot);
         Vector3f uV = new Vector3f(0f, 1f, 0f).rotate(rot);
         Vector3f fV = new Vector3f(0f, 0f, -1f).rotate(rot);
 
-        Vec3d right = new Vec3d(rV.x, rV.y, rV.z);
-        Vec3d up = new Vec3d(uV.x, uV.y, uV.z);
-        Vec3d forward = new Vec3d(fV.x, fV.y, fV.z);
+        Vec3 right = new Vec3(rV.x, rV.y, rV.z);
+        Vec3 up = new Vec3(uV.x, uV.y, uV.z);
+        Vec3 forward = new Vec3(fV.x, fV.y, fV.z);
 
-        double xCam = v.dotProduct(right);
-        double yCam = v.dotProduct(up);
-        double zCam = v.dotProduct(forward);
+        double xCam = v.dot(right);
+        double yCam = v.dot(up);
+        double zCam = v.dot(forward);
         if (zCam <= 0.0) return; // behind camera or at eye
 
         // Effective FOV
-        int baseFov = client.options.getFov().getValue();
+        int baseFov = client.options.fov().get();
         float fovMul = ((GameRendererFovAccessor) client.gameRenderer).getFovMultiplier();
         double fovYDeg = Math.max(1.0, baseFov * fovMul);
         double fovY = Math.toRadians(fovYDeg);
 
         // Aspect and per-axis tangents
-        double w = client.getWindow().getScaledWidth();
-        double h = client.getWindow().getScaledHeight();
+        double w = client.getWindow().getGuiScaledWidth();
+        double h = client.getWindow().getGuiScaledHeight();
         if (w <= 0 || h <= 0) return;
         double aspect = w / h;
         double tanHalfY = Math.tan(fovY * 0.5);

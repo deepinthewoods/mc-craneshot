@@ -1,9 +1,7 @@
 package ninja.trek.mixin.client;
 
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.BlockView;
+import net.minecraft.client.Camera;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CraneshotClient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -15,11 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 // CameraAccessor.java
 @Mixin(Camera.class)
 public interface CameraAccessor {
-    @Accessor("pos")
-    void invokesetPos(Vec3d pos);
+    @Accessor("position")
+    void invokesetPos(Vec3 pos);
 
-    @Accessor("pos")
-    Vec3d getPos();
+    @Accessor("position")
+    Vec3 getPos();
 
     @Invoker("setRotation")
     void invokeSetRotation(float yaw, float pitch);

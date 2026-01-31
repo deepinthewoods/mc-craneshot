@@ -1,20 +1,20 @@
 package ninja.trek.nodes.network.payload;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 import ninja.trek.Craneshot;
 
-public record HandshakePayload(int stage, int protocol, boolean serverAuthoritative, boolean canEdit) implements CustomPayload {
-    public static final Id<HandshakePayload> ID = new Id<>(Identifier.of(Craneshot.MOD_ID, "handshake"));
+public record HandshakePayload(int stage, int protocol, boolean serverAuthoritative, boolean canEdit) implements CustomPacketPayload {
+    public static final Type<HandshakePayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "handshake"));
     
-    public static final PacketCodec<RegistryByteBuf, HandshakePayload> CODEC = PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, HandshakePayload> CODEC = StreamCodec.ofMember(
             HandshakePayload::write,
             HandshakePayload::read
     );
 
-    private HandshakePayload(RegistryByteBuf buf) {
+    private HandshakePayload(RegistryFriendlyByteBuf buf) {
         this(buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean());
     }
 
@@ -22,11 +22,11 @@ public record HandshakePayload(int stage, int protocol, boolean serverAuthoritat
         this(stage, protocol, false, false);
     }
 
-    private static HandshakePayload read(RegistryByteBuf buf) {
+    private static HandshakePayload read(RegistryFriendlyByteBuf buf) {
         return new HandshakePayload(buf);
     }
 
-    private void write(RegistryByteBuf buf) {
+    private void write(RegistryFriendlyByteBuf buf) {
         buf.writeVarInt(stage);
         buf.writeVarInt(protocol);
         buf.writeBoolean(serverAuthoritative);
@@ -34,7 +34,7 @@ public record HandshakePayload(int stage, int protocol, boolean serverAuthoritat
     }
 
     @Override
-    public Id<HandshakePayload> getId() {
+    public Type<HandshakePayload> type() {
         return ID;
     }
 }

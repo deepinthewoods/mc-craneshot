@@ -1,39 +1,38 @@
 package ninja.trek.nodes.ui;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-
 import java.util.function.Consumer;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public class ColorPickerModal extends Screen {
     private float h = 0f, s = 1f, v = 1f;
     private Consumer<Integer> onPick;
 
     public ColorPickerModal(Consumer<Integer> onPick) {
-        super(Text.literal("Color"));
+        super(Component.literal("Color"));
         this.onPick = onPick;
     }
 
     @Override protected void init() {
         int x = 20, y = 20, w = 60, hgt = 20, sp=5;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Hue -"), b-> {h = (h+359)%360;}).dimensions(x,y,w,hgt).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Hue +"), b-> {h = (h+1)%360;}).dimensions(x+w+sp,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Hue -"), b-> {h = (h+359)%360;}).bounds(x,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Hue +"), b-> {h = (h+1)%360;}).bounds(x+w+sp,y,w,hgt).build());
         y+=hgt+sp;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Sat -"), b-> {s = Math.max(0,s-0.05f);}).dimensions(x,y,w,hgt).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Sat +"), b-> {s = Math.min(1,s+0.05f);}).dimensions(x+w+sp,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Sat -"), b-> {s = Math.max(0,s-0.05f);}).bounds(x,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Sat +"), b-> {s = Math.min(1,s+0.05f);}).bounds(x+w+sp,y,w,hgt).build());
         y+=hgt+sp;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Val -"), b-> {v = Math.max(0,v-0.05f);}).dimensions(x,y,w,hgt).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Val +"), b-> {v = Math.min(1,v+0.05f);}).dimensions(x+w+sp,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Val -"), b-> {v = Math.max(0,v-0.05f);}).bounds(x,y,w,hgt).build());
+        addRenderableWidget(Button.builder(Component.literal("Val +"), b-> {v = Math.min(1,v+0.05f);}).bounds(x+w+sp,y,w,hgt).build());
         y+=hgt+sp;
-        addDrawableChild(ButtonWidget.builder(Text.literal("OK"), b-> {
+        addRenderableWidget(Button.builder(Component.literal("OK"), b-> {
             if (onPick != null) onPick.accept(hsvToArgb(h,s,v));
-            if (client!=null) client.setScreen(null);
-        }).dimensions(x,y,w*2+sp,hgt).build());
+            if (minecraft!=null) minecraft.setScreen(null);
+        }).bounds(x,y,w*2+sp,hgt).build());
     }
 
-    @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    @Override public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         // No background/blur – keep game view crisp while editing
         int col = hsvToArgb(h,s,v);
         context.fill(10, 10, 10+16, 10+16, col);
@@ -41,12 +40,12 @@ public class ColorPickerModal extends Screen {
     }
 
     @Override
-    public void renderInGameBackground(DrawContext context) {
+    public void renderTransparentBackground(GuiGraphics context) {
         // Disable translucent gradient/blur
     }
 
     @Override
-    protected void applyBlur(DrawContext context) {
+    protected void renderBlurredBackground(GuiGraphics context) {
         // no-op
     }
 

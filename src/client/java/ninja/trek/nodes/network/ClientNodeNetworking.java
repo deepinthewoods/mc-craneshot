@@ -3,11 +3,9 @@ package ninja.trek.nodes.network;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.AreaInstanceDTO;
@@ -115,19 +113,19 @@ public final class ClientNodeNetworking {
         context.client().execute(() -> tasks.forEach(Runnable::run));
     }
 
-    private static void onChunkUnload(ClientWorld world, net.minecraft.world.chunk.WorldChunk chunk) {
-        NodeManager.get().handleChunkUnload(world.getRegistryKey(), chunk.getPos());
+    private static void onChunkUnload(ClientLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {
+        NodeManager.get().handleChunkUnload(world.dimension(), chunk.getPos());
     }
 
-    public static void sendAreaCreate(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+    public static void sendAreaCreate(ResourceKey<Level> dimension, AreaInstanceDTO dto) {
         ClientPlayNetworking.send(AreaEditRequestPayload.create(dimension, dto));
     }
 
-    public static void sendAreaUpdate(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+    public static void sendAreaUpdate(ResourceKey<Level> dimension, AreaInstanceDTO dto) {
         ClientPlayNetworking.send(AreaEditRequestPayload.update(dimension, dto));
     }
 
-    public static void sendAreaDelete(RegistryKey<World> dimension, UUID areaId) {
+    public static void sendAreaDelete(ResourceKey<Level> dimension, UUID areaId) {
         ClientPlayNetworking.send(AreaEditRequestPayload.delete(dimension, areaId));
     }
 }

@@ -1,20 +1,20 @@
 package ninja.trek.mixin.client;
 
-import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(GameRenderer.class)
 public interface FovAccessor {
-    @Accessor("fovMultiplier")
+    @Accessor("fovModifier")
     float getFovModifier();
 
-    @Accessor("fovMultiplier")
+    @Accessor("fovModifier")
     void setFovModifier(float modifier);
 
-    @Accessor("lastFovMultiplier")
+    @Accessor("oldFovModifier")
     float getLastFovModifier();
 
-    @Accessor("lastFovMultiplier")
+    @Accessor("oldFovModifier")
     void setLastFovModifier(float modifier);
 }

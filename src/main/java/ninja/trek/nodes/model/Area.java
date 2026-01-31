@@ -1,17 +1,17 @@
 package ninja.trek.nodes.model;
 
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.phys.Vec3;
 
 public class Area {
     public AreaShape shape = AreaShape.CUBE;
-    public Vec3d center = Vec3d.ZERO;
+    public Vec3 center = Vec3.ZERO;
     public double insideRadius = 8.0; // inner boundary (100% influence)
     public double outsideRadius = 16.0; // outer boundary (0% influence)
 
     // Phase 2: per-axis radii for advanced mode (ellipsoid for SPHERE, AABB for CUBE)
     public boolean advanced = false;
-    public Vec3d insideRadii = null; // if null, use insideRadius for all axes
-    public Vec3d outsideRadii = null; // if null, use outsideRadius for all axes
+    public Vec3 insideRadii = null; // if null, use insideRadius for all axes
+    public Vec3 outsideRadii = null; // if null, use outsideRadius for all axes
 
     // Phase 2: per-area movement filters (all true by default)
     public boolean filterWalking = true;
@@ -28,7 +28,7 @@ public class Area {
     public EasingCurve easing = EasingCurve.LINEAR;
 
     public Area() {}
-    public Area(AreaShape shape, Vec3d center, double insideRadius, double outsideRadius) {
+    public Area(AreaShape shape, Vec3 center, double insideRadius, double outsideRadius) {
         this.shape = shape;
         this.center = center;
         this.insideRadius = insideRadius;

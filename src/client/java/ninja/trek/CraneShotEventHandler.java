@@ -1,12 +1,12 @@
 package ninja.trek;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.client.Camera;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.movements.FollowMovement;
@@ -28,10 +28,10 @@ public class CraneShotEventHandler {
     private static boolean lastAlive = true;
     private static boolean lastSleeping = false;
     private static java.util.UUID lastPlayerUuid = null;
-    private static RegistryKey<World> lastDimension = null;
-    private static Vec3d lastPlayerPos = null;
+    private static ResourceKey<Level> lastDimension = null;
+    private static Vec3 lastPlayerPos = null;
     private static final double LARGE_POSITION_JUMP_THRESHOLD = 50.0; // blocks
-    private static Perspective lastPerspective = null;
+    private static CameraType lastPerspective = null;
 
     public static void register() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -46,7 +46,7 @@ public class CraneShotEventHandler {
             handleScrollInput(client);
             CraneshotClient.checkKeybinds();
 
-            Camera camera = client.gameRenderer.getCamera();
+            Camera camera = client.gameRenderer.getMainCamera();
             handleRespawnAndWakeReset(client, camera);
             handleDimensionChange(client, camera);
             handleLargePositionJumps(client, camera);
@@ -58,7 +58,7 @@ public class CraneShotEventHandler {
                 return;
             }
 
-            boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isPressed();
+            boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isDown();
             if (followPressed != followWasPressed) {
                 if (followPressed) {
                     CraneshotClient.MOVEMENT_MANAGER.startFollowMovement(client, camera);
@@ -79,7 +79,7 @@ public class CraneShotEventHandler {
             }
 
             // Handle zoom key
-            boolean zoomPressed = CraneshotClient.zoomKey != null && CraneshotClient.zoomKey.isPressed();
+            boolean zoomPressed = CraneshotClient.zoomKey != null && CraneshotClient.zoomKey.isDown();
             if (zoomPressed != zoomWasPressed) {
                 if (zoomPressed) {
                     CraneshotClient.MOVEMENT_MANAGER.startZoomMovement(client, camera);
@@ -90,7 +90,7 @@ public class CraneShotEventHandler {
             }
 
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
-                boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isPressed();
+                boolean currentlyPressed = CraneshotClient.cameraKeyBinds[i].isDown();
                 boolean wasPressed = keyStates.getOrDefault(i, false);
 
                 if (!followPressed) {
@@ -109,7 +109,7 @@ public class CraneShotEventHandler {
         MovementToastRenderer.register();
     }
 
-    private static void handleRespawnAndWakeReset(MinecraftClient client, Camera camera) {
+    private static void handleRespawnAndWakeReset(Minecraft client, Camera camera) {
         if (client == null || client.player == null) {
             lastAlive = false;
             lastSleeping = false;
@@ -119,7 +119,7 @@ public class CraneShotEventHandler {
 
         boolean isAlive = client.player.isAlive();
         boolean isSleeping = client.player.isSleeping();
-        java.util.UUID playerUuid = client.player.getUuid();
+        java.util.UUID playerUuid = client.player.getUUID();
 
         boolean respawned = (!lastAlive && isAlive) ||
             (lastPlayerUuid != null && !lastPlayerUuid.equals(playerUuid) && isAlive);
@@ -134,34 +134,34 @@ public class CraneShotEventHandler {
         lastPlayerUuid = playerUuid;
     }
 
-    private static void handleDimensionChange(MinecraftClient client, Camera camera) {
-        if (client == null || client.world == null || client.player == null) {
+    private static void handleDimensionChange(Minecraft client, Camera camera) {
+        if (client == null || client.level == null || client.player == null) {
             lastDimension = null;
             return;
         }
 
-        RegistryKey<World> currentDimension = client.world.getRegistryKey();
-        Perspective currentPerspective = client.options.getPerspective();
+        ResourceKey<Level> currentDimension = client.level.dimension();
+        CameraType currentPerspective = client.options.getCameraType();
 
         if (lastDimension != null && !lastDimension.equals(currentDimension)) {
             // Dimension changed - snap camera to player's new position
             // This prevents the camera from having to travel massive distances
-            Vec3d playerEyePos = client.player.getEyePos();
-            float playerYaw = client.player.getYaw();
-            float playerPitch = client.player.getPitch();
+            Vec3 playerEyePos = client.player.getEyePosition();
+            float playerYaw = client.player.getYRot();
+            float playerPitch = client.player.getXRot();
 
             // Snap CameraEntity if it exists
             ninja.trek.util.CameraEntity cameraEntity = ninja.trek.util.CameraEntity.getCamera();
             if (cameraEntity != null) {
-                cameraEntity.setPos(playerEyePos.x, playerEyePos.y, playerEyePos.z);
-                cameraEntity.setYaw(playerYaw);
-                cameraEntity.setPitch(playerPitch);
+                cameraEntity.setPosRaw(playerEyePos.x, playerEyePos.y, playerEyePos.z);
+                cameraEntity.setYRot(playerYaw);
+                cameraEntity.setXRot(playerPitch);
             }
 
             // Snap CameraSystem position if active (BEFORE canceling movements)
             ninja.trek.camera.CameraSystem cameraSystem = ninja.trek.camera.CameraSystem.getInstance();
             boolean wasCameraActive = cameraSystem.isCameraActive();
-            Vec3d snappedCameraPos = null;
+            Vec3 snappedCameraPos = null;
             float snappedYaw = 0;
             float snappedPitch = 0;
 
@@ -186,9 +186,9 @@ public class CraneShotEventHandler {
             }
 
             // Restore the previous perspective to avoid getting stuck in third-person after the snap.
-            Perspective restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
+            CameraType restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
             if (restorePerspective != null) {
-                client.options.setPerspective(restorePerspective);
+                client.options.setCameraType(restorePerspective);
                 CraneshotClient.MOVEMENT_MANAGER.syncPerspectiveState(restorePerspective);
             }
         }
@@ -197,13 +197,13 @@ public class CraneShotEventHandler {
         lastPerspective = currentPerspective;
     }
 
-    private static void handleLargePositionJumps(MinecraftClient client, Camera camera) {
+    private static void handleLargePositionJumps(Minecraft client, Camera camera) {
         if (client == null || client.player == null) {
             lastPlayerPos = null;
             return;
         }
 
-        Vec3d currentPlayerPos = new Vec3d(client.player.getX(), client.player.getY(), client.player.getZ());
+        Vec3 currentPlayerPos = new Vec3(client.player.getX(), client.player.getY(), client.player.getZ());
 
         // Check for large position jumps (teleports, respawns, portals we missed, etc.)
         if (lastPlayerPos != null) {
@@ -211,16 +211,16 @@ public class CraneShotEventHandler {
 
             if (distanceMoved > LARGE_POSITION_JUMP_THRESHOLD) {
                 // Player jumped a large distance - snap camera to prevent long travel
-                Vec3d playerEyePos = client.player.getEyePos();
-                float playerYaw = client.player.getYaw();
-                float playerPitch = client.player.getPitch();
+                Vec3 playerEyePos = client.player.getEyePosition();
+                float playerYaw = client.player.getYRot();
+                float playerPitch = client.player.getXRot();
 
                 // Snap CameraEntity if it exists
                 ninja.trek.util.CameraEntity cameraEntity = ninja.trek.util.CameraEntity.getCamera();
                 if (cameraEntity != null) {
-                    cameraEntity.setPos(playerEyePos.x, playerEyePos.y, playerEyePos.z);
-                    cameraEntity.setYaw(playerYaw);
-                    cameraEntity.setPitch(playerPitch);
+                    cameraEntity.setPosRaw(playerEyePos.x, playerEyePos.y, playerEyePos.z);
+                    cameraEntity.setYRot(playerYaw);
+                    cameraEntity.setXRot(playerPitch);
                 }
 
                 // Snap CameraSystem position if active
@@ -244,9 +244,9 @@ public class CraneShotEventHandler {
      * @param client The Minecraft client instance
      * @return The scroll value, or 0 if it couldn't be accessed
      */
-    private static double getScrollValue(MinecraftClient client) {
+    private static double getScrollValue(Minecraft client) {
         try {
-            if (client.mouse instanceof IMouseMixin mouseMixin) {
+            if (client.mouseHandler instanceof IMouseMixin mouseMixin) {
                 return mouseMixin.getLastScrollValue();
             }
         } catch (Exception e) {
@@ -259,9 +259,9 @@ public class CraneShotEventHandler {
      * Safely reset the scroll value in the mouse mixin
      * @param client The Minecraft client instance
      */
-    private static void resetScrollValue(MinecraftClient client) {
+    private static void resetScrollValue(Minecraft client) {
         try {
-            if (client.mouse instanceof IMouseMixin mouseMixin) {
+            if (client.mouseHandler instanceof IMouseMixin mouseMixin) {
                 mouseMixin.setLastScrollValue(0);
             }
         } catch (Exception e) {
@@ -272,7 +272,7 @@ public class CraneShotEventHandler {
     private static ICameraMovement followerMovementInstance = null;
     private static String lastFollowerMovementType = null;
 
-    private static void handleFollowerMode(MinecraftClient client, Camera camera) {
+    private static void handleFollowerMode(Minecraft client, Camera camera) {
         if (client.player == null) return;
 
         // Periodically check if the config file was changed by the primary instance
@@ -357,7 +357,7 @@ public class CraneShotEventHandler {
         }
     }
 
-    private static void handleScrollInput(MinecraftClient client) {
+    private static void handleScrollInput(Minecraft client) {
         double currentTime = System.currentTimeMillis() / 1000.0;
         if (currentTime - lastScrollTime < SCROLL_COOLDOWN) {
             return;
@@ -403,7 +403,7 @@ public class CraneShotEventHandler {
         
         // Handle normal slot scrolling if no active scroll modes
         for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
-            if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
+            if (CraneshotClient.cameraKeyBinds[i].isDown()) {
                 CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(i, scrollUp);
                 lastScrollTime = currentTime;
                 resetScrollValue(client);
@@ -412,7 +412,7 @@ public class CraneShotEventHandler {
         }
 
         // Handle scroll with select movement key pressed
-        if (CraneshotClient.selectMovementType.isPressed() && lastActiveSlot != null) {
+        if (CraneshotClient.selectMovementType.isDown() && lastActiveSlot != null) {
             CraneshotClient.MOVEMENT_MANAGER.handleMouseScroll(lastActiveSlot, scrollUp);
             lastScrollTime = currentTime;
             resetScrollValue(client);

@@ -1,20 +1,20 @@
 package ninja.trek.mixin.client;
 
+import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
-import net.minecraft.client.Mouse;
 
-@Mixin(Mouse.class)
+@Mixin(MouseHandler.class)
 public interface MouseAccessor {
-    @Accessor("cursorDeltaX")
+    @Accessor("accumulatedDX")
     double getCursorDeltaX();
 
-    @Accessor("cursorDeltaY")
+    @Accessor("accumulatedDY")
     double getCursorDeltaY();
 
-    @Accessor("cursorDeltaX")
+    @Accessor("accumulatedDX")
     void setCursorDeltaX(double value);
 
-    @Accessor("cursorDeltaY")
+    @Accessor("accumulatedDY")
     void setCursorDeltaY(double value);
 }

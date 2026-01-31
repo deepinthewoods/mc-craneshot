@@ -1,19 +1,17 @@
 package ninja.trek.nodes.server;
 
 import com.mojang.serialization.Codec;
-import net.minecraft.datafixer.DataFixTypes;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.PersistentState;
-import net.minecraft.world.PersistentStateManager;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.saveddata.SavedData;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
 
@@ -27,34 +25,30 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
-public class CameraNodesState extends PersistentState {
+public class CameraNodesState extends SavedData {
     public static final String STORAGE_KEY = "craneshot_nodes";
     private static final int FORMAT_VERSION = 1;
 
-    private final Map<RegistryKey<net.minecraft.world.World>, Map<Long, LinkedHashMap<UUID, CameraNodeDTO>>> nodesByDimension = new HashMap<>();
-    private final Map<RegistryKey<net.minecraft.world.World>, Map<UUID, Long>> nodeIndex = new HashMap<>();
-    private final Map<RegistryKey<net.minecraft.world.World>, LinkedHashMap<UUID, AreaInstanceDTO>> areasByDimension = new HashMap<>();
+    private final Map<ResourceKey<net.minecraft.world.level.Level>, Map<Long, LinkedHashMap<UUID, CameraNodeDTO>>> nodesByDimension = new HashMap<>();
+    private final Map<ResourceKey<net.minecraft.world.level.Level>, Map<UUID, Long>> nodeIndex = new HashMap<>();
+    private final Map<ResourceKey<net.minecraft.world.level.Level>, LinkedHashMap<UUID, AreaInstanceDTO>> areasByDimension = new HashMap<>();
 
     // Create a Codec that wraps our NBT-based serialization
-    private static final Codec<CameraNodesState> CODEC = Codec.unit(() -> {
-        // This codec is only used for creating empty instances
-        // The actual serialization still uses writeNbt/fromNbt through PersistentState
-        return new CameraNodesState();
-    });
+    private static final Codec<CameraNodesState> CODEC = com.mojang.serialization.MapCodec.unit(CameraNodesState::new).codec();
 
-    private static final net.minecraft.world.PersistentStateType<CameraNodesState> TYPE =
-        new net.minecraft.world.PersistentStateType<>(
+    private static final net.minecraft.world.level.saveddata.SavedDataType<CameraNodesState> TYPE =
+        new net.minecraft.world.level.saveddata.SavedDataType<>(
             STORAGE_KEY,
             CameraNodesState::new,
             CODEC,
             null
         );
 
-    public static CameraNodesState get(ServerWorld world) {
-        return world.getPersistentStateManager().getOrCreate(TYPE);
+    public static CameraNodesState get(ServerLevel world) {
+        return world.getDataStorage().computeIfAbsent(TYPE);
     }
 
-    public List<CameraNodeDTO> getChunkNodes(RegistryKey<net.minecraft.world.World> dimension, ChunkPos pos) {
+    public List<CameraNodeDTO> getChunkNodes(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = nodesByDimension.get(dimension);
         if (dimMap == null) return List.of();
         Map<UUID, CameraNodeDTO> chunk = dimMap.get(pos.toLong());
@@ -62,7 +56,7 @@ public class CameraNodesState extends PersistentState {
         return new ArrayList<>(chunk.values());
     }
 
-    public void replaceChunk(RegistryKey<net.minecraft.world.World> dimension, ChunkPos pos, List<CameraNodeDTO> nodes) {
+    public void replaceChunk(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos, List<CameraNodeDTO> nodes) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         Map<UUID, Long> index = getIndexMap(dimension);
         long key = pos.toLong();
@@ -80,10 +74,10 @@ public class CameraNodesState extends PersistentState {
         if (!map.isEmpty()) {
             dimMap.put(key, map);
         }
-        markDirty();
+        setDirty();
     }
 
-    public void upsertNode(RegistryKey<net.minecraft.world.World> dimension, ChunkPos pos, CameraNodeDTO dto) {
+    public void upsertNode(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos, CameraNodeDTO dto) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         Map<UUID, Long> index = getIndexMap(dimension);
         long key = pos.toLong();
@@ -93,10 +87,10 @@ public class CameraNodesState extends PersistentState {
         if (chunk.isEmpty()) {
             dimMap.remove(key);
         }
-        markDirty();
+        setDirty();
     }
 
-    public boolean removeNode(RegistryKey<net.minecraft.world.World> dimension, UUID nodeId) {
+    public boolean removeNode(ResourceKey<net.minecraft.world.level.Level> dimension, UUID nodeId) {
         Map<UUID, Long> index = getIndexMap(dimension);
         Long key = index.remove(nodeId);
         if (key == null) return false;
@@ -108,12 +102,12 @@ public class CameraNodesState extends PersistentState {
             dimMap.remove(key);
         }
         if (removed != null) {
-            markDirty();
+            setDirty();
         }
         return removed != null;
     }
 
-    public CameraNodeDTO getNode(RegistryKey<net.minecraft.world.World> dimension, UUID nodeId) {
+    public CameraNodeDTO getNode(ResourceKey<net.minecraft.world.level.Level> dimension, UUID nodeId) {
         Map<UUID, Long> index = getIndexMap(dimension);
         Long key = index.get(nodeId);
         if (key == null) return null;
@@ -123,20 +117,20 @@ public class CameraNodesState extends PersistentState {
         return chunk.get(nodeId);
     }
 
-    public ChunkPos getNodeChunk(RegistryKey<net.minecraft.world.World> dimension, UUID nodeId) {
+    public ChunkPos getNodeChunk(ResourceKey<net.minecraft.world.level.Level> dimension, UUID nodeId) {
         Map<UUID, Long> index = getIndexMap(dimension);
         Long key = index.get(nodeId);
         if (key == null) return null;
         return new ChunkPos(key);
     }
 
-    public List<AreaInstanceDTO> getAreas(RegistryKey<net.minecraft.world.World> dimension) {
+    public List<AreaInstanceDTO> getAreas(ResourceKey<net.minecraft.world.level.Level> dimension) {
         LinkedHashMap<UUID, AreaInstanceDTO> map = areasByDimension.get(dimension);
         if (map == null) return List.of();
         return new ArrayList<>(map.values());
     }
 
-    public void replaceAreas(RegistryKey<net.minecraft.world.World> dimension, List<AreaInstanceDTO> areas) {
+    public void replaceAreas(ResourceKey<net.minecraft.world.level.Level> dimension, List<AreaInstanceDTO> areas) {
         LinkedHashMap<UUID, AreaInstanceDTO> map = getAreaMap(dimension);
         map.clear();
         for (AreaInstanceDTO dto : areas) {
@@ -147,17 +141,17 @@ public class CameraNodesState extends PersistentState {
         if (map.isEmpty()) {
             areasByDimension.remove(dimension);
         }
-        markDirty();
+        setDirty();
     }
 
-    public void upsertArea(RegistryKey<net.minecraft.world.World> dimension, AreaInstanceDTO dto) {
+    public void upsertArea(ResourceKey<net.minecraft.world.level.Level> dimension, AreaInstanceDTO dto) {
         if (dto == null || dto.uuid == null) return;
         LinkedHashMap<UUID, AreaInstanceDTO> map = getAreaMap(dimension);
         map.put(dto.uuid, dto);
-        markDirty();
+        setDirty();
     }
 
-    public boolean removeArea(RegistryKey<net.minecraft.world.World> dimension, UUID areaId) {
+    public boolean removeArea(ResourceKey<net.minecraft.world.level.Level> dimension, UUID areaId) {
         LinkedHashMap<UUID, AreaInstanceDTO> map = areasByDimension.get(dimension);
         if (map == null) return false;
         AreaInstanceDTO removed = map.remove(areaId);
@@ -165,33 +159,33 @@ public class CameraNodesState extends PersistentState {
             areasByDimension.remove(dimension);
         }
         if (removed != null) {
-            markDirty();
+            setDirty();
             return true;
         }
         return false;
     }
 
-    public AreaInstanceDTO getArea(RegistryKey<net.minecraft.world.World> dimension, UUID areaId) {
+    public AreaInstanceDTO getArea(ResourceKey<net.minecraft.world.level.Level> dimension, UUID areaId) {
         LinkedHashMap<UUID, AreaInstanceDTO> map = areasByDimension.get(dimension);
         if (map == null) return null;
         return map.get(areaId);
     }
 
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
+    public CompoundTag writeNbt(CompoundTag nbt, HolderLookup.Provider registryLookup) {
         nbt.putInt("formatVersion", FORMAT_VERSION);
-        NbtList dims = new NbtList();
-        java.util.Set<RegistryKey<net.minecraft.world.World>> dimensionKeys = new java.util.HashSet<>(nodesByDimension.keySet());
+        ListTag dims = new ListTag();
+        java.util.Set<ResourceKey<net.minecraft.world.level.Level>> dimensionKeys = new java.util.HashSet<>(nodesByDimension.keySet());
         dimensionKeys.addAll(areasByDimension.keySet());
-        for (RegistryKey<net.minecraft.world.World> dimension : dimensionKeys) {
-            NbtCompound dimTag = new NbtCompound();
-            dimTag.putString("dimension", dimension.getValue().toString());
-            NbtList chunks = new NbtList();
+        for (ResourceKey<net.minecraft.world.level.Level> dimension : dimensionKeys) {
+            CompoundTag dimTag = new CompoundTag();
+            dimTag.putString("dimension", dimension.identifier().toString());
+            ListTag chunks = new ListTag();
             Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimNodes = nodesByDimension.get(dimension);
             if (dimNodes != null) {
                 for (var chunkEntry : dimNodes.entrySet()) {
-                    NbtCompound chunkTag = new NbtCompound();
+                    CompoundTag chunkTag = new CompoundTag();
                     chunkTag.putLong("chunk", chunkEntry.getKey());
-                    NbtList nodes = new NbtList();
+                    ListTag nodes = new ListTag();
                     for (CameraNodeDTO dto : chunkEntry.getValue().values()) {
                         nodes.add(dto.toNbt());
                     }
@@ -203,7 +197,7 @@ public class CameraNodesState extends PersistentState {
 
             LinkedHashMap<UUID, AreaInstanceDTO> dimAreas = areasByDimension.get(dimension);
             if (dimAreas != null && !dimAreas.isEmpty()) {
-                NbtList areas = new NbtList();
+                ListTag areas = new ListTag();
                 for (AreaInstanceDTO dto : dimAreas.values()) {
                     areas.add(dto.toNbt());
                 }
@@ -216,27 +210,27 @@ public class CameraNodesState extends PersistentState {
         return nbt;
     }
 
-    private static CameraNodesState fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
+    private static CameraNodesState fromNbt(CompoundTag nbt, HolderLookup.Provider registryLookup) {
         CameraNodesState state = new CameraNodesState();
         nbt.getList("dimensions").ifPresent(dimList -> {
-            for (NbtElement element : dimList) {
-                if (!(element instanceof NbtCompound dimTag)) continue;
+            for (Tag element : dimList) {
+                if (!(element instanceof CompoundTag dimTag)) continue;
                 String dimId = dimTag.getString("dimension").orElse(null);
                 if (dimId == null) continue;
-                RegistryKey<net.minecraft.world.World> dimension = parseDimension(dimId);
+                ResourceKey<net.minecraft.world.level.Level> dimension = parseDimension(dimId);
                 if (dimension == null) continue;
                 Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = state.getDimensionMap(dimension);
                 Map<UUID, Long> index = state.getIndexMap(dimension);
                 dimTag.getList("chunks").ifPresent(chunkList -> {
-                    for (NbtElement chunkElement : chunkList) {
-                        if (!(chunkElement instanceof NbtCompound chunkTag)) continue;
+                    for (Tag chunkElement : chunkList) {
+                        if (!(chunkElement instanceof CompoundTag chunkTag)) continue;
                         Long chunkKeyOpt = chunkTag.getLong("chunk").orElse(null);
                         if (chunkKeyOpt == null) continue;
                         long chunkKey = chunkKeyOpt;
                         LinkedHashMap<UUID, CameraNodeDTO> nodeMap = new LinkedHashMap<>();
                         chunkTag.getList("nodes").ifPresent(nodeList -> {
-                            for (NbtElement nodeElement : nodeList) {
-                                if (!(nodeElement instanceof NbtCompound nodeTag)) continue;
+                            for (Tag nodeElement : nodeList) {
+                                if (!(nodeElement instanceof CompoundTag nodeTag)) continue;
                                 CameraNodeDTO dto = CameraNodeDTO.fromNbt(nodeTag);
                                 nodeMap.put(dto.uuid, dto);
                                 index.put(dto.uuid, chunkKey);
@@ -249,8 +243,8 @@ public class CameraNodesState extends PersistentState {
                 });
                 dimTag.getList("areas").ifPresent(areaList -> {
                     LinkedHashMap<UUID, AreaInstanceDTO> areaMap = state.getAreaMap(dimension);
-                    for (NbtElement areaElement : areaList) {
-                        if (!(areaElement instanceof NbtCompound areaTag)) continue;
+                    for (Tag areaElement : areaList) {
+                        if (!(areaElement instanceof CompoundTag areaTag)) continue;
                         AreaInstanceDTO dto = AreaInstanceDTO.fromNbt(areaTag);
                         if (dto.uuid == null) {
                             dto.uuid = UUID.randomUUID();
@@ -266,27 +260,27 @@ public class CameraNodesState extends PersistentState {
         return state;
     }
 
-    private Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> getDimensionMap(RegistryKey<net.minecraft.world.World> dimension) {
+    private Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> getDimensionMap(ResourceKey<net.minecraft.world.level.Level> dimension) {
         return nodesByDimension.computeIfAbsent(dimension, k -> new HashMap<>());
     }
 
-    private Map<UUID, Long> getIndexMap(RegistryKey<net.minecraft.world.World> dimension) {
+    private Map<UUID, Long> getIndexMap(ResourceKey<net.minecraft.world.level.Level> dimension) {
         return nodeIndex.computeIfAbsent(dimension, k -> new HashMap<>());
     }
 
-    private Map<UUID, CameraNodeDTO> getChunkMap(RegistryKey<net.minecraft.world.World> dimension, ChunkPos pos) {
+    private Map<UUID, CameraNodeDTO> getChunkMap(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos) {
         long key = pos.toLong();
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         return dimMap.computeIfAbsent(key, k -> new LinkedHashMap<>());
     }
 
-    private LinkedHashMap<UUID, AreaInstanceDTO> getAreaMap(RegistryKey<net.minecraft.world.World> dimension) {
+    private LinkedHashMap<UUID, AreaInstanceDTO> getAreaMap(ResourceKey<net.minecraft.world.level.Level> dimension) {
         return areasByDimension.computeIfAbsent(dimension, k -> new LinkedHashMap<>());
     }
 
-    private static RegistryKey<net.minecraft.world.World> parseDimension(String id) {
+    private static ResourceKey<net.minecraft.world.level.Level> parseDimension(String id) {
         Identifier identifier = Identifier.tryParse(id);
         if (identifier == null) return null;
-        return RegistryKey.of(RegistryKeys.WORLD, identifier);
+        return ResourceKey.create(Registries.DIMENSION, identifier);
     }
 }

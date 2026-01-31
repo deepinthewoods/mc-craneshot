@@ -1,15 +1,15 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.cameramovements.*;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.AreaMovementConfig;
 import ninja.trek.nodes.model.CameraNode;
 
 import java.util.UUID;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 
 @CameraMovementType(
         name = "Static",
@@ -22,24 +22,24 @@ public class StaticMovement extends AbstractMovementSettings implements ICameraM
     private UUID lookNodeId = null;
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         // No runtime state to initialize; static targets are resolved on demand
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         // Fallback behaviour when invoked through the generic movement system: remain at current camera state
         CameraTarget target = CameraTarget.fromCamera(camera);
         return new MovementState(target, true);
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         // No reset path required
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         // Static movement has no distance parameter in the generic context
     }
 
@@ -87,7 +87,7 @@ public class StaticMovement extends AbstractMovementSettings implements ICameraM
         CameraNode positionNode = manager.getNode(posId);
         if (positionNode == null || positionNode.position == null) return null;
 
-        Vec3d position = positionNode.position;
+        Vec3 position = positionNode.position;
         float yaw = base != null ? base.getYaw() : 0f;
         float pitch = base != null ? base.getPitch() : 0f;
         float fov = base != null ? base.getFovMultiplier() : 1.0f;
@@ -96,11 +96,11 @@ public class StaticMovement extends AbstractMovementSettings implements ICameraM
         if (lookId != null) {
             CameraNode lookNode = manager.getNode(lookId);
             if (lookNode != null && lookNode.position != null) {
-                Vec3d dir = lookNode.position.subtract(position);
-                if (dir.lengthSquared() > 1e-6) {
+                Vec3 dir = lookNode.position.subtract(position);
+                if (dir.lengthSqr() > 1e-6) {
                     dir = dir.normalize();
                     yaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-                    pitch = (float) (-Math.toDegrees(Math.asin(MathHelper.clamp(dir.y, -1.0, 1.0))));
+                    pitch = (float) (-Math.toDegrees(Math.asin(Mth.clamp(dir.y, -1.0, 1.0))));
                 }
             }
         }

@@ -1,7 +1,6 @@
 package ninja.trek.config;
 
 import com.google.gson.*;
-import net.minecraft.client.MinecraftClient;
 import ninja.trek.CameraMovementManager;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -16,9 +15,10 @@ import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 
 public class SlotSettingsIO {
-    private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_slots.json");
+    private static final File CONFIG_FILE = new File(Minecraft.getInstance().gameDirectory, "config/craneshot_slots.json");
     private static final int NUM_SLOTS = CameraMovementManager.SLOT_COUNT;
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -145,7 +145,7 @@ public class SlotSettingsIO {
             String jsonStr = GSON.toJson(movementJson);
 
             // Use Minecraft's clipboard handling
-            MinecraftClient.getInstance().keyboard.setClipboard(jsonStr);
+            Minecraft.getInstance().keyboardHandler.setClipboard(jsonStr);
         } catch (Exception e) {
             // logging removed
         }
@@ -154,7 +154,7 @@ public class SlotSettingsIO {
     public static ICameraMovement createMovementFromClipboard() {
         try {
             // Use Minecraft's clipboard handling
-            String clipboardText = MinecraftClient.getInstance().keyboard.getClipboard();
+            String clipboardText = Minecraft.getInstance().keyboardHandler.getClipboard();
             JsonObject movementObj = JsonParser.parseString(clipboardText).getAsJsonObject();
             return jsonToMovement(movementObj);
         } catch (Exception e) {

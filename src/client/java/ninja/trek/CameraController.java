@@ -1,11 +1,13 @@
 package ninja.trek;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.BlockView;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Camera;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_KEYS;
@@ -13,8 +15,6 @@ import ninja.trek.cameramovements.AbstractMovementSettings.POST_MOVE_MOUSE;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
 import ninja.trek.mixin.client.KeyBindingAccessor;
@@ -22,13 +22,13 @@ import ninja.trek.mixin.client.KeyBindingAccessor;
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
     public static POST_MOVE_MOUSE currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
-    public static Vec3d freeCamPosition = Vec3d.ZERO;
+    public static Vec3 freeCamPosition = Vec3.ZERO;
     public static float freeCamYaw = 0f;
     public static float freeCamPitch = 0f;
     public static CameraTarget controlStick = new CameraTarget();
 
     // Target player tracking for spectator mode
-    private static PlayerEntity cachedTargetPlayer = null;
+    private static Player cachedTargetPlayer = null;
     private static String cachedTargetPlayerName = "";
     private static long lastTargetCheckTime = 0;
     private static final long TARGET_CHECK_INTERVAL_MS = 1000; // Check every 1 second
@@ -39,9 +39,9 @@ public class CameraController {
     /**
      * Check if a key is physically held down, ignoring toggle/hold settings.
      */
-    public static boolean isKeyPhysicallyHeld(MinecraftClient client, KeyBinding keyBinding) {
-        InputUtil.Key boundKey = ((KeyBindingAccessor) keyBinding).getBoundKey();
-        return InputUtil.isKeyPressed(client.getWindow(), boundKey.getCode());
+    public static boolean isKeyPhysicallyHeld(Minecraft client, KeyMapping keyBinding) {
+        InputConstants.Key boundKey = ((KeyBindingAccessor) keyBinding).getBoundKey();
+        return InputConstants.isKeyDown(client.getWindow(), boundKey.getValue());
     }
 
     // Track if camera was activated by node influence
@@ -55,12 +55,12 @@ public class CameraController {
     public static final double FIRST_PERSON_THRESHOLD_MAX = 5.0;
 
     public static AbstractMovementSettings.END_TARGET currentEndTarget = AbstractMovementSettings.END_TARGET.HEAD_BACK;
-    private Vec3d lastPlayerPos = Vec3d.ZERO;
-    private Vec3d cumulativeMovement = Vec3d.ZERO;
+    private Vec3 lastPlayerPos = Vec3.ZERO;
+    private Vec3 cumulativeMovement = Vec3.ZERO;
     private float targetYaw = 0f;
     private static final double FULL_ROTATE_DISTANCE = 2.0; // Blocks to move for full rotation
 
-    private Vec3d currentVelocity = Vec3d.ZERO;
+    private Vec3 currentVelocity = Vec3.ZERO;
     private boolean lockPlayerHead = false;
     private float lockedPlayerYaw = 0f;
     private float lockedPlayerPitch = 0f;
@@ -74,8 +74,8 @@ public class CameraController {
      * @param client Minecraft client instance
      * @return The target PlayerEntity, or null if not found
      */
-    private static PlayerEntity resolveTargetPlayer(MinecraftClient client) {
-        if (client == null || client.world == null) {
+    private static Player resolveTargetPlayer(Minecraft client) {
+        if (client == null || client.level == null) {
             cachedTargetPlayer = null;
             return null;
         }
@@ -103,7 +103,7 @@ public class CameraController {
         cachedTargetPlayerName = targetName;
         cachedTargetPlayer = null;
 
-        for (PlayerEntity player : client.world.getPlayers()) {
+        for (Player player : client.level.players()) {
             if (player.getName().getString().equalsIgnoreCase(targetName)) {
                 cachedTargetPlayer = player;
                 break;
@@ -117,7 +117,7 @@ public class CameraController {
      * Checks if target player following is currently active.
      * Only active when: enabled, in spectator mode, and target player is found.
      */
-    private static boolean shouldUseTargetPlayer(MinecraftClient client) {
+    private static boolean shouldUseTargetPlayer(Minecraft client) {
         if (client == null || client.player == null) {
             return false;
         }
@@ -133,37 +133,37 @@ public class CameraController {
         }
 
         // Check if we have a valid target
-        PlayerEntity target = resolveTargetPlayer(client);
+        Player target = resolveTargetPlayer(client);
         return target != null;
     }
 
-    private void updateControlStick(MinecraftClient client, float tickDelta) {
+    private void updateControlStick(Minecraft client, float tickDelta) {
         if (currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
                 currentKeyMoveMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
 
             if (client.player == null) return;
 
             // Determine which player to track
-            PlayerEntity trackedPlayer = client.player;
+            Player trackedPlayer = client.player;
             if (shouldUseTargetPlayer(client)) {
-                PlayerEntity target = resolveTargetPlayer(client);
+                Player target = resolveTargetPlayer(client);
                 if (target != null) {
                     trackedPlayer = target;
                 }
                 // If target is null, falls back to client.player
             }
 
-            Camera camera = client.gameRenderer.getCamera();
+            Camera camera = client.gameRenderer.getMainCamera();
             if (camera != null) {
-                Vec3d eyePos = trackedPlayer.getCameraPosVec(tickDelta);
-                float yaw = trackedPlayer.getYaw(tickDelta);
-                float pitch = trackedPlayer.getPitch(tickDelta);
+                Vec3 eyePos = trackedPlayer.getEyePosition(tickDelta);
+                float yaw = trackedPlayer.getViewYRot(tickDelta);
+                float pitch = trackedPlayer.getViewXRot(tickDelta);
 
                 // Update movement tracking for VELOCITY targets
                 if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
                         currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_FRONT) {
                     // Track the target player's position (not local player)
-                    updateMovementTracking(new Vec3d(trackedPlayer.getX(), trackedPlayer.getY(), trackedPlayer.getZ()));
+                    updateMovementTracking(new Vec3(trackedPlayer.getX(), trackedPlayer.getY(), trackedPlayer.getZ()));
                 }
 
                 // Calculate final angles based on target type
@@ -211,20 +211,20 @@ public class CameraController {
         }
     }
 
-    private void updateMovementTracking(Vec3d currentPos) {
-        if (lastPlayerPos.equals(Vec3d.ZERO)) {
+    private void updateMovementTracking(Vec3 currentPos) {
+        if (lastPlayerPos.equals(Vec3.ZERO)) {
             lastPlayerPos = currentPos;
             return;
         }
 
         // Calculate movement in XZ plane
-        Vec3d movement = new Vec3d(
+        Vec3 movement = new Vec3(
                 currentPos.x - lastPlayerPos.x,
                 0,
                 currentPos.z - lastPlayerPos.z
         );
 
-        if (movement.lengthSquared() > 0.001) { // Only update if there's significant movement
+        if (movement.lengthSqr() > 0.001) { // Only update if there's significant movement
             cumulativeMovement = cumulativeMovement.add(movement);
 
             // Calculate movement direction (Minecraft coordinates)
@@ -240,7 +240,7 @@ public class CameraController {
 
             // Reset cumulative movement if we've reached full rotation
             if (moveDistance >= FULL_ROTATE_DISTANCE) {
-                cumulativeMovement = Vec3d.ZERO;
+                cumulativeMovement = Vec3.ZERO;
             }
         }
 
@@ -250,7 +250,7 @@ public class CameraController {
     public void setPreMoveStates(AbstractMovementSettings m){
         currentEndTarget = m.getEndTarget();
         // Reset any FOV modifications when starting a new movement
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.gameRenderer instanceof FovAccessor) {
             ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
         }
@@ -266,17 +266,17 @@ public class CameraController {
             clearPlayerHeadLock();
             
             // Reset tracking variables
-            lastPlayerPos = Vec3d.ZERO;
-            cumulativeMovement = Vec3d.ZERO;
+            lastPlayerPos = Vec3.ZERO;
+            cumulativeMovement = Vec3.ZERO;
             
             // Reset keyboard input handling
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 ((IKeyboardInputMixin) client.player.input).setDisabled(false);
             }
             // Close node editor if open
-            net.minecraft.client.MinecraftClient _mc = net.minecraft.client.MinecraftClient.getInstance();
-            if (_mc != null && _mc.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+            net.minecraft.client.Minecraft _mc = net.minecraft.client.Minecraft.getInstance();
+            if (_mc != null && _mc.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
                 _mc.setScreen(null);
             }
             ninja.trek.nodes.NodeManager.get().setEditing(false);
@@ -288,8 +288,8 @@ public class CameraController {
             currentMouseMoveMode = m.getPostMoveMouse();
             currentKeyMoveMode = m.getPostMoveKeys();
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            Camera camera = client.gameRenderer.getCamera();
+            Minecraft client = Minecraft.getInstance();
+            Camera camera = client.gameRenderer.getMainCamera();
             
             // Reset the keyboard movement tracking flag when entering a new camera mode
             hasMovedWithKeyboard = false;
@@ -318,7 +318,7 @@ public class CameraController {
                 boolean keysOk = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT || currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
                 if (keysOk) {
                     ninja.trek.nodes.NodeManager.get().setEditing(true);
-                    if (!(client.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen)) {
+                    if (!(client.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen)) {
                         client.setScreen(new ninja.trek.nodes.ui.NodeEditorScreen());
                     }
                     // Do NOT intercept mouse globally while screen is open; screen handles drag
@@ -329,7 +329,7 @@ public class CameraController {
                 }
             } else {
                 // Ensure editor closed if not in node edit mode
-                if (client.currentScreen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                if (client.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
                     client.setScreen(null);
                 }
                 ninja.trek.nodes.NodeManager.get().setEditing(false);
@@ -345,9 +345,9 @@ public class CameraController {
                                     currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK);
             
             // Capture existing camera position before activating any new camera mode
-            Vec3d existingCameraPos = camera.getPos();
-            float existingYaw = camera.getYaw();
-            float existingPitch = camera.getPitch();
+            Vec3 existingCameraPos = camera.position();
+            float existingYaw = camera.yRot();
+            float existingPitch = camera.xRot();
             
             // Activate the appropriate camera mode
             CameraSystem cameraSystem = CameraSystem.getInstance();
@@ -366,7 +366,7 @@ public class CameraController {
         }
     }
 
-    private void handleKeyboardMovement(MinecraftClient client, Camera camera) {
+    private void handleKeyboardMovement(Minecraft client, Camera camera) {
         if (client.player == null) return;
 
         // Let the camera system handle movement
@@ -391,33 +391,33 @@ public class CameraController {
         float baseSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
 
         // Sprint multiplier
-        if (client.options.sprintKey.isPressed()) {
+        if (client.options.keySprint.isDown()) {
             baseSpeed *= 3.0f;
         }
 
-        Vec3d targetVelocity = Vec3d.ZERO;
+        Vec3 targetVelocity = Vec3.ZERO;
         
         // Calculate movement direction
         if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             // Free camera movement in all directions
             double x = 0, y = 0, z = 0;
             
-            if (client.options.forwardKey.isPressed()) {
+            if (client.options.keyUp.isDown()) {
                 z += 1.0;
             }
-            if (client.options.backKey.isPressed()) {
+            if (client.options.keyDown.isDown()) {
                 z -= 1.0;
             }
-            if (client.options.leftKey.isPressed()) {
+            if (client.options.keyLeft.isDown()) {
                 x += 1.0;
             }
-            if (client.options.rightKey.isPressed()) {
+            if (client.options.keyRight.isDown()) {
                 x -= 1.0;
             }
-            if (client.options.jumpKey.isPressed()) {
+            if (client.options.keyJump.isDown()) {
                 y += 1.0;
             }
-            if (isKeyPhysicallyHeld(client, client.options.sneakKey)) {
+            if (isKeyPhysicallyHeld(client, client.options.keyShift)) {
                 y -= 1.0;
             }
             
@@ -432,43 +432,43 @@ public class CameraController {
             // Convert to camera-relative movement
             double yawRad = Math.toRadians(freeCamYaw);
             double pitchRad = Math.toRadians(freeCamPitch);
-            Vec3d forward = new Vec3d(
+            Vec3 forward = new Vec3(
                 -Math.sin(yawRad) * Math.cos(pitchRad),
                 -Math.sin(pitchRad),
                 Math.cos(yawRad) * Math.cos(pitchRad)
             );
-            Vec3d right = forward.crossProduct(new Vec3d(0.0, 1.0, 0.0));
-            if (right.lengthSquared() < 1.0E-6) {
-                right = new Vec3d(-Math.cos(yawRad), 0.0, -Math.sin(yawRad));
+            Vec3 right = forward.cross(new Vec3(0.0, 1.0, 0.0));
+            if (right.lengthSqr() < 1.0E-6) {
+                right = new Vec3(-Math.cos(yawRad), 0.0, -Math.sin(yawRad));
             } else {
                 right = right.normalize();
             }
-            Vec3d up = right.crossProduct(forward).normalize();
-            targetVelocity = forward.multiply(z).add(right.multiply(-x)).add(up.multiply(y));
+            Vec3 up = right.cross(forward).normalize();
+            targetVelocity = forward.scale(z).add(right.scale(-x)).add(up.scale(y));
             
         } else if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             // Y-axis locked camera movement
             double x = 0, z = 0;
             
-            if (client.options.forwardKey.isPressed()) {
+            if (client.options.keyUp.isDown()) {
                 z += 1.0;
             }
-            if (client.options.backKey.isPressed()) {
+            if (client.options.keyDown.isDown()) {
                 z -= 1.0;
             }
-            if (client.options.leftKey.isPressed()) {
+            if (client.options.keyLeft.isDown()) {
                 x += 1.0;
             }
-            if (client.options.rightKey.isPressed()) {
+            if (client.options.keyRight.isDown()) {
                 x -= 1.0;
             }
             
             // Y movement from jump/sneak
             double y = 0;
-            if (client.options.jumpKey.isPressed()) {
+            if (client.options.keyJump.isDown()) {
                 y += 1.0;
             }
-            if (isKeyPhysicallyHeld(client, client.options.sneakKey)) {
+            if (isKeyPhysicallyHeld(client, client.options.keyShift)) {
                 y -= 1.0;
             }
             
@@ -484,7 +484,7 @@ public class CameraController {
             double xFactor = Math.sin(yaw * Math.PI / 180.0);
             double zFactor = Math.cos(yaw * Math.PI / 180.0);
             
-            targetVelocity = new Vec3d(
+            targetVelocity = new Vec3(
                 (x * zFactor - z * xFactor), 
                 y, 
                 (z * zFactor + x * xFactor)
@@ -492,18 +492,18 @@ public class CameraController {
         }
 
         // Normalize and apply speed to target velocity if there's any movement
-        if (targetVelocity.lengthSquared() > 0.0001) {
-            targetVelocity = targetVelocity.normalize().multiply(baseSpeed);
+        if (targetVelocity.lengthSqr() > 0.0001) {
+            targetVelocity = targetVelocity.normalize().scale(baseSpeed);
         }
 
         // Apply acceleration or deceleration
         float acceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
         float deceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
 
-        if (targetVelocity.lengthSquared() > 0.0001) {
+        if (targetVelocity.lengthSqr() > 0.0001) {
             // Accelerating
             currentVelocity = currentVelocity.add(
-                    targetVelocity.subtract(currentVelocity).multiply(acceleration)
+                    targetVelocity.subtract(currentVelocity).scale(acceleration)
             );
             
             // Mark as moved with keyboard if acceleration is happening
@@ -512,10 +512,10 @@ public class CameraController {
             }
         } else {
             // Decelerating
-            currentVelocity = currentVelocity.multiply(1.0 - deceleration);
+            currentVelocity = currentVelocity.scale(1.0 - deceleration);
             // Zero out very small velocities to prevent perpetual drift
-            if (currentVelocity.lengthSquared() < 0.0001) {
-                currentVelocity = Vec3d.ZERO;
+            if (currentVelocity.lengthSqr() < 0.0001) {
+                currentVelocity = Vec3.ZERO;
             }
         }
 
@@ -524,14 +524,14 @@ public class CameraController {
         ((CameraAccessor) camera).invokesetPos(freeCamPosition);
     }
 
-    public void updateCamera(MinecraftClient client, Camera camera, float tickDelta, float deltaSeconds) {
+    public void updateCamera(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         updateControlStick(client, tickDelta);
 
         // Cache interpolated player position for consistent rendering decisions
         // This must be done BEFORE any rendering decisions (like shouldRenderPlayerModel)
         CameraSystem cameraSystem = CameraSystem.getInstance();
         if (client.player != null) {
-            Vec3d interpolatedEyePos = client.player.getCameraPosVec(tickDelta);
+            Vec3 interpolatedEyePos = client.player.getEyePosition(tickDelta);
             cameraSystem.updateInterpolatedPlayerPosition(interpolatedEyePos);
         }
 
@@ -550,7 +550,7 @@ public class CameraController {
         // Handle node-based camera activation/deactivation
         double currentNodeInfluence = 0.0;
         if (!skipNodeInfluence && client.player != null) {
-            currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(client.player.getEyePos());
+            currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(client.player.getEyePosition());
         }
 
         // Activate camera when nodes start influencing
@@ -616,10 +616,10 @@ public class CameraController {
                     if (entityFreecam) {
                         ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
                         if (camEnt != null) {
-                            Vec3d pos = baseTarget.getPosition();
-                            camEnt.setPos(pos.x, pos.y, pos.z);
+                            Vec3 pos = baseTarget.getPosition();
+                            camEnt.setPosRaw(pos.x, pos.y, pos.z);
                             camEnt.setCameraRotations(baseTarget.getYaw(), baseTarget.getPitch());
-                            camEnt.setVelocity(Vec3d.ZERO); // Prevent physics interference
+                            camEnt.setDeltaMovement(Vec3.ZERO); // Prevent physics interference
                         }
                     }
                 }
@@ -627,12 +627,12 @@ public class CameraController {
                 else if (entityFreecam) {
                     // Route mouse input to CameraSystem (not CameraEntity)
                     // CameraEntity is just a ghost for chunk rendering
-                    if (rotating && client.mouse instanceof IMouseMixin) {
-                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                    if (rotating && client.mouseHandler instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouseHandler;
                         double deltaX = mouseMixin.getCapturedDeltaX();
                         double deltaY = -mouseMixin.getCapturedDeltaY();
                         if (deltaX != 0 || deltaY != 0) {
-                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double mouseSensitivity = client.options.sensitivity().get();
                             double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
                             // Adjust sensitivity based on FOV for zoom
                             if (baseTarget != null) {
@@ -647,12 +647,12 @@ public class CameraController {
                         }
                     }
                 } else {
-                    if (rotating && client.mouse instanceof IMouseMixin) {
-                        IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                    if (rotating && client.mouseHandler instanceof IMouseMixin) {
+                        IMouseMixin mouseMixin = (IMouseMixin) client.mouseHandler;
                         double deltaX = mouseMixin.getCapturedDeltaX();
                         double deltaY = -mouseMixin.getCapturedDeltaY();
                         if (deltaX != 0 || deltaY != 0) {
-                            double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                            double mouseSensitivity = client.options.sensitivity().get();
                             double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
                             // Adjust sensitivity based on FOV for zoom
                             if (baseTarget != null) {
@@ -691,11 +691,11 @@ public class CameraController {
                 }
 
                 // Handle rotation based on movement mode
-                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouse instanceof IMouseMixin) {
-                    IMouseMixin mouseMixin = (IMouseMixin) client.mouse;
+                if (currentMouseMoveMode == POST_MOVE_MOUSE.ROTATE_CAMERA && client.mouseHandler instanceof IMouseMixin) {
+                    IMouseMixin mouseMixin = (IMouseMixin) client.mouseHandler;
                     double deltaX = mouseMixin.getCapturedDeltaX();
                     double deltaY = -mouseMixin.getCapturedDeltaY();
-                    double mouseSensitivity = client.options.getMouseSensitivity().getValue();
+                    double mouseSensitivity = client.options.sensitivity().get();
                     double calculatedSensitivity = 0.6 * mouseSensitivity * mouseSensitivity * mouseSensitivity + 0.2;
                     // Adjust sensitivity based on FOV for zoom
                     if (baseTarget != null) {
@@ -765,13 +765,13 @@ public class CameraController {
      * is responsible for applying the computed camera state (from the movement manager) as well as
      * processing any free keyboard/mouse input. It should be placed in CameraController.
      */
-    public void handleCameraUpdate(BlockView area, Entity focusedEntity, boolean thirdPerson,
+    public void handleCameraUpdate(BlockGetter area, Entity focusedEntity, boolean thirdPerson,
                                    boolean inverseView, float tickDelta, float frameSeconds, Camera camera) {
         // Verify that both the camera and the focused entity exist.
         if (camera == null || focusedEntity == null) return;
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null) return;
 
         // Disable camera control when sleeping to avoid clipping inside the player's head
         if (client.player != null && client.player.isSleeping()) {
@@ -785,7 +785,7 @@ public class CameraController {
         updateKeyboardInput(client);
     }
 
-    private void updateKeyboardInput(MinecraftClient client) {
+    private void updateKeyboardInput(Minecraft client) {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
             // Only disable player movement when our post-move mode requires camera keyboard control.
             // Do NOT blanket-disable just because the camera system is active; Bezier out-phase needs player input.
@@ -815,7 +815,7 @@ public class CameraController {
         lastNodeInfluence = 0.0;
 
         // Ensure keyboard input is enabled for the player
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client != null && client.player != null && client.player.input instanceof IKeyboardInputMixin) {
             ((IKeyboardInputMixin) client.player.input).setDisabled(false);
         }
@@ -831,15 +831,15 @@ public class CameraController {
 
         // Reset the camera position to follow the player
         if (client != null && client.player != null) {
-            Vec3d eyePos = client.player.getEyePos();
-            float yaw = client.player.getYaw();
-            float pitch = client.player.getPitch();
+            Vec3 eyePos = client.player.getEyePosition();
+            float yaw = client.player.getYRot();
+            float pitch = client.player.getXRot();
 
             freeCamPosition = eyePos;
             freeCamYaw = yaw;
             freeCamPitch = pitch;
 
-            Camera camera = client.gameRenderer.getCamera();
+            Camera camera = client.gameRenderer.getMainCamera();
             if (camera != null) {
                 ((CameraAccessor) camera).invokesetPos(eyePos);
                 ((CameraAccessor) camera).invokeSetRotation(yaw, pitch);
@@ -852,9 +852,9 @@ public class CameraController {
 
             ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
             if (camEnt != null) {
-                camEnt.setPos(eyePos.x, eyePos.y, eyePos.z);
+                camEnt.setPosRaw(eyePos.x, eyePos.y, eyePos.z);
                 camEnt.setCameraRotations(yaw, pitch);
-                camEnt.setVelocity(Vec3d.ZERO);
+                camEnt.setDeltaMovement(Vec3.ZERO);
             }
         }
 
@@ -864,27 +864,27 @@ public class CameraController {
         }
     }
 
-    private void capturePlayerHeadLock(MinecraftClient client) {
+    private void capturePlayerHeadLock(Minecraft client) {
         if (client == null || client.player == null) return;
-        PlayerEntity player = client.player;
+        Player player = client.player;
         lockPlayerHead = true;
-        lockedPlayerYaw = player.getYaw();
-        lockedPlayerPitch = player.getPitch();
-        lockedPlayerHeadYaw = player.getHeadYaw();
-        lockedPlayerBodyYaw = player.getBodyYaw();
+        lockedPlayerYaw = player.getYRot();
+        lockedPlayerPitch = player.getXRot();
+        lockedPlayerHeadYaw = player.getYHeadRot();
+        lockedPlayerBodyYaw = player.getVisualRotationYInDegrees();
     }
 
     private void clearPlayerHeadLock() {
         lockPlayerHead = false;
     }
 
-    private void applyPlayerHeadLock(MinecraftClient client) {
+    private void applyPlayerHeadLock(Minecraft client) {
         if (!lockPlayerHead || client == null || client.player == null) return;
-        PlayerEntity player = client.player;
-        player.setYaw(lockedPlayerYaw);
-        player.setPitch(lockedPlayerPitch);
-        player.setHeadYaw(lockedPlayerHeadYaw);
-        player.setBodyYaw(lockedPlayerBodyYaw);
+        Player player = client.player;
+        player.setYRot(lockedPlayerYaw);
+        player.setXRot(lockedPlayerPitch);
+        player.setYHeadRot(lockedPlayerHeadYaw);
+        player.setYBodyRot(lockedPlayerBodyYaw);
          
     }
 }

@@ -1,16 +1,15 @@
 package ninja.trek.nodes.model;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.Objects;
 import java.util.UUID;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.phys.Vec3;
 
 public class CameraNodeDTO {
     public static final int CURRENT_VERSION = 3;
@@ -21,7 +20,7 @@ public class CameraNodeDTO {
     public UUID owner = null;
     public String name = "Node";
     public NodeType type = NodeType.CAMERA_CONTROL;
-    public Vec3d position = Vec3d.ZERO;
+    public Vec3 position = Vec3.ZERO;
     public int colorARGB = 0xFFFF8800;
     public double droneRadius = 6.0;
     public double droneSpeedDegPerSec = 30.0;
@@ -75,15 +74,15 @@ public class CameraNodeDTO {
         return dto;
     }
 
-    public void write(PacketByteBuf buf) {
+    public void write(FriendlyByteBuf buf) {
         buf.writeVarInt(version);
-        buf.writeUuid(uuid);
+        buf.writeUUID(uuid);
         buf.writeBoolean(clientRequestId != null);
-        if (clientRequestId != null) buf.writeUuid(clientRequestId);
+        if (clientRequestId != null) buf.writeUUID(clientRequestId);
         buf.writeBoolean(owner != null);
-        if (owner != null) buf.writeUuid(owner);
-        buf.writeString(name);
-        buf.writeEnumConstant(type == null ? NodeType.CAMERA_CONTROL : type);
+        if (owner != null) buf.writeUUID(owner);
+        buf.writeUtf(name);
+        buf.writeEnum(type == null ? NodeType.CAMERA_CONTROL : type);
         writeVec3d(buf, position);
         buf.writeInt(colorARGB);
         buf.writeDouble(droneRadius);
@@ -91,14 +90,14 @@ public class CameraNodeDTO {
         buf.writeDouble(droneStartAngleDeg);
     }
 
-    public static CameraNodeDTO read(PacketByteBuf buf) {
+    public static CameraNodeDTO read(FriendlyByteBuf buf) {
         CameraNodeDTO dto = new CameraNodeDTO();
         dto.version = buf.readVarInt();
-        dto.uuid = buf.readUuid();
-        if (buf.readBoolean()) dto.clientRequestId = buf.readUuid();
-        if (buf.readBoolean()) dto.owner = buf.readUuid();
-        dto.name = buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH);
-        dto.type = buf.readEnumConstant(NodeType.class);
+        dto.uuid = buf.readUUID();
+        if (buf.readBoolean()) dto.clientRequestId = buf.readUUID();
+        if (buf.readBoolean()) dto.owner = buf.readUUID();
+        dto.name = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
+        dto.type = buf.readEnum(NodeType.class);
         dto.position = readVec3d(buf);
         dto.colorARGB = buf.readInt();
         dto.droneRadius = buf.readDouble();
@@ -107,8 +106,8 @@ public class CameraNodeDTO {
         return dto;
     }
 
-    public NbtCompound toNbt() {
-        NbtCompound tag = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag tag = new CompoundTag();
         tag.putInt("version", version);
         tag.putString("uuid", uuid.toString());
         if (owner != null) tag.putString("owner", owner.toString());
@@ -122,7 +121,7 @@ public class CameraNodeDTO {
         return tag;
     }
 
-    public static CameraNodeDTO fromNbt(NbtCompound tag) {
+    public static CameraNodeDTO fromNbt(CompoundTag tag) {
         CameraNodeDTO dto = new CameraNodeDTO();
         dto.version = tag.getInt("version").orElse(0);
         tag.getString("uuid").ifPresent(uuidStr -> {
@@ -143,7 +142,7 @@ public class CameraNodeDTO {
             } catch (IllegalArgumentException ignored) {}
         });
         tag.getList("pos").ifPresent(list -> {
-            if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
+            if (!list.isEmpty() && list.get(0).getId() == Tag.TAG_DOUBLE) {
                 dto.position = vec3dFromNbt(list);
             }
         });
@@ -154,13 +153,13 @@ public class CameraNodeDTO {
         return dto;
     }
 
-    public static RegistryKey<net.minecraft.world.World> readDimension(PacketByteBuf buf) {
+    public static ResourceKey<net.minecraft.world.level.Level> readDimension(FriendlyByteBuf buf) {
         Identifier id = buf.readIdentifier();
-        return RegistryKey.of(RegistryKeys.WORLD, id);
+        return ResourceKey.create(Registries.DIMENSION, id);
     }
 
-    public static void writeDimension(PacketByteBuf buf, RegistryKey<net.minecraft.world.World> key) {
-        buf.writeIdentifier(key.getValue());
+    public static void writeDimension(FriendlyByteBuf buf, ResourceKey<net.minecraft.world.level.Level> key) {
+        buf.writeIdentifier(key.identifier());
     }
 
     @Override
@@ -176,29 +175,29 @@ public class CameraNodeDTO {
         return Objects.hashCode(uuid);
     }
 
-    private static void writeVec3d(PacketByteBuf buf, Vec3d vec) {
+    private static void writeVec3d(FriendlyByteBuf buf, Vec3 vec) {
         buf.writeDouble(vec.x);
         buf.writeDouble(vec.y);
         buf.writeDouble(vec.z);
     }
 
-    private static Vec3d readVec3d(PacketByteBuf buf) {
-        return new Vec3d(buf.readDouble(), buf.readDouble(), buf.readDouble());
+    private static Vec3 readVec3d(FriendlyByteBuf buf) {
+        return new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
     }
 
-    private static NbtList vec3dToNbt(Vec3d vec) {
-        NbtList list = new NbtList();
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.x));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.y));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.z));
+    private static ListTag vec3dToNbt(Vec3 vec) {
+        ListTag list = new ListTag();
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.x));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.y));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.z));
         return list;
     }
 
-    private static Vec3d vec3dFromNbt(NbtList list) {
-        if (list == null || list.size() < 3) return Vec3d.ZERO;
+    private static Vec3 vec3dFromNbt(ListTag list) {
+        if (list == null || list.size() < 3) return Vec3.ZERO;
         double x = list.getDouble(0).orElse(0.0);
         double y = list.getDouble(1).orElse(0.0);
         double z = list.getDouble(2).orElse(0.0);
-        return new Vec3d(x, y, z);
+        return new Vec3(x, y, z);
     }
 }

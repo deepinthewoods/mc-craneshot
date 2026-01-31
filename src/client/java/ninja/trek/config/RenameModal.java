@@ -1,22 +1,22 @@
 package ninja.trek.config;
 
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 
 public class RenameModal extends Screen {
     private final Screen parent;
     private final AbstractMovementSettings movement;
-    private TextFieldWidget nameField;
+    private EditBox nameField;
     private final Runnable onComplete;
     private static final int MODAL_WIDTH = 200;
     private static final int MODAL_HEIGHT = 100;
 
     public RenameModal(Screen parent, AbstractMovementSettings movement, Runnable onComplete) {
-        super(Text.literal("Rename Movement"));
+        super(Component.literal("Rename Movement"));
         this.parent = parent;
         this.movement = movement;
         this.onComplete = onComplete;
@@ -30,35 +30,35 @@ public class RenameModal extends Screen {
         int modalTop = centerY - MODAL_HEIGHT / 2;
 
         // Create text field
-        nameField = new TextFieldWidget(
-                textRenderer,
+        nameField = new EditBox(
+                font,
                 modalLeft + 10,
                 modalTop + 30,
                 MODAL_WIDTH - 20,
                 20,
-                Text.literal("Name")
+                Component.literal("Name")
         );
-        nameField.setText(movement.getDisplayName());
+        nameField.setValue(movement.getDisplayName());
         nameField.setMaxLength(32);
-        addSelectableChild(nameField);
+        addWidget(nameField);
         setInitialFocus(nameField);
 
         // Create buttons
-        addDrawableChild(ButtonWidget.builder(Text.literal("Save"), button -> {
-                    movement.setCustomName(nameField.getText());
+        addRenderableWidget(Button.builder(Component.literal("Save"), button -> {
+                    movement.setCustomName(nameField.getValue());
                     if (onComplete != null) onComplete.run();
-                    close();
+                    onClose();
                 })
-                .dimensions(modalLeft + 10, modalTop + MODAL_HEIGHT - 30, 80, 20)
+                .bounds(modalLeft + 10, modalTop + MODAL_HEIGHT - 30, 80, 20)
                 .build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), button -> close())
-                .dimensions(modalLeft + MODAL_WIDTH - 90, modalTop + MODAL_HEIGHT - 30, 80, 20)
+        addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> onClose())
+                .bounds(modalLeft + MODAL_WIDTH - 90, modalTop + MODAL_HEIGHT - 30, 80, 20)
                 .build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         if (parent != null) {
            // parent.render(context, mouseX, mouseY, delta);
         }
@@ -74,21 +74,21 @@ public class RenameModal extends Screen {
         context.fill(modalLeft + 1, modalTop + 1, modalLeft + MODAL_WIDTH - 1, modalTop + MODAL_HEIGHT - 1, 0xFF444444);
 
         // Draw title
-        context.drawCenteredTextWithShadow(textRenderer, "Rename Movement", centerX, modalTop + 10, 0xFFFFFF);
+        context.drawCenteredString(font, "Rename Movement", centerX, modalTop + 10, 0xFFFFFF);
 
         nameField.render(context, mouseX, mouseY, delta);
 
     }
 
     @Override
-    public void close() {
-        if (this.client != null) {
-            this.client.setScreen(parent);
+    public void onClose() {
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(parent);
         }
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }

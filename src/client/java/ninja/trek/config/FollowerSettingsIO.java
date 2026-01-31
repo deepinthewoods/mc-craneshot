@@ -1,7 +1,6 @@
 package ninja.trek.config;
 
 import com.google.gson.*;
-import net.minecraft.client.MinecraftClient;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.ICameraMovement;
 
@@ -9,9 +8,10 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import net.minecraft.client.Minecraft;
 
 public class FollowerSettingsIO {
-    private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_followers.json");
+    private static final File CONFIG_FILE = new File(Minecraft.getInstance().gameDirectory, "config/craneshot_followers.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static void saveFollowers(FollowerConfig config) {

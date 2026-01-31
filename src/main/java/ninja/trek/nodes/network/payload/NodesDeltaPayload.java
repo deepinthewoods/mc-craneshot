@@ -1,47 +1,45 @@
 package ninja.trek.nodes.network.payload;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.Uuids;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.CameraNodeDTO;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 
 public record NodesDeltaPayload(
-        RegistryKey<World> dimension,
+        ResourceKey<Level> dimension,
         ChunkPos chunk,
         List<NodeOperation> operations
-) implements CustomPayload {
-    public static final Id<NodesDeltaPayload> ID = new Id<>(Identifier.of(Craneshot.MOD_ID, "nodes_delta"));
+) implements CustomPacketPayload {
+    public static final Type<NodesDeltaPayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "nodes_delta"));
 
-    public static final PacketCodec<RegistryByteBuf, NodesDeltaPayload> CODEC = PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, NodesDeltaPayload> CODEC = StreamCodec.ofMember(
             NodesDeltaPayload::write,
             NodesDeltaPayload::read
     );
 
-    private NodesDeltaPayload(RegistryByteBuf buf) {
+    private NodesDeltaPayload(RegistryFriendlyByteBuf buf) {
         this(
-                RegistryKey.of(RegistryKeys.WORLD, buf.readIdentifier()),
+                ResourceKey.create(Registries.DIMENSION, buf.readIdentifier()),
                 new ChunkPos(buf.readInt(), buf.readInt()),
                 readOperations(buf)
         );
     }
 
-    private static NodesDeltaPayload read(RegistryByteBuf buf) {
+    private static NodesDeltaPayload read(RegistryFriendlyByteBuf buf) {
         return new NodesDeltaPayload(buf);
     }
 
-    private static List<NodeOperation> readOperations(RegistryByteBuf buf) {
+    private static List<NodeOperation> readOperations(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
         List<NodeOperation> ops = new java.util.ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -50,8 +48,8 @@ public record NodesDeltaPayload(
         return ops;
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeIdentifier(dimension.getValue());
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeIdentifier(dimension.identifier());
         buf.writeInt(chunk.x);
         buf.writeInt(chunk.z);
         buf.writeVarInt(operations.size());
@@ -61,7 +59,7 @@ public record NodesDeltaPayload(
     }
 
     @Override
-    public Id<NodesDeltaPayload> getId() {
+    public Type<NodesDeltaPayload> type() {
         return ID;
     }
 
@@ -74,9 +72,9 @@ public record NodesDeltaPayload(
             UUID nodeId,
             Optional<CameraNodeDTO> nodeData
     ) {
-        public static NodeOperation read(RegistryByteBuf buf) {
-            OperationType type = buf.readEnumConstant(OperationType.class);
-            UUID nodeId = buf.readUuid();
+        public static NodeOperation read(RegistryFriendlyByteBuf buf) {
+            OperationType type = buf.readEnum(OperationType.class);
+            UUID nodeId = buf.readUUID();
             Optional<CameraNodeDTO> nodeData;
             if (type == OperationType.ADD || type == OperationType.UPDATE) {
                 nodeData = Optional.of(CameraNodeDTO.read(buf));
@@ -86,9 +84,9 @@ public record NodesDeltaPayload(
             return new NodeOperation(type, nodeId, nodeData);
         }
 
-        public void write(RegistryByteBuf buf) {
-            buf.writeEnumConstant(type);
-            buf.writeUuid(nodeId);
+        public void write(RegistryFriendlyByteBuf buf) {
+            buf.writeEnum(type);
+            buf.writeUUID(nodeId);
             if (type == OperationType.ADD || type == OperationType.UPDATE) {
                 nodeData.ifPresent(dto -> dto.write(buf));
             }

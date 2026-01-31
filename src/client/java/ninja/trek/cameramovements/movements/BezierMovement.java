@@ -1,8 +1,8 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -46,7 +46,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     public CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
     public CameraTarget current = new CameraTarget();
-    private Vec3d controlPoint;
+    private Vec3 controlPoint;
     private double progress;
     private boolean resetting = false;
     private boolean linearMode = false;
@@ -61,20 +61,20 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private float lastTargetPitch = 0f;
     private float lastYawError = 0f;
     private float lastPitchError = 0f;
-    private Vec3d lastPlayerEyePos = null;
+    private Vec3 lastPlayerEyePos = null;
     private boolean jitterStateInit = false;
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
 
         // Store base FOV
-        baseFov = client.options.getFov().getValue().floatValue();
+        baseFov = client.options.fov().get().floatValue();
         
         // Orthographic handling removed
 
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), fovMultiplier);
@@ -99,7 +99,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         lastPitchError = 0f;
     }
 
-    private Vec3d calculateTargetPosition(CameraTarget stick) {
+    private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
         double pitch = Math.toRadians(stick.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
@@ -109,7 +109,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -121,7 +121,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         );
 
         // Update end target based on controlStick and target distance
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), 
                 end.getFovMultiplier(),
@@ -137,9 +137,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         
         // When returning, continuously update the target to follow the player's head position and rotation
         if (resetting && client.player != null) {
-            Vec3d playerPos = client.player.getEyePos();
-            float playerYaw = client.player.getYaw();
-            float playerPitch = client.player.getPitch();
+            Vec3 playerPos = client.player.getEyePosition();
+            float playerYaw = client.player.getYRot();
+            float playerPitch = client.player.getXRot();
             
             // Update return target to always be the player's current head position and rotation
             // Update the return target
@@ -151,7 +151,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             }
         }
         
-        Vec3d desiredPos;
+        Vec3 desiredPos;
 
         if (!linearMode) {
             // Bezier movement mode
@@ -187,17 +187,17 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             );
         } else {
             // Linear movement mode
-            Vec3d delta = b.getPosition().subtract(current.getPosition());
+            Vec3 delta = b.getPosition().subtract(current.getPosition());
             double deltaLength = delta.length();
             double maxMove = positionSpeedLimit * (deltaSeconds);
-            Vec3d move;
+            Vec3 move;
             if (deltaLength > 0) {
-                move = delta.multiply(positionEasing);
+                move = delta.scale(positionEasing);
                 if (move.length() > maxMove) {
-                    move = move.normalize().multiply(maxMove);
+                    move = move.normalize().scale(maxMove);
                 }
             } else {
-                move = Vec3d.ZERO;
+                move = Vec3.ZERO;
             }
             desiredPos = current.getPosition().add(move);
         }
@@ -245,7 +245,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (!resetting) {
             boolean fullyOut = linearMode || progress >= 0.999;
             if (fullyOut && client.player != null) {
-                Vec3d eye = client.player.getEyePos();
+                Vec3 eye = client.player.getEyePosition();
                 double playerMove = 0.0;
                 if (lastPlayerEyePos != null) {
                     playerMove = eye.distanceTo(lastPlayerEyePos);
@@ -397,43 +397,43 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
 
-    private Vec3d quadraticBezier(Vec3d p0, Vec3d p1, Vec3d p2, double t) {
+    private Vec3 quadraticBezier(Vec3 p0, Vec3 p1, Vec3 p2, double t) {
         double oneMinusT = 1.0 - t;
-        return p0.multiply(oneMinusT * oneMinusT)
-                .add(p1.multiply(2 * oneMinusT * t))
-                .add(p2.multiply(t * t));
+        return p0.scale(oneMinusT * oneMinusT)
+                .add(p1.scale(2 * oneMinusT * t))
+                .add(p2.scale(t * t));
     }
 
-    private Vec3d generateControlPoint(Vec3d start, Vec3d end) {
-        Vec3d mid = start.add(end).multiply(0.5);
-        Vec3d diff = end.subtract(start);
+    private Vec3 generateControlPoint(Vec3 start, Vec3 end) {
+        Vec3 mid = start.add(end).scale(0.5);
+        Vec3 diff = end.subtract(start);
 
-        if (diff.lengthSquared() < 1e-6) {
-            return mid.add(new Vec3d(0, controlPointDisplacement, 0));
+        if (diff.lengthSqr() < 1e-6) {
+            return mid.add(new Vec3(0, controlPointDisplacement, 0));
         }
 
-        Vec3d direction = diff.normalize();
-        Vec3d worldUp = new Vec3d(0, 1, 0);
-        Vec3d right = direction.crossProduct(worldUp).normalize();
-        Vec3d perpUp = direction.crossProduct(right).normalize();
+        Vec3 direction = diff.normalize();
+        Vec3 worldUp = new Vec3(0, 1, 0);
+        Vec3 right = direction.cross(worldUp).normalize();
+        Vec3 perpUp = direction.cross(right).normalize();
 
         if (perpUp.y < 0) {
-            perpUp = perpUp.multiply(-1);
+            perpUp = perpUp.scale(-1);
         }
 
         if (Math.abs(displacementAngle) > 0 || displacementAngleVariance > 0) {
             double angleOffset = displacementAngle +
                     (displacementAngleVariance > 0 ? (Math.random() * 2 - 1) * displacementAngleVariance : 0);
             double angleRadians = Math.toRadians(angleOffset);
-            perpUp = perpUp.multiply(Math.cos(angleRadians))
-                    .add(direction.crossProduct(perpUp).multiply(Math.sin(angleRadians)));
+            perpUp = perpUp.scale(Math.cos(angleRadians))
+                    .add(direction.cross(perpUp).scale(Math.sin(angleRadians)));
         }
 
-        return mid.add(perpUp.multiply(controlPointDisplacement));
+        return mid.add(perpUp.scale(controlPointDisplacement));
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         if (!resetting) {
             resetting = true;
             resetReturnTargetTracking();
@@ -443,9 +443,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // Always target the player head position/rotation during return phase
             if (client.player != null) {
                 // Always return to player's head rotation regardless of END_TARGET
-                float playerYaw = client.player.getYaw();
-                float playerPitch = client.player.getPitch();
-                Vec3d playerPos = client.player.getEyePos();
+                float playerYaw = client.player.getYRot();
+                float playerPitch = client.player.getXRot();
+                Vec3 playerPos = client.player.getEyePosition();
                 
                 // Set the target position to player head with proper rotation for return
                 // When returning to player view, we'll gradually transition back to perspective mode
@@ -476,7 +476,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // Generate a control point for the return path
             // We're always returning to player position now
             if (client.player != null) {
-                controlPoint = generateControlPoint(current.getPosition(), client.player.getEyePos());
+                controlPoint = generateControlPoint(current.getPosition(), client.player.getEyePosition());
                 // logging removed
             }
             
@@ -489,7 +489,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         return resetting;
     }
 
-    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+    public void resumeOutPhase(Minecraft client, Camera camera) {
         if (!resetting) {
             return;
         }
@@ -498,7 +498,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             current = CameraTarget.fromCamera(camera);
         }
 
-        Vec3d stickPos = CameraController.controlStick.getPosition();
+        Vec3 stickPos = CameraController.controlStick.getPosition();
         start = new CameraTarget(
                 stickPos,
                 CameraController.controlStick.getYaw(),
@@ -506,7 +506,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 start.getFovMultiplier()
         );
 
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(
                 targetPos,
                 CameraController.controlStick.getYaw(),
@@ -521,7 +521,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
             double multiplier = increase ? 1.2 : 0.8;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
@@ -532,7 +532,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void adjustFov(boolean increase, MinecraftClient client) {
+    public void adjustFov(boolean increase, Minecraft client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
         
         // Call the parent implementation to update the target FOV multiplier

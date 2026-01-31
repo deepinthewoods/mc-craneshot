@@ -1,8 +1,8 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
  
@@ -44,14 +44,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private boolean isComplete = false;
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         resetReturnTargetTracking();
         // Force return target to player's head rotation for consistent return
         endTarget = END_TARGET.HEAD_BACK;
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(this);
 
         // Start from the exact freecam state tracked by controller
-        Vec3d startPos = CameraController.freeCamPosition;
+        Vec3 startPos = CameraController.freeCamPosition;
         float startYaw = CameraController.freeCamYaw;
         float startPitch = CameraController.freeCamPitch;
         start = new CameraTarget(startPos, startYaw, startPitch, 1.0f);
@@ -65,7 +65,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client == null || client.player == null) {
             return new MovementState(current, true);
         }
@@ -74,12 +74,12 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         end = resolveReturnTarget(client);
 
         // Position step with LinearMovement-like speed-capped easing
-        Vec3d delta = end.getPosition().subtract(current.getPosition());
+        Vec3 delta = end.getPosition().subtract(current.getPosition());
         double deltaLength = delta.length();
         double maxMove = positionSpeedLimit * (deltaSeconds);
-        Vec3d move = deltaLength > 0 ? delta.multiply(positionEasing) : Vec3d.ZERO;
-        if (move.length() > maxMove) move = move.normalize().multiply(maxMove);
-        Vec3d desiredPos = current.getPosition().add(move);
+        Vec3 move = deltaLength > 0 ? delta.scale(positionEasing) : Vec3.ZERO;
+        if (move.length() > maxMove) move = move.normalize().scale(maxMove);
+        Vec3 desiredPos = current.getPosition().add(move);
 
         desiredPos = applyMinimumSpeedDuringReturn(
                 current.getPosition(),
@@ -129,13 +129,13 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
 
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         // Already a return-only movement; allow immediate completion if requested
         isComplete = true;
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         // Not applicable for this movement
     }
 
@@ -160,8 +160,8 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         return RaycastType.NONE;
     }
 
-    private CameraTarget resolveReturnTarget(MinecraftClient client) {
-        Vec3d targetPos = CameraController.controlStick.getPosition();
+    private CameraTarget resolveReturnTarget(Minecraft client) {
+        Vec3 targetPos = CameraController.controlStick.getPosition();
         float targetYaw = CameraController.controlStick.getYaw();
         float targetPitch = CameraController.controlStick.getPitch();
 
@@ -169,10 +169,10 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         }
 
-        Vec3d playerEye = client.player.getEyePos();
+        Vec3 playerEye = client.player.getEyePosition();
         double distance = targetPos.distanceTo(playerEye);
         if (Double.isNaN(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
-            return new CameraTarget(playerEye, client.player.getYaw(), client.player.getPitch(), 1.0f);
+            return new CameraTarget(playerEye, client.player.getYRot(), client.player.getXRot(), 1.0f);
         }
 
         return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);

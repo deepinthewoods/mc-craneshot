@@ -6,13 +6,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
-import net.minecraft.client.MinecraftClient;
 import ninja.trek.CameraMovementManager;
 import ninja.trek.Craneshot;
 import java.io.*;
+import net.minecraft.client.Minecraft;
 
 public class GeneralSettingsIO {
-    private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_general.json");
+    private static final File CONFIG_FILE = new File(Minecraft.getInstance().gameDirectory, "config/craneshot_general.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static void saveSettings() {

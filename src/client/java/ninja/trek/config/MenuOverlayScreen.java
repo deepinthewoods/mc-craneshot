@@ -1,15 +1,5 @@
 package ninja.trek.config;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.CheckboxWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import ninja.trek.CameraMovementRegistry;
 import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
@@ -17,6 +7,16 @@ import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.lang.reflect.Field;
 import java.util.*;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import ninja.trek.config.FollowerConfig.FollowerEntry;
 import ninja.trek.config.FollowerConfig.FollowerMode;
 
@@ -38,13 +38,13 @@ public class MenuOverlayScreen extends Screen {
     private int centerY;
     private int selectedMovementTypeIndex = 0;
     private int followerMovementTypeIndex = 0;
-    private TextFieldWidget targetPlayerNameField;
-    private TextFieldWidget followerTargetPlayerNameField;
+    private EditBox targetPlayerNameField;
+    private EditBox followerTargetPlayerNameField;
     private FollowerConfig followerConfig;
     private static final Map<Integer, Boolean> expandedFollowers = new HashMap<>();
 
     public MenuOverlayScreen() {
-        super(Text.literal("CraneShot Settings"));
+        super(Component.literal("CraneShot Settings"));
         isMenuOpen = false;
         followerConfig = FollowerSettingsIO.loadFollowers();
     }
@@ -92,15 +92,15 @@ public class MenuOverlayScreen extends Screen {
             } else {
                 tabName = String.valueOf(i - 1); // Slot number
             }
-            Text buttonText = Text.literal(tabName);
+            Component buttonText = Component.literal(tabName);
             if (i != selectedTab) {
-                buttonText = buttonText.copy().formatted(Formatting.GRAY);
+                buttonText = buttonText.copy().withStyle(ChatFormatting.GRAY);
             }
 
-            ButtonWidget slotBtn = ButtonWidget.builder(buttonText, button -> switchTab(tabIndex))
-                    .dimensions(centerX + (i * (tabWidth + 5)), centerY, tabWidth, 20)
+            Button slotBtn = Button.builder(buttonText, button -> switchTab(tabIndex))
+                    .bounds(centerX + (i * (tabWidth + 5)), centerY, tabWidth, 20)
                     .build();
-            this.addDrawableChild(slotBtn);
+            this.addRenderableWidget(slotBtn);
         }
     }
 
@@ -112,36 +112,36 @@ public class MenuOverlayScreen extends Screen {
         int spacing = 10;
 
         // Add movement button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Add"), button -> addMovement(slotIndex))
-                .dimensions(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Add"), button -> addMovement(slotIndex))
+                .bounds(centerX + 10, centerY + CONTENT_START_Y, addButtonWidth, BUTTON_HEIGHT)
                 .build());
 
         // Paste button
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste"), button -> pasteMovement(slotIndex))
-                .dimensions(centerX + addButtonWidth + spacing, centerY + CONTENT_START_Y, clipboardButtonWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Paste"), button -> pasteMovement(slotIndex))
+                .bounds(centerX + addButtonWidth + spacing, centerY + CONTENT_START_Y, clipboardButtonWidth, BUTTON_HEIGHT)
                 .build());
 
         // Movement type selector
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
         String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Type: " + currentTypeName),
+        this.addRenderableWidget(Button.builder(Component.literal("Type: " + currentTypeName),
                         button -> cycleMovementType())
-                .dimensions(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
+                .bounds(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
                         typeButtonWidth, BUTTON_HEIGHT)
                 .build());
 
         // Wrap checkbox
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Wrap"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Wrap"), Minecraft.getInstance().font)
                 .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3, centerY + CONTENT_START_Y)
-                .checked(SlotMenuSettings.getWrapState(slotIndex))
-                .callback((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
+                .selected(SlotMenuSettings.getWrapState(slotIndex))
+                .onValueChange((checkbox, checked) -> SlotMenuSettings.setWrapState(slotIndex, checked))
                 .build());
 
         // Toggle checkbox - add right after Wrap checkbox
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Toggle"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Toggle"), Minecraft.getInstance().font)
                 .pos(centerX + addButtonWidth + clipboardButtonWidth + typeButtonWidth + spacing * 3 + 100, centerY + CONTENT_START_Y)
-                .checked(SlotMenuSettings.getToggleState(slotIndex))
-                .callback((checkbox, checked) -> SlotMenuSettings.setToggleState(slotIndex, checked))
+                .selected(SlotMenuSettings.getToggleState(slotIndex))
+                .onValueChange((checkbox, checked) -> SlotMenuSettings.setToggleState(slotIndex, checked))
                 .build());
     }
     private void createMovementControls(int slotIndex, int index, ICameraMovement movement, int rowY, int BUTTON_HEIGHT) {
@@ -149,34 +149,34 @@ public class MenuOverlayScreen extends Screen {
 
         // Movement control buttons
         if (index > 0) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("↑"),
+            addRenderableWidget(Button.builder(Component.literal("↑"),
                             button -> moveMovement(slotIndex, index, index - 1))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+                    .bounds(controlX, rowY, 20, BUTTON_HEIGHT).build());
         }
         controlX += 25;
 
         if (index < CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex).size() - 1) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("↓"),
+            addRenderableWidget(Button.builder(Component.literal("↓"),
                             button -> moveMovement(slotIndex, index, index + 1))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+                    .bounds(controlX, rowY, 20, BUTTON_HEIGHT).build());
         }
         controlX += 25;
 
         if (CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(slotIndex).size() > 1) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("×"),
+            addRenderableWidget(Button.builder(Component.literal("×"),
                             button -> deleteMovement(slotIndex, index))
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT).build());
+                    .bounds(controlX, rowY, 20, BUTTON_HEIGHT).build());
         }
         controlX += 25;
 
         // Rename button
         if (movement instanceof AbstractMovementSettings settings) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("r"), button -> {
-                        if (client != null) {
-                            client.setScreen(new RenameModal(this, settings, this::reinitialize));
+            addRenderableWidget(Button.builder(Component.literal("r"), button -> {
+                        if (minecraft != null) {
+                            minecraft.setScreen(new RenameModal(this, settings, this::reinitialize));
                         }
                     })
-                    .dimensions(controlX, rowY, 20, BUTTON_HEIGHT)
+                    .bounds(controlX, rowY, 20, BUTTON_HEIGHT)
                     .build());
             controlX += 25;
         }
@@ -186,19 +186,19 @@ public class MenuOverlayScreen extends Screen {
         String displayName = movement instanceof AbstractMovementSettings ?
                 ((AbstractMovementSettings)movement).getDisplayName() :
                 movement.getName();
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + displayName),
+        addRenderableWidget(Button.builder(
+                        Component.literal((isMovementExpanded(slotIndex, index) ? "▼ " : "▶ ") + displayName),
                         button -> {
                             toggleMovementExpanded(slotIndex, index);
                             reinitialize();
                         })
-                .dimensions(controlX, rowY, remainingWidth, BUTTON_HEIGHT)
+                .bounds(controlX, rowY, remainingWidth, BUTTON_HEIGHT)
                 .build());
 
         // Copy button after the name
         controlX += remainingWidth + 5;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Copy"), button -> copyMovement(movement))
-                .dimensions(controlX, rowY, 30, BUTTON_HEIGHT)
+        addRenderableWidget(Button.builder(Component.literal("Copy"), button -> copyMovement(movement))
+                .bounds(controlX, rowY, 30, BUTTON_HEIGHT)
                 .build());
     }
 
@@ -216,19 +216,19 @@ public class MenuOverlayScreen extends Screen {
         int baseY = centerY - scrollOffset;
 
         // Auto Advance Checkbox
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Auto Advance"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Auto Advance"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isAutoAdvance())
-                .callback((checkbox, checked) -> GeneralMenuSettings.setAutoAdvance(checked))
+                .selected(GeneralMenuSettings.isAutoAdvance())
+                .onValueChange((checkbox, checked) -> GeneralMenuSettings.setAutoAdvance(checked))
                 .build());
 
         yOffset += spacing;
 
         // Show/Hide Vanilla Crosshair
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Vanilla Crosshair"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Show Vanilla Crosshair"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isShowVanillaCrosshair())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isShowVanillaCrosshair())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setShowVanillaCrosshair(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -237,10 +237,10 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Show/Hide Camera Crosshair
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Camera Crosshair"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Show Camera Crosshair"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isShowCameraCrosshair())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isShowCameraCrosshair())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setShowCameraCrosshair(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -249,10 +249,10 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Camera Crosshair Shape
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Camera Crosshair: Square"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Camera Crosshair: Square"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isCameraCrosshairSquare())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isCameraCrosshairSquare())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setCameraCrosshairSquare(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -261,15 +261,15 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Camera Crosshair Size slider
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Camera Crosshair Size"), button -> {})
-                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Camera Crosshair Size"), button -> {})
+                .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
-        this.addDrawableChild(SettingWidget.createSlider(
+        this.addRenderableWidget(SettingWidget.createSlider(
                 buttonX + labelWidth + 10,
                 baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
-                Text.literal("Camera Crosshair Size"),
+                Component.literal("Camera Crosshair Size"),
                 1f,
                 20f,
                 GeneralMenuSettings.getCameraCrosshairSize(),
@@ -288,10 +288,10 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Show/Hide Node Overlays outside edit mode
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Show Nodes Outside Edit"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Show Nodes Outside Edit"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isShowNodesOutsideEdit())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isShowNodesOutsideEdit())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setShowNodesOutsideEdit(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -300,10 +300,10 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Enforce Minimum Speed Checkbox
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Enforce Minimum Speed During Return"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Enforce Minimum Speed During Return"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isEnforceMinimumSpeed())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isEnforceMinimumSpeed())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setEnforceMinimumSpeed(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -312,15 +312,15 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Minimum Speed Multiplier slider
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Minimum Speed Multiplier"), button -> {})
-                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Minimum Speed Multiplier"), button -> {})
+                .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
-        this.addDrawableChild(SettingWidget.createSlider(
+        this.addRenderableWidget(SettingWidget.createSlider(
                 buttonX + labelWidth + 10,
                 baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
-                Text.literal("Minimum Speed Multiplier"),
+                Component.literal("Minimum Speed Multiplier"),
                 1.0f,
                 3.0f,
                 GeneralMenuSettings.getMinimumSpeedMultiplier(),
@@ -339,10 +339,10 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Use Default Movement When Idle Checkbox
-        this.addDrawableChild(CheckboxWidget.builder(Text.literal("Use Default Movement When Idle"), this.textRenderer)
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Use Default Movement When Idle"), Minecraft.getInstance().font)
                 .pos(buttonX, baseY + yOffset)
-                .checked(GeneralMenuSettings.isUseDefaultIdleMovement())
-                .callback((checkbox, checked) -> {
+                .selected(GeneralMenuSettings.isUseDefaultIdleMovement())
+                .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setUseDefaultIdleMovement(checked);
                     GeneralSettingsIO.saveSettings();
                 })
@@ -351,15 +351,15 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
 
         // Node Editor sensitivity slider
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Node Edit Sensitivity"), button -> {})
-                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Node Edit Sensitivity"), button -> {})
+                .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
-        this.addDrawableChild(SettingWidget.createSlider(
+        this.addRenderableWidget(SettingWidget.createSlider(
                 buttonX + labelWidth + 10,
                 baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
-                Text.literal("Node Edit Sensitivity"),
+                Component.literal("Node Edit Sensitivity"),
                 0.5f,
                 20.0f,
                 GeneralMenuSettings.getNodeEditSensitivityMultiplier(),
@@ -381,22 +381,22 @@ public class MenuOverlayScreen extends Screen {
         // Add collapsible Spectator Follow section header
         String spectatorFollowKey = "spectatorFollowSection";
         boolean spectatorFollowExpanded = isSettingsExpanded(spectatorFollowKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((spectatorFollowExpanded ? "▼ " : "▶ ") + "Spectator Follow Settings").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((spectatorFollowExpanded ? "▼ " : "▶ ") + "Spectator Follow Settings").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(spectatorFollowKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
         yOffset += spacing;
 
         if (spectatorFollowExpanded) {
             // Enable/Disable Spectator Follow
-            this.addDrawableChild(CheckboxWidget.builder(Text.literal("Enable Spectator Follow"), this.textRenderer)
+            this.addRenderableWidget(Checkbox.builder(Component.literal("Enable Spectator Follow"), Minecraft.getInstance().font)
                     .pos(buttonX + 10, baseY + yOffset)
-                    .checked(GeneralMenuSettings.isSpectatorFollowEnabled())
-                    .callback((checkbox, checked) -> {
+                    .selected(GeneralMenuSettings.isSpectatorFollowEnabled())
+                    .onValueChange((checkbox, checked) -> {
                         GeneralMenuSettings.setSpectatorFollowEnabled(checked);
                         GeneralSettingsIO.saveSettings();
                     })
@@ -405,38 +405,38 @@ public class MenuOverlayScreen extends Screen {
             yOffset += spacing;
 
             // Target Player Name Label
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Target Player Name:"), button -> {})
-                    .dimensions(buttonX + 10, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Target Player Name:"), button -> {})
+                    .bounds(buttonX + 10, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
 
             // Target Player Name Text Field
-            targetPlayerNameField = new TextFieldWidget(
-                    this.textRenderer,
+            targetPlayerNameField = new EditBox(
+                    Minecraft.getInstance().font,
                     buttonX + labelWidth + 20,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Player name")
+                    Component.literal("Player name")
             );
             targetPlayerNameField.setMaxLength(16); // Minecraft username max length
-            targetPlayerNameField.setText(GeneralMenuSettings.getTargetPlayerName());
-            targetPlayerNameField.setChangedListener(text -> {
+            targetPlayerNameField.setValue(GeneralMenuSettings.getTargetPlayerName());
+            targetPlayerNameField.setResponder(text -> {
                 GeneralMenuSettings.setTargetPlayerName(text);
                 GeneralSettingsIO.saveSettings();
             });
-            this.addDrawableChild(targetPlayerNameField);
+            this.addRenderableWidget(targetPlayerNameField);
 
             yOffset += spacing;
 
             // Status Indicator
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             String statusText = getSpectatorFollowStatus(client);
-            Formatting statusColor = getSpectatorFollowStatusColor(client);
+            ChatFormatting statusColor = getSpectatorFollowStatusColor(client);
 
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("Status: " + statusText).formatted(statusColor),
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("Status: " + statusText).withStyle(statusColor),
                     button -> {})
-                    .dimensions(buttonX + 10, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                    .bounds(buttonX + 10, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                     .build());
 
             yOffset += spacing;
@@ -445,28 +445,28 @@ public class MenuOverlayScreen extends Screen {
         // Add collapsible Free Camera section header
         String freeCamKey = "freeCamSection";
         boolean freeCamExpanded = isSettingsExpanded(freeCamKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((freeCamExpanded ? "▼ " : "▶ ") + "Free Camera Settings").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((freeCamExpanded ? "▼ " : "▶ ") + "Free Camera Settings").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(freeCamKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
         yOffset += spacing;
         
         if (freeCamExpanded) {
             // Move Speed Slider
             float currentSpeed = GeneralMenuSettings.getFreeCamSettings().getMoveSpeed();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Free Camera Speed"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Free Camera Speed"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Free Camera Speed"),
+                    Component.literal("Free Camera Speed"),
                     0.1f,
                     2.0f,
                     currentSpeed,
@@ -485,15 +485,15 @@ public class MenuOverlayScreen extends Screen {
 
             // Acceleration Slider
             float currentAcceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Acceleration"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Acceleration"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Acceleration"),
+                    Component.literal("Acceleration"),
                     0.01f,
                     0.5f,
                     currentAcceleration,
@@ -512,15 +512,15 @@ public class MenuOverlayScreen extends Screen {
 
             // Deceleration Slider
             float currentDeceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Deceleration"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Deceleration"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Deceleration"),
+                    Component.literal("Deceleration"),
                     0.01f,
                     0.5f,
                     currentDeceleration,
@@ -539,15 +539,15 @@ public class MenuOverlayScreen extends Screen {
 
             // Rotation Easing Slider
             float currentRotationEasing = GeneralMenuSettings.getFreeCamSettings().getRotationEasing();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Rotation Easing"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Rotation Easing"),
+                    Component.literal("Rotation Easing"),
                     0.01f,
                     1.0f,
                     currentRotationEasing,
@@ -566,15 +566,15 @@ public class MenuOverlayScreen extends Screen {
 
             // Rotation Speed Limit Slider
             float currentRotationSpeedLimit = GeneralMenuSettings.getFreeCamSettings().getRotationSpeedLimit();
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Speed Limit"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Rotation Speed Limit"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Rotation Speed Limit"),
+                    Component.literal("Rotation Speed Limit"),
                     0.1f,
                     1000.0f,
                     currentRotationSpeedLimit,
@@ -594,13 +594,13 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
         String defaultIdleKey = "defaultIdleSection";
         boolean defaultIdleExpanded = isSettingsExpanded(defaultIdleKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((defaultIdleExpanded ? "â–¼ " : "â–¶ ") + "Default Idle Movement (Linear)").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((defaultIdleExpanded ? "â–¼ " : "â–¶ ") + "Default Idle Movement (Linear)").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(defaultIdleKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (defaultIdleExpanded) {
@@ -639,13 +639,13 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
         String followKey = "followMovementSection";
         boolean followExpanded = isSettingsExpanded(followKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((followExpanded ? "v " : "> ") + "Follow Movement").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((followExpanded ? "v " : "> ") + "Follow Movement").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(followKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (followExpanded) {
@@ -681,13 +681,13 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
         String zoomKey = "zoomSection";
         boolean zoomExpanded = isSettingsExpanded(zoomKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((zoomExpanded ? "▼ " : "▶ ") + "Zoom Settings").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((zoomExpanded ? "▼ " : "▶ ") + "Zoom Settings").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(zoomKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         if (zoomExpanded) {
@@ -723,13 +723,13 @@ public class MenuOverlayScreen extends Screen {
         yOffset += spacing;
         String freeCamReturnKey = "freeCamReturnSection";
         boolean freeCamReturnExpanded = isSettingsExpanded(freeCamReturnKey);
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal((freeCamReturnExpanded ? "▼ " : "▶ ") + "Free Camera Return Settings").formatted(Formatting.YELLOW),
+        this.addRenderableWidget(Button.builder(
+                Component.literal((freeCamReturnExpanded ? "▼ " : "▶ ") + "Free Camera Return Settings").withStyle(ChatFormatting.YELLOW),
                 button -> {
                     toggleSettingsExpanded(freeCamReturnKey);
                     reinitialize();
                 })
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
                 
         if (freeCamReturnExpanded) {
@@ -738,8 +738,8 @@ public class MenuOverlayScreen extends Screen {
             ninja.trek.cameramovements.movements.FreeCamReturnMovement freeCamReturn = GeneralMenuSettings.getFreeCamReturnMovement();
             
             // Position Easing slider
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Easing"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Position Easing"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -752,12 +752,12 @@ public class MenuOverlayScreen extends Screen {
             // logging removed
         }
             
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Position Easing"),
+                    Component.literal("Position Easing"),
                     0.01f,
                     1.0f,
                     positionEasing,
@@ -767,8 +767,8 @@ public class MenuOverlayScreen extends Screen {
             
             // Position Speed Limit slider
             yOffset += spacing;
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Position Speed Limit"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Position Speed Limit"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -781,12 +781,12 @@ public class MenuOverlayScreen extends Screen {
             // logging removed
         }
             
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Position Speed Limit"),
+                    Component.literal("Position Speed Limit"),
                     0.1f,
                     200.0f,
                     positionSpeedLimit,
@@ -796,8 +796,8 @@ public class MenuOverlayScreen extends Screen {
             
             // Rotation Easing slider
             yOffset += spacing;
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Easing"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Rotation Easing"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -810,12 +810,12 @@ public class MenuOverlayScreen extends Screen {
             // logging removed
         }
             
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Rotation Easing"),
+                    Component.literal("Rotation Easing"),
                     0.01f,
                     1.0f,
                     rotationEasing,
@@ -825,8 +825,8 @@ public class MenuOverlayScreen extends Screen {
             
             // Rotation Speed Limit slider
             yOffset += spacing;
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("Rotation Speed Limit"), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(Component.literal("Rotation Speed Limit"), button -> {})
+                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                     .build());
                     
             // Use reflection to get the current value
@@ -839,12 +839,12 @@ public class MenuOverlayScreen extends Screen {
             // logging removed
         }
             
-            this.addDrawableChild(SettingWidget.createSlider(
+            this.addRenderableWidget(SettingWidget.createSlider(
                     buttonX + labelWidth + 10,
                     baseY + yOffset,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal("Rotation Speed Limit"),
+                    Component.literal("Rotation Speed Limit"),
                     0.1f,
                     360.0f,
                     rotationSpeedLimit,
@@ -868,41 +868,41 @@ public class MenuOverlayScreen extends Screen {
         int baseY = centerY - scrollOffset;
 
         // Target Player Name
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Target Player Name:"), button -> {})
-                .dimensions(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(Component.literal("Target Player Name:"), button -> {})
+                .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
                 .build());
 
-        followerTargetPlayerNameField = new TextFieldWidget(
-                this.textRenderer,
+        followerTargetPlayerNameField = new EditBox(
+                Minecraft.getInstance().font,
                 buttonX + labelWidth + 20,
                 baseY + yOffset,
                 controlWidth,
                 BUTTON_HEIGHT,
-                Text.literal("Player name")
+                Component.literal("Player name")
         );
         followerTargetPlayerNameField.setMaxLength(16);
-        followerTargetPlayerNameField.setText(followerConfig.getTargetPlayerName());
-        followerTargetPlayerNameField.setChangedListener(text -> {
+        followerTargetPlayerNameField.setValue(followerConfig.getTargetPlayerName());
+        followerTargetPlayerNameField.setResponder(text -> {
             followerConfig.setTargetPlayerName(text);
             FollowerSettingsIO.saveFollowers(followerConfig);
         });
-        this.addDrawableChild(followerTargetPlayerNameField);
+        this.addRenderableWidget(followerTargetPlayerNameField);
 
         yOffset += spacing + 10;
 
         // Follower entries header
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Follower Entries").formatted(Formatting.YELLOW), button -> {})
-                .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+        this.addRenderableWidget(Button.builder(
+                Component.literal("Follower Entries").withStyle(ChatFormatting.YELLOW), button -> {})
+                .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                 .build());
 
         // Add follower button
         int addBtnX = buttonX + buttonWidth + 10;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("+ Add Follower"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("+ Add Follower"), button -> {
             followerConfig.addFollower(new FollowerEntry());
             FollowerSettingsIO.saveFollowers(followerConfig);
             reinitialize();
-        }).dimensions(addBtnX, baseY + yOffset, 100, BUTTON_HEIGHT).build());
+        }).bounds(addBtnX, baseY + yOffset, 100, BUTTON_HEIGHT).build());
 
         yOffset += spacing + 5;
 
@@ -914,15 +914,15 @@ public class MenuOverlayScreen extends Screen {
 
             // Follower index label
             int controlX = buttonX;
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("Follower " + i).formatted(Formatting.WHITE), button -> {})
-                    .dimensions(controlX, baseY + yOffset, 80, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("Follower " + i).withStyle(ChatFormatting.WHITE), button -> {})
+                    .bounds(controlX, baseY + yOffset, 80, BUTTON_HEIGHT)
                     .build());
             controlX += 85;
 
             // Mode toggle button
             String modeLabel = entry.getMode() == FollowerMode.MOVEMENT ? "Mode: MOVEMENT" : "Mode: ZONES";
-            this.addDrawableChild(ButtonWidget.builder(Text.literal(modeLabel), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal(modeLabel), button -> {
                 if (entry.getMode() == FollowerMode.MOVEMENT) {
                     entry.setMode(FollowerMode.ZONES);
                 } else {
@@ -930,16 +930,16 @@ public class MenuOverlayScreen extends Screen {
                 }
                 FollowerSettingsIO.saveFollowers(followerConfig);
                 reinitialize();
-            }).dimensions(controlX, baseY + yOffset, 120, BUTTON_HEIGHT).build());
+            }).bounds(controlX, baseY + yOffset, 120, BUTTON_HEIGHT).build());
             controlX += 125;
 
             // Remove button
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal("×"), button -> {
                 followerConfig.removeFollower(followerIndex);
                 expandedFollowers.remove(followerIndex);
                 FollowerSettingsIO.saveFollowers(followerConfig);
                 reinitialize();
-            }).dimensions(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
+            }).bounds(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
             controlX += 25;
 
             yOffset += spacing;
@@ -956,8 +956,8 @@ public class MenuOverlayScreen extends Screen {
 
                 // Movement type cycle button
                 List<CameraMovementRegistry.MovementInfo> allMovements = CameraMovementRegistry.getAllMovements();
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Type: " + movementTypeName), button -> {
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("Type: " + movementTypeName), button -> {
                     if (allMovements.isEmpty()) return;
                     // Find current type index
                     int currentIdx = 0;
@@ -979,16 +979,16 @@ public class MenuOverlayScreen extends Screen {
                     } catch (Exception ex) {
                         ex.printStackTrace();
                     }
-                }).dimensions(buttonX + 20, baseY + yOffset, 200, BUTTON_HEIGHT).build());
+                }).bounds(buttonX + 20, baseY + yOffset, 200, BUTTON_HEIGHT).build());
 
                 // Expand/collapse settings button
                 if (entry.getMovement() != null) {
                     boolean expanded = expandedFollowers.getOrDefault(followerIndex, false);
-                    this.addDrawableChild(ButtonWidget.builder(
-                            Text.literal(expanded ? "▼ Settings" : "▶ Settings"), button -> {
+                    this.addRenderableWidget(Button.builder(
+                            Component.literal(expanded ? "▼ Settings" : "▶ Settings"), button -> {
                         expandedFollowers.put(followerIndex, !expandedFollowers.getOrDefault(followerIndex, false));
                         reinitialize();
-                    }).dimensions(buttonX + 225, baseY + yOffset, 80, BUTTON_HEIGHT).build());
+                    }).bounds(buttonX + 225, baseY + yOffset, 80, BUTTON_HEIGHT).build());
                 }
 
                 yOffset += spacing;
@@ -1021,10 +1021,10 @@ public class MenuOverlayScreen extends Screen {
                     yOffset += settingsPerColumn * BUTTON_HEIGHT + 5;
 
                     // Save after any setting change - add a manual save button
-                    this.addDrawableChild(ButtonWidget.builder(
-                            Text.literal("Save Settings").formatted(Formatting.GREEN), button -> {
+                    this.addRenderableWidget(Button.builder(
+                            Component.literal("Save Settings").withStyle(ChatFormatting.GREEN), button -> {
                         FollowerSettingsIO.saveFollowers(followerConfig);
-                    }).dimensions(buttonX + 40, baseY + yOffset, 100, BUTTON_HEIGHT).build());
+                    }).bounds(buttonX + 40, baseY + yOffset, 100, BUTTON_HEIGHT).build());
 
                     yOffset += spacing;
                 }
@@ -1034,9 +1034,9 @@ public class MenuOverlayScreen extends Screen {
         }
 
         if (followers.isEmpty()) {
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("No followers configured").formatted(Formatting.GRAY), button -> {})
-                    .dimensions(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("No followers configured").withStyle(ChatFormatting.GRAY), button -> {})
+                    .bounds(buttonX, baseY + yOffset, buttonWidth, BUTTON_HEIGHT)
                     .build());
             yOffset += spacing;
         }
@@ -1110,7 +1110,7 @@ public class MenuOverlayScreen extends Screen {
             throws IllegalAccessException {
         if (annotation.type() == MovementSettingType.ENUM) {
             // For enums, create the button
-            ButtonWidget enumButton = SettingWidget.createEnumButton(
+            Button enumButton = SettingWidget.createEnumButton(
                     settingX,
                     settingY,
                     labelWidth + controlWidth + 10,
@@ -1119,7 +1119,7 @@ public class MenuOverlayScreen extends Screen {
                     settings,
                     annotation
             );
-            addDrawableChild(enumButton);
+            addRenderableWidget(enumButton);
 
             // Add warning if needed for postMoveMouse field
             if (field.getName().equals("postMoveMouse")) {
@@ -1141,16 +1141,16 @@ public class MenuOverlayScreen extends Screen {
                             keysMode != AbstractMovementSettings.POST_MOVE_KEYS.NONE) {
 
                         // Create warning button
-                        ButtonWidget warningButton = ButtonWidget.builder(
-                                        Text.literal("!").formatted(Formatting.GOLD),
+                        Button warningButton = Button.builder(
+                                        Component.literal("!").withStyle(ChatFormatting.GOLD),
                                         button -> {}
                                 )
-                                .dimensions(settingX + labelWidth + controlWidth + 15, settingY, 20, BUTTON_HEIGHT)
-                                .tooltip(Tooltip.of(Text.literal(
+                                .bounds(settingX + labelWidth + controlWidth + 15, settingY, 20, BUTTON_HEIGHT)
+                                .tooltip(Tooltip.create(Component.literal(
                                         "Warning: Camera rotation will be locked, Rotate Camera recommended")))
                                 .build();
 
-                        addDrawableChild(warningButton);
+                        addRenderableWidget(warningButton);
                     }
                     } catch (Exception e) {
                         // logging removed
@@ -1158,8 +1158,8 @@ public class MenuOverlayScreen extends Screen {
             }
         } else if (annotation.type() == MovementSettingType.BOOLEAN ||
                 field.getType() == boolean.class || field.getType() == Boolean.class) {
-            addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
-                    .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+            addRenderableWidget(Button.builder(Component.literal(annotation.label()), button -> {})
+                    .bounds(settingX, settingY, labelWidth, BUTTON_HEIGHT)
                     .build());
 
             boolean checked = false;
@@ -1168,22 +1168,22 @@ public class MenuOverlayScreen extends Screen {
                 checked = b;
             }
 
-            addDrawableChild(CheckboxWidget.builder(Text.literal(""), this.textRenderer)
+            addRenderableWidget(Checkbox.builder(Component.literal(""), Minecraft.getInstance().font)
                     .pos(settingX + labelWidth + 10, settingY)
-                    .checked(checked)
-                    .callback((checkbox, isChecked) -> settings.updateSetting(field.getName(), isChecked))
+                    .selected(checked)
+                    .onValueChange((checkbox, isChecked) -> settings.updateSetting(field.getName(), isChecked))
                     .build());
         } else {
             // For non-enum settings, keep the original label + control layout
-            addDrawableChild(ButtonWidget.builder(Text.literal(annotation.label()), button -> {})
-                    .dimensions(settingX, settingY, labelWidth, BUTTON_HEIGHT)
+            addRenderableWidget(Button.builder(Component.literal(annotation.label()), button -> {})
+                    .bounds(settingX, settingY, labelWidth, BUTTON_HEIGHT)
                     .build());
-            addDrawableChild(SettingWidget.createSlider(
+            addRenderableWidget(SettingWidget.createSlider(
                     settingX + labelWidth + 10,
                     settingY,
                     controlWidth,
                     BUTTON_HEIGHT,
-                    Text.literal(annotation.label()),
+                    Component.literal(annotation.label()),
                     annotation.min(),
                     annotation.max(),
                     ((Number) field.get(settings)).doubleValue(),
@@ -1223,12 +1223,12 @@ public class MenuOverlayScreen extends Screen {
             selectedMovementTypeIndex = (selectedMovementTypeIndex + 1) % movements.size();
 
             // Update the button text immediately
-            for (Element child : this.children()) {
-                if (child instanceof ButtonWidget button) {
+            for (GuiEventListener child : this.children()) {
+                if (child instanceof Button button) {
                     String buttonText = button.getMessage().getString();
                     if (buttonText.startsWith("Type: ")) {
                         String currentTypeName = movements.get(selectedMovementTypeIndex).getName();
-                        button.setMessage(Text.literal("Type: " + currentTypeName));
+                        button.setMessage(Component.literal("Type: " + currentTypeName));
                         break;
                     }
                 }
@@ -1253,14 +1253,14 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public void resize(MinecraftClient client, int width, int height) {
-        super.resize(client, width, height);
+    public void resize(int width, int height) {
+        super.resize(width, height);
         this.scrollOffset = 0;
         this.reinitialize();
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0x80000000);
         context.fill(
                 centerX,
@@ -1272,18 +1272,18 @@ public class MenuOverlayScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
         if (maxScroll > 0) {
             if (scrollOffset > 0) {
-                context.drawCenteredTextWithShadow(
-                        this.textRenderer,
-                        Text.literal("▲"),
+                context.drawCenteredString(
+                        Minecraft.getInstance().font,
+                        Component.literal("▲"),
                         centerX + guiWidth - 15,
                         centerY + CONTENT_START_Y,
                         0xFFFFFF
                 );
             }
             if (scrollOffset < maxScroll) {
-                context.drawCenteredTextWithShadow(
-                        this.textRenderer,
-                        Text.literal("▼"),
+                context.drawCenteredString(
+                        Minecraft.getInstance().font,
+                        Component.literal("▼"),
                         centerX + guiWidth - 15,
                         centerY + guiHeight - 15,
                         0xFFFFFF
@@ -1328,7 +1328,7 @@ public class MenuOverlayScreen extends Screen {
     }
 
     void reinitialize() {
-        this.clearChildren();
+        this.clearWidgets();
         this.init();
     }
 
@@ -1342,16 +1342,16 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent input) {
         // ESC
-        if (input.getKeycode() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
-            close();
+        if (input.input() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+            onClose();
             return true;
         }
 
         // Inventory key
-        if (this.client != null && this.client.options.inventoryKey.matchesKey(input)) {
-            close();
+        if (this.minecraft != null && this.minecraft.options.keyInventory.matches(input)) {
+            onClose();
             return true;
         }
 
@@ -1361,7 +1361,7 @@ public class MenuOverlayScreen extends Screen {
     private void scroll(int amount) {
         if (maxScroll > 0) {
             scrollOffset = Math.max(0, Math.min(scrollOffset + amount, maxScroll));
-            clearChildren();
+            clearWidgets();
             init();
         }
     }
@@ -1369,14 +1369,14 @@ public class MenuOverlayScreen extends Screen {
     private void switchTab(int index) {
         selectedTab = index;
         scrollOffset = 0;
-        clearChildren();
+        clearWidgets();
         init();
     }
 
     public void toggleMenu() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (isMenuOpen) {
-            close();
+            onClose();
         } else {
             client.setScreen(this);
             isMenuOpen = true;
@@ -1384,7 +1384,7 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         // Save the current slots configuration before closing
         List<List<ICameraMovement>> slots = new ArrayList<>();
         for (int i = 0; i < CraneshotClient.MOVEMENT_MANAGER.getMovementCount(); i++) {
@@ -1396,8 +1396,8 @@ public class MenuOverlayScreen extends Screen {
             FollowerSettingsIO.saveFollowers(followerConfig);
         }
 
-        if (this.client != null) {
-            this.client.setScreen(null);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(null);
         }
         isMenuOpen = false;
     }
@@ -1419,14 +1419,14 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
     /**
      * Gets the current status text for spectator follow feature.
      */
-    private String getSpectatorFollowStatus(MinecraftClient client) {
+    private String getSpectatorFollowStatus(Minecraft client) {
         if (client == null || client.player == null) {
             return "Not in game";
         }
@@ -1445,8 +1445,8 @@ public class MenuOverlayScreen extends Screen {
         }
 
         // Check if target player can be found
-        if (client.world != null) {
-            for (net.minecraft.entity.player.PlayerEntity player : client.world.getPlayers()) {
+        if (client.level != null) {
+            for (net.minecraft.world.entity.player.Player player : client.level.players()) {
                 if (player.getName().getString().equalsIgnoreCase(targetName)) {
                     return "Following: " + player.getName().getString();
                 }
@@ -1459,34 +1459,34 @@ public class MenuOverlayScreen extends Screen {
     /**
      * Gets the color for the status indicator based on current state.
      */
-    private Formatting getSpectatorFollowStatusColor(MinecraftClient client) {
+    private ChatFormatting getSpectatorFollowStatusColor(Minecraft client) {
         if (client == null || client.player == null) {
-            return Formatting.RED;
+            return ChatFormatting.RED;
         }
 
         if (!client.player.isSpectator()) {
-            return Formatting.GRAY;
+            return ChatFormatting.GRAY;
         }
 
         if (!GeneralMenuSettings.isSpectatorFollowEnabled()) {
-            return Formatting.GRAY;
+            return ChatFormatting.GRAY;
         }
 
         String targetName = GeneralMenuSettings.getTargetPlayerName();
         if (targetName == null || targetName.trim().isEmpty()) {
-            return Formatting.GRAY;
+            return ChatFormatting.GRAY;
         }
 
         // Check if target player can be found
-        if (client.world != null) {
-            for (net.minecraft.entity.player.PlayerEntity player : client.world.getPlayers()) {
+        if (client.level != null) {
+            for (net.minecraft.world.entity.player.Player player : client.level.players()) {
                 if (player.getName().getString().equalsIgnoreCase(targetName)) {
-                    return Formatting.GREEN; // Successfully following
+                    return ChatFormatting.GREEN; // Successfully following
                 }
             }
         }
 
-        return Formatting.YELLOW; // Target not found
+        return ChatFormatting.YELLOW; // Target not found
     }
 
     // Static methods for managing expanded settings

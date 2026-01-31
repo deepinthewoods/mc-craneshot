@@ -1,8 +1,8 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -48,14 +48,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private float lastTargetPitch = 0f;
     private float lastYawError = 0f;
     private float lastPitchError = 0f;
-    private Vec3d lastPlayerEyePos = null;
+    private Vec3 lastPlayerEyePos = null;
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
 
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch(), fovMultiplier);
 
@@ -73,7 +73,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // No startup log; keep movement logs minimal.
     }
 
-    private Vec3d calculateTargetPosition(CameraTarget stick) {
+    private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
         double pitch = Math.toRadians(stick.getPitch());
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
@@ -83,7 +83,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -96,7 +96,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Update end target based on controlStick and target distance
         if (!resetting) {
-            Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+            Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
             end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                     CameraController.controlStick.getPitch(), end.getFovMultiplier());
         }
@@ -106,26 +106,26 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // During return, track the player head position and rotation continuously
         if (resetting) {
-            Vec3d playerPos = client.player.getEyePos();
-            float playerYaw = client.player.getYaw();
-            float playerPitch = client.player.getPitch();
+            Vec3 playerPos = client.player.getEyePosition();
+            float playerYaw = client.player.getYRot();
+            float playerPitch = client.player.getXRot();
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
         // Straight-line eased movement towards target with speed cap
-        Vec3d delta = b.getPosition().subtract(current.getPosition());
+        Vec3 delta = b.getPosition().subtract(current.getPosition());
         double deltaLength = delta.length();
         double maxMove = positionSpeedLimit * (deltaSeconds);
-        Vec3d move;
+        Vec3 move;
         if (deltaLength > 0) {
-            move = delta.multiply(positionEasing);
+            move = delta.scale(positionEasing);
             if (move.length() > maxMove) {
-                move = move.normalize().multiply(maxMove);
+                move = move.normalize().scale(maxMove);
             }
         } else {
-            move = Vec3d.ZERO;
+            move = Vec3.ZERO;
         }
-        Vec3d desiredPos = current.getPosition().add(move);
+        Vec3 desiredPos = current.getPosition().add(move);
 
         // Apply minimum speed snap logic
         if (resetting) {
@@ -165,7 +165,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Jitter suppression when fully out (near target) while player moves
         if (!resetting && client.player != null) {
-            Vec3d eye = client.player.getEyePos();
+            Vec3 eye = client.player.getEyePosition();
             double playerMove = lastPlayerEyePos == null ? 0.0 : eye.distanceTo(lastPlayerEyePos);
             final float ANGLE_EPS = 0.7f;
             final float TARGET_EPS = 0.7f;
@@ -241,16 +241,16 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         if (!resetting) {
             resetting = true;
             resetReturnTargetTracking();
             current = CameraTarget.fromCamera(camera);
 
             if (client.player != null) {
-                float playerYaw = client.player.getYaw();
-                float playerPitch = client.player.getPitch();
-                Vec3d playerPos = client.player.getEyePos();
+                float playerYaw = client.player.getYRot();
+                float playerPitch = client.player.getXRot();
+                Vec3 playerPos = client.player.getEyePosition();
 
                 // Target player view with normal FOV on return
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
@@ -275,7 +275,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         return resetting;
     }
 
-    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+    public void resumeOutPhase(Minecraft client, Camera camera) {
         if (!resetting) {
             return;
         }
@@ -284,7 +284,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             current = CameraTarget.fromCamera(camera);
         }
 
-        Vec3d stickPos = CameraController.controlStick.getPosition();
+        Vec3 stickPos = CameraController.controlStick.getPosition();
         start = new CameraTarget(
                 stickPos,
                 CameraController.controlStick.getYaw(),
@@ -292,7 +292,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
                 start.getFovMultiplier()
         );
 
-        Vec3d targetPos = calculateTargetPosition(CameraController.controlStick);
+        Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(
                 targetPos,
                 CameraController.controlStick.getYaw(),
@@ -306,7 +306,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         if (mouseWheel == SCROLL_WHEEL.DISTANCE) {
             double multiplier = increase ? 1.2 : 0.8;
             targetDistance = Math.max(minDistance, Math.min(maxDistance, targetDistance * multiplier));
@@ -317,7 +317,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void adjustFov(boolean increase, MinecraftClient client) {
+    public void adjustFov(boolean increase, Minecraft client) {
         if (mouseWheel != SCROLL_WHEEL.FOV) return;
         super.adjustFov(increase, client);
         end.setFovMultiplier(fovMultiplier);

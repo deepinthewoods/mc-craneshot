@@ -1,36 +1,36 @@
 package ninja.trek.config;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 
 import java.lang.reflect.Field;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.network.chat.Component;
 
 public class SettingWidget {
 
     // Add this to the SettingWidget class in SettingWidget.java
 
-    private static ButtonWidget createWarningButton(int x, int y) {
-        return ButtonWidget.builder(
-                        Text.literal("!").formatted(Formatting.GOLD),
+    private static Button createWarningButton(int x, int y) {
+        return Button.builder(
+                        Component.literal("!").withStyle(ChatFormatting.GOLD),
                         button -> {}  // Empty click handler since we're just showing tooltip
                 )
-                .dimensions(x, y, 20, 20)
-                .tooltip(Tooltip.of(Text.literal("Warning: This configuration may cause view instability")))
+                .bounds(x, y, 20, 20)
+                .tooltip(Tooltip.create(Component.literal("Warning: This configuration may cause view instability")))
                 .build();
     }
 
-    public static ButtonWidget[] createEnumButtonWithWarning(
+    public static Button[] createEnumButtonWithWarning(
             int x, int y, int width, int height,
             String fieldName, AbstractMovementSettings settings,
             MovementSetting annotation
     ) {
-        ButtonWidget enumButton = createEnumButton(x, y, width, height, fieldName, settings, annotation);
+        Button enumButton = createEnumButton(x, y, width, height, fieldName, settings, annotation);
 
         // Check if we need to show warning
         boolean showWarning = false;
@@ -57,14 +57,14 @@ public class SettingWidget {
         }
 
         if (showWarning) {
-            ButtonWidget warningButton = createWarningButton(x + width + 5, y);
-            return new ButtonWidget[]{enumButton, warningButton};
+            Button warningButton = createWarningButton(x + width + 5, y);
+            return new Button[]{enumButton, warningButton};
         } else {
-            return new ButtonWidget[]{enumButton};
+            return new Button[]{enumButton};
         }
     }
 
-    public static ButtonWidget createEnumButton(int x, int y, int width, int height,
+    public static Button createEnumButton(int x, int y, int width, int height,
                                                 String fieldName, AbstractMovementSettings settings,
                                                 MovementSetting annotation) {
         try {
@@ -94,8 +94,8 @@ public class SettingWidget {
             final Field finalField = field;
 
             // Create button with current value
-            ButtonWidget button = ButtonWidget.builder(
-                    Text.literal(formatButtonText(annotation.label(), initialValue.toString())),
+            Button button = Button.builder(
+                    Component.literal(formatButtonText(annotation.label(), initialValue.toString())),
                     btn -> {
                         try {
                             Enum<?> currentValue = (Enum<?>) finalField.get(settings);
@@ -108,11 +108,11 @@ public class SettingWidget {
                             settings.updateSetting(fieldName, nextValue.name());
 
                             // Update button text
-                            btn.setMessage(Text.literal(formatButtonText(annotation.label(), nextValue.toString())));
+                            btn.setMessage(Component.literal(formatButtonText(annotation.label(), nextValue.toString())));
 
                             // If this is either the postMoveMouse or postMoveKeys field, force a menu refresh to update warnings
                             if (fieldName.equals("postMoveMouse") || fieldName.equals("postMoveKeys")) {
-                                if (MinecraftClient.getInstance().currentScreen instanceof MenuOverlayScreen menuScreen) {
+                                if (Minecraft.getInstance().screen instanceof MenuOverlayScreen menuScreen) {
                                     menuScreen.reinitialize();
                                 }
                             }
@@ -120,7 +120,7 @@ public class SettingWidget {
                             // logging removed
                         }
                     }
-            ).dimensions(x, y, width, height).build();
+            ).bounds(x, y, width, height).build();
 
             return button;
         } catch (Exception e) {
@@ -142,7 +142,7 @@ public class SettingWidget {
         return label + ": " + formattedValue;
     }
 
-    public static SliderWidget createSlider(int x, int y, int width, int height, Text label,
+    public static AbstractSliderButton createSlider(int x, int y, int width, int height, Component label,
                                             double min, double max, double value, String fieldName, AbstractMovementSettings settings) {
         return new SettingSlider(x, y, width, height, label, min, max, value, fieldName, settings);
     }

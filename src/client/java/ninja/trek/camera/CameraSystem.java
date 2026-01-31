@@ -1,10 +1,10 @@
 package ninja.trek.camera;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -47,7 +47,7 @@ public class CameraSystem {
 
     // Camera state
     private boolean cameraActive = false;
-    private Vec3d cameraPosition = Vec3d.ZERO;
+    private Vec3 cameraPosition = Vec3.ZERO;
     private float cameraYaw = 0f;
     private float cameraPitch = 0f;
     private boolean shouldRenderHands = true;
@@ -57,7 +57,7 @@ public class CameraSystem {
     private boolean originalChunkCulling = true;
 
     // Interpolated player position (updated once per frame for consistent rendering decisions)
-    private Vec3d interpolatedPlayerPosition = null;
+    private Vec3 interpolatedPlayerPosition = null;
 
     // Hysteresis state for player model visibility
     private boolean isPlayerModelCurrentlyVisible = true;
@@ -67,7 +67,7 @@ public class CameraSystem {
     private float targetPitch = 0f;
 
     // Movement state
-    private Vec3d cameraVelocity = Vec3d.ZERO;
+    private Vec3 cameraVelocity = Vec3.ZERO;
     
     private CameraSystem() {
         // Private constructor for singleton
@@ -87,20 +87,20 @@ public class CameraSystem {
      * Activates the custom camera for the given mode
      */
     public void activateCamera(CameraMode mode) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.player == null || mc.world == null) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
 
         // Get the current camera if available
-        Camera currentCamera = mc.gameRenderer.getCamera();
-        Vec3d currentCameraPos = null;
+        Camera currentCamera = mc.gameRenderer.getMainCamera();
+        Vec3 currentCameraPos = null;
         float currentYaw = 0;
         float currentPitch = 0;
 
         // Capture current camera position if possible
         if (currentCamera != null) {
-            currentCameraPos = currentCamera.getPos();
-            currentYaw = currentCamera.getYaw();
-            currentPitch = currentCamera.getPitch();
+            currentCameraPos = currentCamera.position();
+            currentYaw = currentCamera.yRot();
+            currentPitch = currentCamera.xRot();
             // logging removed
         }
 
@@ -108,7 +108,7 @@ public class CameraSystem {
         if (!cameraActive) {
             // Store original state
             originalCameraEntity = mc.getCameraEntity();
-            originalChunkCulling = mc.chunkCullingEnabled;
+            originalChunkCulling = mc.smartCull;
             
             // Initialize camera position and rotation from either current camera (if available)
             // or from the player position
@@ -121,9 +121,9 @@ public class CameraSystem {
                 targetPitch = currentPitch;  // Initialize target to current
             } else if (originalCameraEntity != null) {
                 // Fallback to entity position
-                cameraPosition = originalCameraEntity.getEyePos();
-                cameraYaw = originalCameraEntity.getYaw();
-                cameraPitch = originalCameraEntity.getPitch();
+                cameraPosition = originalCameraEntity.getEyePosition();
+                cameraYaw = originalCameraEntity.getYRot();
+                cameraPitch = originalCameraEntity.getXRot();
                 targetYaw = cameraYaw;       // Initialize target to current
                 targetPitch = cameraPitch;   // Initialize target to current
             }
@@ -134,7 +134,7 @@ public class CameraSystem {
             disableChunkCulling = mode.disableChunkCulling;
             
             // Apply chunk culling setting
-            mc.chunkCullingEnabled = !disableChunkCulling;
+            mc.smartCull = !disableChunkCulling;
 
             // Use a dedicated camera entity for free camera, otherwise detach
             if (mode == CameraMode.FREE_CAMERA) {
@@ -159,7 +159,7 @@ public class CameraSystem {
             
             if (disableChunkCulling != mode.disableChunkCulling) {
                 disableChunkCulling = mode.disableChunkCulling;
-                mc.chunkCullingEnabled = !disableChunkCulling;
+                mc.smartCull = !disableChunkCulling;
             }
         }
     }
@@ -170,7 +170,7 @@ public class CameraSystem {
     public void deactivateCamera() {
         if (!cameraActive) return;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
         // If using dedicated camera entity, disable it (restores chunk culling/camera entity)
         if (ninja.trek.util.CameraEntity.getCamera() != null) {
@@ -182,7 +182,7 @@ public class CameraSystem {
             } else if (mc.player != null) {
                 mc.setCameraEntity(mc.player);
             }
-            mc.chunkCullingEnabled = originalChunkCulling;
+            mc.smartCull = originalChunkCulling;
             if (mc.gameRenderer instanceof ninja.trek.mixin.client.FovAccessor) {
                 ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer).setFovModifier(1.0f);
             }
@@ -190,7 +190,7 @@ public class CameraSystem {
 
         // Reset all camera state
         cameraActive = false;
-        cameraVelocity = Vec3d.ZERO;
+        cameraVelocity = Vec3.ZERO;
         shouldRenderHands = true;
         shouldRenderPlayerModel = true;
         disableChunkCulling = false;
@@ -221,19 +221,19 @@ public class CameraSystem {
     public boolean handleMovementInput(float baseSpeed, float acceleration, float deceleration) {
         if (!cameraActive) return false;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc == null) return false;
 
-        Vec3d targetVelocity = calculateTargetVelocity(mc, baseSpeed);
+        Vec3 targetVelocity = calculateTargetVelocity(mc, baseSpeed);
         boolean isMoved = false;
 
-        if (targetVelocity.lengthSquared() > 0.0001) {
-            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).multiply(acceleration));
+        if (targetVelocity.lengthSqr() > 0.0001) {
+            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).scale(acceleration));
             isMoved = true;
         } else {
-            cameraVelocity = cameraVelocity.multiply(1.0 - deceleration);
-            if (cameraVelocity.lengthSquared() < 0.0001) {
-                cameraVelocity = Vec3d.ZERO;
+            cameraVelocity = cameraVelocity.scale(1.0 - deceleration);
+            if (cameraVelocity.lengthSqr() < 0.0001) {
+                cameraVelocity = Vec3.ZERO;
             } else {
                 isMoved = true;
             }
@@ -241,7 +241,7 @@ public class CameraSystem {
 
         cameraPosition = cameraPosition.add(cameraVelocity);
 
-        Camera camera = mc.gameRenderer.getCamera();
+        Camera camera = mc.gameRenderer.getMainCamera();
         if (camera != null) {
             updateCamera(camera);
         }
@@ -251,54 +251,54 @@ public class CameraSystem {
     /**
      * Calculates the target velocity from input.
      */
-    private Vec3d calculateTargetVelocity(MinecraftClient mc, float baseSpeed) {
+    private Vec3 calculateTargetVelocity(Minecraft mc, float baseSpeed) {
         boolean isFreeMode = CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE;
 
         double x = 0, y = 0, z = 0;
-        if (mc.options.forwardKey.isPressed()) z += 1.0;
-        if (mc.options.backKey.isPressed()) z -= 1.0;
-        if (mc.options.leftKey.isPressed()) x += 1.0;
-        if (mc.options.rightKey.isPressed()) x -= 1.0;
-        if (mc.options.jumpKey.isPressed()) y += 1.0;
-        if (CameraController.isKeyPhysicallyHeld(mc, mc.options.sneakKey)) y -= 1.0;
+        if (mc.options.keyUp.isDown()) z += 1.0;
+        if (mc.options.keyDown.isDown()) z -= 1.0;
+        if (mc.options.keyLeft.isDown()) x += 1.0;
+        if (mc.options.keyRight.isDown()) x -= 1.0;
+        if (mc.options.keyJump.isDown()) y += 1.0;
+        if (CameraController.isKeyPhysicallyHeld(mc, mc.options.keyShift)) y -= 1.0;
 
-        if (x == 0 && y == 0 && z == 0) return Vec3d.ZERO;
+        if (x == 0 && y == 0 && z == 0) return Vec3.ZERO;
 
-        if (mc.options.sprintKey.isPressed()) baseSpeed *= 3.0f;
+        if (mc.options.keySprint.isDown()) baseSpeed *= 3.0f;
 
         if ((x != 0 && z != 0) || (x != 0 && y != 0) || (z != 0 && y != 0)) {
             double len = Math.sqrt(x * x + y * y + z * z);
             x /= len; y /= len; z /= len;
         }
 
-        Vec3d velocity;
+        Vec3 velocity;
         if (CameraController.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT) {
             double xFactor = Math.sin(cameraYaw * Math.PI / 180.0);
             double zFactor = Math.cos(cameraYaw * Math.PI / 180.0);
             double moveX = (x * zFactor - z * xFactor);
             double moveZ = (z * zFactor + x * xFactor);
-            velocity = new Vec3d(moveX, y, moveZ);
+            velocity = new Vec3(moveX, y, moveZ);
         } else if (isFreeMode) {
             double yawRad = Math.toRadians(cameraYaw);
             double pitchRad = Math.toRadians(cameraPitch);
-            Vec3d forward = new Vec3d(
-                -MathHelper.sin((float) yawRad) * MathHelper.cos((float) pitchRad),
-                -MathHelper.sin((float) pitchRad),
-                MathHelper.cos((float) yawRad) * MathHelper.cos((float) pitchRad)
+            Vec3 forward = new Vec3(
+                -Mth.sin((float) yawRad) * Mth.cos((float) pitchRad),
+                -Mth.sin((float) pitchRad),
+                Mth.cos((float) yawRad) * Mth.cos((float) pitchRad)
             );
-            Vec3d right = forward.crossProduct(new Vec3d(0.0, 1.0, 0.0));
-            if (right.lengthSquared() < 1.0E-6) {
-                right = new Vec3d(-MathHelper.cos((float) yawRad), 0.0, -MathHelper.sin((float) yawRad));
+            Vec3 right = forward.cross(new Vec3(0.0, 1.0, 0.0));
+            if (right.lengthSqr() < 1.0E-6) {
+                right = new Vec3(-Mth.cos((float) yawRad), 0.0, -Mth.sin((float) yawRad));
             } else {
                 right = right.normalize();
             }
-            Vec3d up = right.crossProduct(forward).normalize();
-            velocity = forward.multiply(z).add(right.multiply(-x)).add(up.multiply(y));
+            Vec3 up = right.cross(forward).normalize();
+            velocity = forward.scale(z).add(right.scale(-x)).add(up.scale(y));
         } else {
-            velocity = new Vec3d(x, y, z);
+            velocity = new Vec3(x, y, z);
         }
 
-        return velocity.lengthSquared() > 0.0001 ? velocity.normalize().multiply(baseSpeed) : Vec3d.ZERO;
+        return velocity.lengthSqr() > 0.0001 ? velocity.normalize().scale(baseSpeed) : Vec3.ZERO;
     }
 
     /**
@@ -309,7 +309,7 @@ public class CameraSystem {
 
         // Accumulate into target angles (not current angles)
         targetYaw += deltaX * sensitivity;
-        targetPitch = (float) MathHelper.clamp(targetPitch - deltaY * sensitivity, -90.0f, 90.0f);
+        targetPitch = (float) Mth.clamp(targetPitch - deltaY * sensitivity, -90.0f, 90.0f);
 
         // Normalize targetYaw
         while (targetYaw > 360.0f) targetYaw -= 360.0f;
@@ -361,19 +361,19 @@ public class CameraSystem {
     public void syncCameraEntity() {
         ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
         if (camEnt != null) {
-            camEnt.setPos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            camEnt.setPosRaw(cameraPosition.x, cameraPosition.y, cameraPosition.z);
             camEnt.setCameraRotations(cameraYaw, cameraPitch);
-            camEnt.setVelocity(Vec3d.ZERO); // Prevent physics interference
+            camEnt.setDeltaMovement(Vec3.ZERO); // Prevent physics interference
         }
     }
 
-    public void setCameraPosition(Vec3d position) {
+    public void setCameraPosition(Vec3 position) {
         if (position == null) return;
         this.cameraPosition = position;
         if (cameraActive) {
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
-                Camera camera = mc.gameRenderer.getCamera();
+                Camera camera = mc.gameRenderer.getMainCamera();
                 if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
@@ -386,21 +386,21 @@ public class CameraSystem {
         this.targetPitch = pitch;  // Keep target in sync when setting rotation
 
         if (cameraActive) {
-            MinecraftClient mc = MinecraftClient.getInstance();
+            Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
-                Camera camera = mc.gameRenderer.getCamera();
+                Camera camera = mc.gameRenderer.getMainCamera();
                 if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }
     }
 
-    public Vec3d getCameraPosition() { return cameraPosition; }
+    public Vec3 getCameraPosition() { return cameraPosition; }
     public float getCameraYaw() { return cameraYaw; }
     public float getCameraPitch() { return cameraPitch; }
     public boolean isCameraActive() { return cameraActive; }
 
     public void resetVelocity() {
-        this.cameraVelocity = Vec3d.ZERO;
+        this.cameraVelocity = Vec3.ZERO;
     }
 
     /**
@@ -409,7 +409,7 @@ public class CameraSystem {
      *
      * @param position The player's interpolated eye position from getCameraPosVec(tickDelta)
      */
-    public void updateInterpolatedPlayerPosition(Vec3d position) {
+    public void updateInterpolatedPlayerPosition(Vec3 position) {
         this.interpolatedPlayerPosition = position;
     }
 
@@ -419,18 +419,18 @@ public class CameraSystem {
      *
      * @return The interpolated player position, or a fallback if not available
      */
-    private Vec3d getPlayerPositionForRendering() {
+    private Vec3 getPlayerPositionForRendering() {
         if (interpolatedPlayerPosition != null) {
             return interpolatedPlayerPosition;
         }
 
         // Fallback: use raw position (should rarely happen)
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
-            return mc.player.getEyePos();
+            return mc.player.getEyePosition();
         }
 
-        return Vec3d.ZERO;
+        return Vec3.ZERO;
     }
 
     /**
@@ -440,7 +440,7 @@ public class CameraSystem {
      * @return The distance in blocks between camera and player
      */
     public double getVisualDistanceToPlayer() {
-        Vec3d playerPos = getPlayerPositionForRendering();
+        Vec3 playerPos = getPlayerPositionForRendering();
         return cameraPosition.distanceTo(playerPos);
     }
 
@@ -448,7 +448,7 @@ public class CameraSystem {
         if (!shouldRenderHands) return false;
         if (!cameraActive) return shouldRenderHands;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             // Hands and player model are mutually exclusive states:
             // - First person (close): Show hands, hide player model
@@ -463,7 +463,7 @@ public class CameraSystem {
         if (!shouldRenderPlayerModel) return false;
         if (!cameraActive) return shouldRenderPlayerModel;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
             // Use interpolated position for consistent rendering
             double distance = getVisualDistanceToPlayer();

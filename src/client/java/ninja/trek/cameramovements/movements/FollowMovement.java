@@ -1,19 +1,17 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.CarpetBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.CameraTarget;
@@ -95,9 +93,9 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
     private CameraTarget current = new CameraTarget();
     private float lastStickYaw = 0.0f;
-    private Vec3d startPlayerPosXZ = null;
+    private Vec3 startPlayerPosXZ = null;
     private boolean clampArmed = false;
-    private Vec3d orbitTargetXZ = null;
+    private Vec3 orbitTargetXZ = null;
     private boolean resetting = false;
 
     public boolean isAutoRunAndJump() {
@@ -135,18 +133,18 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         return fallback;
     }
 
-    public void tickAutoRunAndJump(MinecraftClient client) {
+    public void tickAutoRunAndJump(Minecraft client) {
         if (!autoRunAndJump) {
             stopAutoRunAndJump(client);
             return;
         }
 
-        if (client == null || client.world == null || client.player == null) {
+        if (client == null || client.level == null || client.player == null) {
             stopAutoRunAndJump(client);
             return;
         }
 
-        PlayerEntity player = client.player;
+        Player player = client.player;
         if (shouldSuppressAllAssist(player)) {
             stopForcedKeys(client);
             restoreVanillaAutoJump(client);
@@ -158,8 +156,14 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         forceMoveKeys(client);
         tickJumpTimers(client);
 
+        // --- Swimming assist: hold space when underwater, jump out at water edge ---
+        if (player.isInWater()) {
+            handleSwimmingAssist(client, player);
+            return;
+        }
+
         // Keep running while airborne, but only *decide* new jumps when grounded.
-        if (!player.isOnGround()) {
+        if (!player.onGround()) {
             return;
         }
 
@@ -167,13 +171,13 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return;
         }
 
-        Vec3d vel = player.getVelocity();
+        Vec3 vel = player.getDeltaMovement();
         double horizontalSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         double leadDistance = horizontalSpeed * AUTO_JUMP_LEAD_TIME_SECONDS + AUTO_JUMP_PAD_BLOCKS;
-        leadDistance = MathHelper.clamp(leadDistance, AUTO_JUMP_MIN_LEAD_BLOCKS, AUTO_JUMP_MAX_LEAD_BLOCKS);
+        leadDistance = Mth.clamp(leadDistance, AUTO_JUMP_MIN_LEAD_BLOCKS, AUTO_JUMP_MAX_LEAD_BLOCKS);
 
-        Vec3d dir = Vec3d.fromPolar(0.0f, player.getYaw()).normalize();
-        if (dir.lengthSquared() < 1e-9) {
+        Vec3 dir = Vec3.directionFromRotation(0.0f, player.getYRot()).normalize();
+        if (dir.lengthSqr() < 1e-9) {
             return;
         }
 
@@ -184,7 +188,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
                     "Follow auto-run active: speed={} lead={} onGround={}",
                     format3(horizontalSpeed),
                     format3(leadDistance),
-                    player.isOnGround()
+                    player.onGround()
             );
         }
 
@@ -207,7 +211,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         }
     }
 
-    public void stopAutoRunAndJump(MinecraftClient client) {
+    public void stopAutoRunAndJump(Minecraft client) {
         stopForcedKeys(client);
         restoreVanillaAutoJump(client);
         jumpPressTicksRemaining = 0;
@@ -217,105 +221,155 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         lastAutoAssistStatusLogTimeMs = 0L;
     }
 
-    private void disableVanillaAutoJump(MinecraftClient client) {
+    private void disableVanillaAutoJump(Minecraft client) {
         if (savedVanillaAutoJump == null) {
             try {
-                savedVanillaAutoJump = client.options.getAutoJump().getValue();
+                savedVanillaAutoJump = client.options.autoJump().get();
             } catch (Throwable t) {
                 savedVanillaAutoJump = null;
             }
         }
         try {
-            client.options.getAutoJump().setValue(false);
+            client.options.autoJump().set(false);
         } catch (Throwable ignored) {
         }
     }
 
-    private void restoreVanillaAutoJump(MinecraftClient client) {
+    private void restoreVanillaAutoJump(Minecraft client) {
         if (savedVanillaAutoJump == null || client == null) {
             savedVanillaAutoJump = null;
             return;
         }
         try {
-            client.options.getAutoJump().setValue(savedVanillaAutoJump);
+            client.options.autoJump().set(savedVanillaAutoJump);
         } catch (Throwable ignored) {
         } finally {
             savedVanillaAutoJump = null;
         }
     }
 
-    private void forceMoveKeys(MinecraftClient client) {
-        client.options.forwardKey.setPressed(true);
-        client.options.sprintKey.setPressed(true);
+    private void forceMoveKeys(Minecraft client) {
+        client.options.keyUp.setDown(true);
+        client.options.keySprint.setDown(true);
         forcedForward = true;
         forcedSprint = true;
     }
 
-    private void stopForcedKeys(MinecraftClient client) {
+    private void stopForcedKeys(Minecraft client) {
         if (client == null) return;
         if (forcedForward) {
-            client.options.forwardKey.setPressed(false);
+            client.options.keyUp.setDown(false);
             forcedForward = false;
         }
         if (forcedSprint) {
-            client.options.sprintKey.setPressed(false);
+            client.options.keySprint.setDown(false);
             forcedSprint = false;
         }
         if (forcedJump) {
-            client.options.jumpKey.setPressed(false);
+            client.options.keyJump.setDown(false);
             forcedJump = false;
         }
     }
 
-    private void tickJumpTimers(MinecraftClient client) {
+    private void tickJumpTimers(Minecraft client) {
         if (jumpCooldownTicksRemaining > 0) {
             jumpCooldownTicksRemaining--;
         }
 
         if (jumpPressTicksRemaining > 0) {
-            client.options.jumpKey.setPressed(true);
+            client.options.keyJump.setDown(true);
             forcedJump = true;
             jumpPressTicksRemaining--;
             if (jumpPressTicksRemaining == 0) {
-                client.options.jumpKey.setPressed(false);
+                client.options.keyJump.setDown(false);
                 forcedJump = false;
             }
         }
     }
 
-    private void triggerJump(MinecraftClient client) {
+    private void handleSwimmingAssist(Minecraft client, Player player) {
+        // If underwater (not getting air at surface), hold space to swim up
+        if (player.isUnderWater()) {
+            client.options.keyJump.setDown(true);
+            forcedJump = true;
+            return;
+        }
+
+        // Player is at the water surface — check if near the edge to jump out
+        Vec3 dir = Vec3.directionFromRotation(0.0f, player.getYRot()).normalize();
+        if (dir.lengthSqr() < 1e-9) {
+            releaseJumpIfForced(client);
+            return;
+        }
+
+        // Scan ahead for solid ground (water edge)
+        for (double d = 0.5; d <= 1.5; d += 0.5) {
+            BlockPos checkPos = BlockPos.containing(
+                    player.getX() + dir.x * d,
+                    player.getY(),
+                    player.getZ() + dir.z * d
+            );
+
+            // Solid block at player level means land ahead — jump out
+            if (hasCollision(client, checkPos)) {
+                client.options.keyJump.setDown(true);
+                forcedJump = true;
+                return;
+            }
+
+            // Non-fluid block with solid ground below means water edge — jump out
+            BlockState stateAtLevel = client.level.getBlockState(checkPos);
+            if (stateAtLevel.getFluidState().isEmpty() && hasCollision(client, checkPos.below())) {
+                client.options.keyJump.setDown(true);
+                forcedJump = true;
+                return;
+            }
+        }
+
+        // Not near edge — release jump
+        releaseJumpIfForced(client);
+    }
+
+    private void releaseJumpIfForced(Minecraft client) {
+        if (forcedJump) {
+            client.options.keyJump.setDown(false);
+            forcedJump = false;
+        }
+    }
+
+    private void triggerJump(Minecraft client) {
         jumpPressTicksRemaining = AUTO_JUMP_PRESS_TICKS;
         jumpCooldownTicksRemaining = AUTO_JUMP_COOLDOWN_TICKS;
-        client.options.jumpKey.setPressed(true);
+        client.options.keyJump.setDown(true);
         forcedJump = true;
     }
 
-    private static boolean shouldSuppressAssist(PlayerEntity player) {
+    private static boolean shouldSuppressAssist(Player player) {
         return shouldSuppressAllAssist(player);
     }
 
-    private static boolean shouldSuppressAllAssist(PlayerEntity player) {
+    private static boolean shouldSuppressAllAssist(Player player) {
         if (player == null) return true;
         return false;
     }
 
-    private static boolean hasCollision(MinecraftClient client, BlockPos pos) {
-        if (client == null || client.world == null || pos == null) return false;
+    private static boolean hasCollision(Minecraft client, BlockPos pos) {
+        if (client == null || client.level == null || pos == null) return false;
         try {
-            return !client.world.getBlockState(pos).getCollisionShape(client.world, pos).isEmpty();
+            return !client.level.getBlockState(pos).getCollisionShape(client.level, pos).isEmpty();
         } catch (Throwable t) {
             return false;
         }
     }
 
-    private static boolean isJumpHeadroomClear(MinecraftClient client, BlockPos groundPos) {
+    private static boolean isJumpHeadroomClear(Minecraft client, BlockPos groundPos) {
         if (groundPos == null) return false;
-        return !hasCollision(client, groundPos.up(1)) && !hasCollision(client, groundPos.up(2));
+        return !hasCollision(client, groundPos.above(1)) && !hasCollision(client, groundPos.above(2));
     }
 
-    private static Vec3d[] getForwardCornerOffsetsXZ(Vec3d dir, double extent) {
+    private static Vec3[] getForwardCornerOffsetsXZ(Vec3 dir, double extent) {
         if (dir == null || extent <= 1e-9) {
-            return new Vec3d[] { Vec3d.ZERO };
+            return new Vec3[] { Vec3.ZERO };
         }
 
         double ax = Math.abs(dir.x);
@@ -323,7 +377,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         double eps = 1e-6;
 
         if (ax < eps && az < eps) {
-            return new Vec3d[] { Vec3d.ZERO };
+            return new Vec3[] { Vec3.ZERO };
         }
 
         double sx = Math.signum(dir.x);
@@ -332,65 +386,65 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         // If we're almost perfectly aligned with an axis, include both corners along the other axis
         // to avoid picking only one corner due to tiny floating-point components.
         if (ax < eps) {
-            return new Vec3d[] {
-                    new Vec3d(extent, 0.0, sz * extent),
-                    new Vec3d(-extent, 0.0, sz * extent)
+            return new Vec3[] {
+                    new Vec3(extent, 0.0, sz * extent),
+                    new Vec3(-extent, 0.0, sz * extent)
             };
         }
         if (az < eps) {
-            return new Vec3d[] {
-                    new Vec3d(sx * extent, 0.0, extent),
-                    new Vec3d(sx * extent, 0.0, -extent)
+            return new Vec3[] {
+                    new Vec3(sx * extent, 0.0, extent),
+                    new Vec3(sx * extent, 0.0, -extent)
             };
         }
 
-        return new Vec3d[] { new Vec3d(sx * extent, 0.0, sz * extent) };
+        return new Vec3[] { new Vec3(sx * extent, 0.0, sz * extent) };
     }
 
     private static AutoJumpDecision getAutoJumpDecision(
-            MinecraftClient client,
-            PlayerEntity player,
-            Vec3d dir,
+            Minecraft client,
+            Player player,
+            Vec3 dir,
             double leadDistance
     ) {
-        BlockPos groundPos = BlockPos.ofFloored(player.getX(), player.getY() - 0.01, player.getZ());
+        BlockPos groundPos = BlockPos.containing(player.getX(), player.getY() - 0.01, player.getZ());
         if (!isJumpHeadroomClear(client, groundPos)) {
             return null;
         }
 
-        Vec3d right = new Vec3d(-dir.z, 0.0, dir.x);
-        double rightLen2 = right.lengthSquared();
+        Vec3 right = new Vec3(-dir.z, 0.0, dir.x);
+        double rightLen2 = right.lengthSqr();
         if (rightLen2 > 1e-9) {
-            right = right.multiply(1.0 / Math.sqrt(rightLen2));
+            right = right.scale(1.0 / Math.sqrt(rightLen2));
         } else {
-            right = Vec3d.ZERO;
+            right = Vec3.ZERO;
         }
-        double sideOffset = Math.max(0.0, player.getWidth() * 0.5 - 0.05);
-        Vec3d leftOffset = right.multiply(-sideOffset);
-        Vec3d rightOffset = right.multiply(sideOffset);
+        double sideOffset = Math.max(0.0, player.getBbWidth() * 0.5 - 0.05);
+        Vec3 leftOffset = right.scale(-sideOffset);
+        Vec3 rightOffset = right.scale(sideOffset);
 
         // 1) Full-block step up ahead (raycast from both sides of the player's body).
-        Vec3d startBase = new Vec3d(player.getX(), player.getY() + 0.2, player.getZ());
-        Vec3d startLeft = startBase.add(leftOffset);
-        Vec3d startRight = startBase.add(rightOffset);
-        Vec3d endLeft = startLeft.add(dir.multiply(leadDistance));
-        Vec3d endRight = startRight.add(dir.multiply(leadDistance));
+        Vec3 startBase = new Vec3(player.getX(), player.getY() + 0.2, player.getZ());
+        Vec3 startLeft = startBase.add(leftOffset);
+        Vec3 startRight = startBase.add(rightOffset);
+        Vec3 endLeft = startLeft.add(dir.scale(leadDistance));
+        Vec3 endRight = startRight.add(dir.scale(leadDistance));
 
         AutoJumpDecision bestStep = null;
-        BlockHitResult hitLeft = client.world.raycast(new RaycastContext(
+        BlockHitResult hitLeft = client.level.clip(new ClipContext(
                 startLeft,
                 endLeft,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
                 player
         ));
         bestStep = pickBestStepDecision(client, groundPos, startLeft, hitLeft, "left", bestStep);
 
-        BlockHitResult hitRight = client.world.raycast(new RaycastContext(
+        BlockHitResult hitRight = client.level.clip(new ClipContext(
                 startRight,
                 endRight,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
                 player
         ));
         bestStep = pickBestStepDecision(client, groundPos, startRight, hitRight, "right", bestStep);
@@ -399,16 +453,16 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         // "jump too late when running diagonally into a block corner" by accounting for the fact that
         // the leading point of the player's AABB is a corner when moving at an angle.
         double cornerInset = 0.05;
-        double cornerExtent = Math.max(0.0, player.getWidth() * 0.5 - cornerInset);
-        Vec3d[] cornerOffsets = getForwardCornerOffsetsXZ(dir, cornerExtent);
+        double cornerExtent = Math.max(0.0, player.getBbWidth() * 0.5 - cornerInset);
+        Vec3[] cornerOffsets = getForwardCornerOffsetsXZ(dir, cornerExtent);
         for (int i = 0; i < cornerOffsets.length; i++) {
-            Vec3d rayStart = startBase.add(cornerOffsets[i]);
-            Vec3d rayEnd = rayStart.add(dir.multiply(leadDistance));
-            BlockHitResult hit = client.world.raycast(new RaycastContext(
+            Vec3 rayStart = startBase.add(cornerOffsets[i]);
+            Vec3 rayEnd = rayStart.add(dir.scale(leadDistance));
+            BlockHitResult hit = client.level.clip(new ClipContext(
                     rayStart,
                     rayEnd,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
                     player
             ));
             bestStep = pickBestStepDecision(client, groundPos, rayStart, hit, "corner_" + i, bestStep);
@@ -422,12 +476,12 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         double checkDist = Math.max(AUTO_GAP_MIN_CHECK_BLOCKS, leadDistance);
         double x0 = player.getX();
         double z0 = player.getZ();
-        BlockPos firstLeft = BlockPos.ofFloored(
+        BlockPos firstLeft = BlockPos.containing(
                 x0 + leftOffset.x + dir.x * checkDist,
                 player.getY() - 0.01,
                 z0 + leftOffset.z + dir.z * checkDist
         );
-        BlockPos firstRight = BlockPos.ofFloored(
+        BlockPos firstRight = BlockPos.containing(
                 x0 + rightOffset.x + dir.x * checkDist,
                 player.getY() - 0.01,
                 z0 + rightOffset.z + dir.z * checkDist
@@ -437,15 +491,15 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         if (hasCollision(client, firstLeft) || hasCollision(client, firstRight)) {
             return null;
         }
-        if (hasCollision(client, firstLeft.up(1)) || hasCollision(client, firstRight.up(1))) {
+        if (hasCollision(client, firstLeft.above(1)) || hasCollision(client, firstRight.above(1))) {
             return null;
         }
 
         for (double d = checkDist + AUTO_GAP_SCAN_STEP_BLOCKS; d <= AUTO_GAP_MAX_SCAN_BLOCKS; d += AUTO_GAP_SCAN_STEP_BLOCKS) {
-            BlockPos pLeft = BlockPos.ofFloored(x0 + leftOffset.x + dir.x * d, player.getY() - 0.01, z0 + leftOffset.z + dir.z * d);
-            BlockPos pRight = BlockPos.ofFloored(x0 + rightOffset.x + dir.x * d, player.getY() - 0.01, z0 + rightOffset.z + dir.z * d);
+            BlockPos pLeft = BlockPos.containing(x0 + leftOffset.x + dir.x * d, player.getY() - 0.01, z0 + leftOffset.z + dir.z * d);
+            BlockPos pRight = BlockPos.containing(x0 + rightOffset.x + dir.x * d, player.getY() - 0.01, z0 + rightOffset.z + dir.z * d);
             if (hasCollision(client, pLeft) && hasCollision(client, pRight)) {
-                return new AutoJumpDecision("gap", d, BlockPos.ofFloored(x0 + dir.x * d, player.getY() - 0.01, z0 + dir.z * d));
+                return new AutoJumpDecision("gap", d, BlockPos.containing(x0 + dir.x * d, player.getY() - 0.01, z0 + dir.z * d));
             }
         }
 
@@ -453,9 +507,9 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     private static AutoJumpDecision pickBestStepDecision(
-            MinecraftClient client,
+            Minecraft client,
             BlockPos groundPos,
-            Vec3d rayStart,
+            Vec3 rayStart,
             BlockHitResult hit,
             String side,
             AutoJumpDecision best
@@ -494,7 +548,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             return best;
         }
 
-        double hitDist = hit.getPos().distanceTo(rayStart);
+        double hitDist = hit.getLocation().distanceTo(rayStart);
         String reason = String.format("step_%s_h%.2f", side, obstacleHeight);
         AutoJumpDecision candidate = new AutoJumpDecision(reason, hitDist, hitPos);
 
@@ -515,10 +569,10 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
      * @return Height in blocks above ground level, or 0.0 if no obstacle
      */
     private static double getObstacleHeightAboveGround(
-            MinecraftClient client,
+            Minecraft client,
             BlockPos groundPos,
             BlockPos checkPos) {
-        if (client == null || client.world == null || groundPos == null || checkPos == null) {
+        if (client == null || client.level == null || groundPos == null || checkPos == null) {
             return 0.0;
         }
 
@@ -528,7 +582,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         // Scan upward from ground level to 3 blocks high (handles stacked blocks like slab+slab+slab)
         for (int dy = 1; dy <= 3; dy++) {
             BlockPos scanPos = new BlockPos(checkPos.getX(), groundPos.getY() + dy, checkPos.getZ());
-            BlockState state = client.world.getBlockState(scanPos);
+            BlockState state = client.level.getBlockState(scanPos);
 
             if (state.isAir()) {
                 // No obstacle at this height, continue checking above in case of floating blocks
@@ -536,7 +590,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             }
 
             try {
-                VoxelShape collisionShape = state.getCollisionShape(client.world, scanPos);
+                VoxelShape collisionShape = state.getCollisionShape(client.level, scanPos);
 
                 if (collisionShape.isEmpty()) {
                     // Block exists but has no collision (e.g., torch, flower, wheat)
@@ -544,7 +598,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
                 }
 
                 // Get the maximum Y value of the collision shape (top surface)
-                double shapeMaxY = collisionShape.getMax(Direction.Axis.Y);
+                double shapeMaxY = collisionShape.max(Direction.Axis.Y);
 
                 // Collision shapes are relative to block position, so add block's Y coordinate
                 double absoluteMaxY = scanPos.getY() + shapeMaxY;
@@ -586,25 +640,25 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         current = CameraTarget.fromCamera(camera);
         lastStickYaw = CameraController.controlStick.getYaw();
-        Vec3d stickPos = CameraController.controlStick.getPosition();
+        Vec3 stickPos = CameraController.controlStick.getPosition();
 
         // Safety check: if captured camera position is unreasonably far from player,
         // snap to a reasonable starting position to prevent glitchy far-away camera
         if (client != null && client.player != null) {
-            Vec3d playerPos = client.player.getEyePos();
+            Vec3 playerPos = client.player.getEyePosition();
             double distFromPlayer = current.getPosition().distanceTo(playerPos);
             double maxReasonableDistance = followHeight + xzThreshold + 10.0; // Some margin
             if (distFromPlayer > maxReasonableDistance) {
                 // Snap to player position - the movement will ease out to follow height
-                current = new CameraTarget(playerPos, client.player.getYaw(), client.player.getPitch(), 1.0f);
+                current = new CameraTarget(playerPos, client.player.getYRot(), client.player.getXRot(), 1.0f);
             }
         }
 
-        startPlayerPosXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);
-        orbitTargetXZ = new Vec3d(current.getPosition().x, 0.0, current.getPosition().z);
+        startPlayerPosXZ = new Vec3(stickPos.x, 0.0, stickPos.z);
+        orbitTargetXZ = new Vec3(current.getPosition().x, 0.0, current.getPosition().z);
         clampArmed = false;
         resetting = false;
         alpha = 1.0;
@@ -621,22 +675,22 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
-        Vec3d stickPos = CameraController.controlStick.getPosition();
+        Vec3 stickPos = CameraController.controlStick.getPosition();
         float stickYaw = CameraController.controlStick.getYaw();
         float stickPitch = (float) (CameraController.controlStick.getPitch() + pitchOffset);
 
-        Vec3d desiredPos;
+        Vec3 desiredPos;
         float targetYaw;
         float targetPitch;
         float targetFovDelta;
 
         if (resetting) {
-            Vec3d playerPos = client.player.getEyePos();
-            targetYaw = client.player.getYaw();
-            targetPitch = (float) (client.player.getPitch() + pitchOffset);
+            Vec3 playerPos = client.player.getEyePosition();
+            targetYaw = client.player.getYRot();
+            targetPitch = (float) (client.player.getXRot() + pitchOffset);
             targetFovDelta = 1.0f;
 
             desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
@@ -653,8 +707,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             targetPitch = stickPitch;
             targetFovDelta = fovMultiplier;
 
-            Vec3d cur = current.getPosition();
-            Vec3d playerXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);
+            Vec3 cur = current.getPosition();
+            Vec3 playerXZ = new Vec3(stickPos.x, 0.0, stickPos.z);
 
             float deltaYaw = stickYaw - lastStickYaw;
             while (deltaYaw > 180f) deltaYaw -= 360f;
@@ -662,7 +716,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             lastStickYaw = stickYaw;
 
             if (orbitTargetXZ == null) {
-                orbitTargetXZ = new Vec3d(cur.x, 0.0, cur.z);
+                orbitTargetXZ = new Vec3(cur.x, 0.0, cur.z);
             }
             orbitTargetXZ = rotateAroundY(playerXZ, orbitTargetXZ, deltaYaw);
 
@@ -676,10 +730,10 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             if (clampArmed) {
                 orbitTargetXZ = clampDistanceXZ(playerXZ, orbitTargetXZ, xzThreshold);
             }
-            Vec3d desiredCamXZ = orbitTargetXZ;
-            double desiredY = computeFollowY(stickPos.y, cur.y, followHeight, yThreshold, client.player.isOnGround());
+            Vec3 desiredCamXZ = orbitTargetXZ;
+            double desiredY = computeFollowY(stickPos.y, cur.y, followHeight, yThreshold, client.player.onGround());
 
-            Vec3d desiredRaw = new Vec3d(desiredCamXZ.x, desiredY, desiredCamXZ.z);
+            Vec3 desiredRaw = new Vec3(desiredCamXZ.x, desiredY, desiredCamXZ.z);
             desiredPos = easedStep(cur, desiredRaw, deltaSeconds);
         }
 
@@ -698,7 +752,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
 
-    private Vec3d rotateAroundY(Vec3d centerXZ, Vec3d pointXZ, float deltaYawDegrees) {
+    private Vec3 rotateAroundY(Vec3 centerXZ, Vec3 pointXZ, float deltaYawDegrees) {
         if (Math.abs(deltaYawDegrees) < 1e-6f) return pointXZ;
         double theta = Math.toRadians(deltaYawDegrees);
         double cos = Math.cos(theta);
@@ -710,18 +764,18 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         double rx = ox * cos - oz * sin;
         double rz = ox * sin + oz * cos;
 
-        return new Vec3d(centerXZ.x + rx, 0.0, centerXZ.z + rz);
+        return new Vec3(centerXZ.x + rx, 0.0, centerXZ.z + rz);
     }
 
-    private Vec3d clampDistanceXZ(Vec3d playerXZ, Vec3d cameraXZ, double threshold) {
-        Vec3d delta = new Vec3d(cameraXZ.x - playerXZ.x, 0.0, cameraXZ.z - playerXZ.z);
+    private Vec3 clampDistanceXZ(Vec3 playerXZ, Vec3 cameraXZ, double threshold) {
+        Vec3 delta = new Vec3(cameraXZ.x - playerXZ.x, 0.0, cameraXZ.z - playerXZ.z);
         double dist = delta.length();
         if (dist <= threshold || dist <= 1e-9) return cameraXZ;
-        Vec3d dir = delta.multiply(1.0 / dist);
-        return new Vec3d(playerXZ.x, 0.0, playerXZ.z).add(dir.multiply(threshold));
+        Vec3 dir = delta.scale(1.0 / dist);
+        return new Vec3(playerXZ.x, 0.0, playerXZ.z).add(dir.scale(threshold));
     }
 
-    private double horizontalDistanceXZ(Vec3d a, Vec3d b) {
+    private double horizontalDistanceXZ(Vec3 a, Vec3 b) {
         double dx = a.x - b.x;
         double dz = a.z - b.z;
         return Math.sqrt(dx * dx + dz * dz);
@@ -738,22 +792,22 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         return currentY;
     }
 
-    private Vec3d easedStep(Vec3d currentPos, Vec3d targetPos, float deltaSeconds) {
+    private Vec3 easedStep(Vec3 currentPos, Vec3 targetPos, float deltaSeconds) {
         return easedStep(currentPos, targetPos, deltaSeconds, positionEasingY, positionSpeedLimitY);
     }
 
-    private Vec3d easedStep(Vec3d currentPos, Vec3d targetPos, float deltaSeconds, double easingY, double speedLimitY) {
-        Vec3d delta = targetPos.subtract(currentPos);
-        if (delta.lengthSquared() <= 1e-24) {
+    private Vec3 easedStep(Vec3 currentPos, Vec3 targetPos, float deltaSeconds, double easingY, double speedLimitY) {
+        Vec3 delta = targetPos.subtract(currentPos);
+        if (delta.lengthSqr() <= 1e-24) {
             return currentPos;
         }
 
-        Vec3d deltaXZ = new Vec3d(delta.x, 0.0, delta.z);
-        Vec3d moveXZ = deltaXZ.multiply(positionEasingXZ);
+        Vec3 deltaXZ = new Vec3(delta.x, 0.0, delta.z);
+        Vec3 moveXZ = deltaXZ.scale(positionEasingXZ);
         double maxMoveXZ = positionSpeedLimitXZ * deltaSeconds;
         double moveXZLength = moveXZ.length();
         if (moveXZLength > maxMoveXZ && moveXZLength > 1e-12) {
-            moveXZ = moveXZ.multiply(maxMoveXZ / moveXZLength);
+            moveXZ = moveXZ.scale(maxMoveXZ / moveXZLength);
         }
 
         double moveY = delta.y * easingY;
@@ -789,7 +843,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         if (!resetting) {
             resetting = true;
             resetReturnTargetTracking();
@@ -803,23 +857,23 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         return resetting;
     }
 
-    public void resumeOutPhase(MinecraftClient client, Camera camera) {
+    public void resumeOutPhase(Minecraft client, Camera camera) {
         if (!resetting) {
             return;
         }
         resetting = false;
         // Keep existing 'current' position - it already tracks the camera during return.
         // Using CameraTarget.fromCamera(camera) can capture stale/wrong positions.
-        Vec3d stickPos = CameraController.controlStick.getPosition();
+        Vec3 stickPos = CameraController.controlStick.getPosition();
         lastStickYaw = CameraController.controlStick.getYaw();
-        startPlayerPosXZ = new Vec3d(stickPos.x, 0.0, stickPos.z);
-        orbitTargetXZ = new Vec3d(current.getPosition().x, 0.0, current.getPosition().z);
+        startPlayerPosXZ = new Vec3(stickPos.x, 0.0, stickPos.z);
+        orbitTargetXZ = new Vec3(current.getPosition().x, 0.0, current.getPosition().z);
         clampArmed = false;
         alpha = 1.0;
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         if (mouseWheel == SCROLL_WHEEL.FOV) {
             adjustFov(increase, client);
         }
@@ -838,8 +892,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     @Override
     public boolean isComplete() {
         if (!resetting) return false;
-        if (MinecraftClient.getInstance().player == null) return true;
-        Vec3d playerPos = MinecraftClient.getInstance().player.getEyePos();
+        if (Minecraft.getInstance().player == null) return true;
+        Vec3 playerPos = Minecraft.getInstance().player.getEyePosition();
         double positionDistance = current.getPosition().distanceTo(playerPos);
         float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
         boolean positionComplete = positionDistance < 0.005;

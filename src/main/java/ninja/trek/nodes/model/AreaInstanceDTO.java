@@ -2,17 +2,16 @@ package ninja.trek.nodes.model;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.math.Vec3d;
-
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Serializable representation of an {@link AreaInstance} that can be sent across the network
@@ -31,12 +30,12 @@ public class AreaInstanceDTO {
     public String name = "Area";
 
     public AreaShape shape = AreaShape.CUBE;
-    public Vec3d center = Vec3d.ZERO;
+    public Vec3 center = Vec3.ZERO;
     public double insideRadius = 8.0;
     public double outsideRadius = 16.0;
     public boolean advanced = false;
-    public Vec3d insideRadii = null;
-    public Vec3d outsideRadii = null;
+    public Vec3 insideRadii = null;
+    public Vec3 outsideRadii = null;
 
     public boolean filterWalking = true;
     public boolean filterElytra = true;
@@ -109,15 +108,15 @@ public class AreaInstanceDTO {
         return inst;
     }
 
-    public void write(PacketByteBuf buf) {
+    public void write(FriendlyByteBuf buf) {
         buf.writeVarInt(version);
-        buf.writeUuid(uuid);
+        buf.writeUUID(uuid);
         buf.writeBoolean(clientRequestId != null);
-        if (clientRequestId != null) buf.writeUuid(clientRequestId);
+        if (clientRequestId != null) buf.writeUUID(clientRequestId);
         buf.writeBoolean(owner != null);
-        if (owner != null) buf.writeUuid(owner);
-        buf.writeString(name != null ? name : "");
-        buf.writeEnumConstant(shape);
+        if (owner != null) buf.writeUUID(owner);
+        buf.writeUtf(name != null ? name : "");
+        buf.writeEnum(shape);
         writeVec3d(buf, center);
         buf.writeDouble(insideRadius);
         buf.writeDouble(outsideRadius);
@@ -137,7 +136,7 @@ public class AreaInstanceDTO {
         buf.writeBoolean(filterSneaking);
         buf.writeBoolean(filterCrawling1Block);
 
-        buf.writeEnumConstant(easing);
+        buf.writeEnum(easing);
 
         buf.writeVarInt(movements.size());
         for (AreaMovementConfig cfg : movements) {
@@ -145,14 +144,14 @@ public class AreaInstanceDTO {
         }
     }
 
-    public static AreaInstanceDTO read(PacketByteBuf buf) {
+    public static AreaInstanceDTO read(FriendlyByteBuf buf) {
         AreaInstanceDTO dto = new AreaInstanceDTO();
         dto.version = buf.readVarInt();
-        dto.uuid = buf.readUuid();
-        if (buf.readBoolean()) dto.clientRequestId = buf.readUuid();
-        if (buf.readBoolean()) dto.owner = buf.readUuid();
-        dto.name = buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH);
-        dto.shape = buf.readEnumConstant(AreaShape.class);
+        dto.uuid = buf.readUUID();
+        if (buf.readBoolean()) dto.clientRequestId = buf.readUUID();
+        if (buf.readBoolean()) dto.owner = buf.readUUID();
+        dto.name = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
+        dto.shape = buf.readEnum(AreaShape.class);
         dto.center = readVec3d(buf);
         dto.insideRadius = buf.readDouble();
         dto.outsideRadius = buf.readDouble();
@@ -170,7 +169,7 @@ public class AreaInstanceDTO {
         dto.filterSneaking = buf.readBoolean();
         dto.filterCrawling1Block = buf.readBoolean();
 
-        dto.easing = buf.readEnumConstant(EasingCurve.class);
+        dto.easing = buf.readEnum(EasingCurve.class);
 
         int count = buf.readVarInt();
         dto.movements.clear();
@@ -180,8 +179,8 @@ public class AreaInstanceDTO {
         return dto;
     }
 
-    public NbtCompound toNbt() {
-        NbtCompound tag = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag tag = new CompoundTag();
         tag.putInt("version", version);
         tag.putString("uuid", uuid.toString());
         if (clientRequestId != null) tag.putString("clientRequestId", clientRequestId.toString());
@@ -207,7 +206,7 @@ public class AreaInstanceDTO {
 
         tag.putString("easing", easing.name());
 
-        NbtList movementList = new NbtList();
+        ListTag movementList = new ListTag();
         for (AreaMovementConfig cfg : movements) {
             movementList.add(movementToNbt(cfg));
         }
@@ -215,7 +214,7 @@ public class AreaInstanceDTO {
         return tag;
     }
 
-    public static AreaInstanceDTO fromNbt(NbtCompound tag) {
+    public static AreaInstanceDTO fromNbt(CompoundTag tag) {
         AreaInstanceDTO dto = new AreaInstanceDTO();
         dto.version = tag.getInt("version").orElse(0);
         tag.getString("uuid").ifPresent(uuidStr -> {
@@ -264,8 +263,8 @@ public class AreaInstanceDTO {
 
         dto.movements.clear();
         tag.getList("movements").ifPresent(list -> {
-            for (NbtElement element : list) {
-                if (element instanceof NbtCompound compound) {
+            for (Tag element : list) {
+                if (element instanceof CompoundTag compound) {
                     dto.movements.add(movementFromNbt(compound));
                 }
             }
@@ -273,37 +272,37 @@ public class AreaInstanceDTO {
         return dto;
     }
 
-    private static void writeVec3d(PacketByteBuf buf, Vec3d vec) {
+    private static void writeVec3d(FriendlyByteBuf buf, Vec3 vec) {
         buf.writeDouble(vec.x);
         buf.writeDouble(vec.y);
         buf.writeDouble(vec.z);
     }
 
-    private static Vec3d readVec3d(PacketByteBuf buf) {
-        return new Vec3d(buf.readDouble(), buf.readDouble(), buf.readDouble());
+    private static Vec3 readVec3d(FriendlyByteBuf buf) {
+        return new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
     }
 
-    private static void writeMovement(PacketByteBuf buf, AreaMovementConfig cfg) {
-        buf.writeUuid(cfg.id != null ? cfg.id : UUID.randomUUID());
-        buf.writeString(cfg.movementType != null ? cfg.movementType : "");
+    private static void writeMovement(FriendlyByteBuf buf, AreaMovementConfig cfg) {
+        buf.writeUUID(cfg.id != null ? cfg.id : UUID.randomUUID());
+        buf.writeUtf(cfg.movementType != null ? cfg.movementType : "");
         buf.writeBoolean(cfg.name != null);
-        if (cfg.name != null) buf.writeString(cfg.name);
+        if (cfg.name != null) buf.writeUtf(cfg.name);
         buf.writeBoolean(cfg.enabled);
         buf.writeFloat(cfg.weight);
         buf.writeVarInt(cfg.stateFilters.size());
         for (String key : cfg.stateFilters) {
-            buf.writeString(key);
+            buf.writeUtf(key);
         }
         String json = GSON.toJson(cfg.settings, SETTINGS_TYPE);
-        buf.writeString(json != null ? json : "{}");
+        buf.writeUtf(json != null ? json : "{}");
     }
 
-    private static AreaMovementConfig readMovement(PacketByteBuf buf) {
+    private static AreaMovementConfig readMovement(FriendlyByteBuf buf) {
         AreaMovementConfig cfg = new AreaMovementConfig();
-        cfg.id = buf.readUuid();
-        cfg.movementType = buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH);
+        cfg.id = buf.readUUID();
+        cfg.movementType = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
         if (buf.readBoolean()) {
-            cfg.name = buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH);
+            cfg.name = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
         } else {
             cfg.name = null;
         }
@@ -312,9 +311,9 @@ public class AreaInstanceDTO {
         cfg.stateFilters.clear();
         int filterCount = buf.readVarInt();
         for (int i = 0; i < filterCount; i++) {
-            cfg.stateFilters.add(buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH));
+            cfg.stateFilters.add(buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH));
         }
-        String json = buf.readString(PacketByteBuf.DEFAULT_MAX_STRING_LENGTH);
+        String json = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
         cfg.settings.clear();
         if (!json.isEmpty()) {
             Map<String, Object> map = GSON.fromJson(json, SETTINGS_TYPE);
@@ -325,32 +324,32 @@ public class AreaInstanceDTO {
         return cfg;
     }
 
-    private static NbtList vec3dToNbt(Vec3d vec) {
-        NbtList list = new NbtList();
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.x));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.y));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.z));
+    private static ListTag vec3dToNbt(Vec3 vec) {
+        ListTag list = new ListTag();
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.x));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.y));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.z));
         return list;
     }
 
-    private static Vec3d vec3dFromNbt(NbtList list) {
-        if (list == null || list.size() < 3) return Vec3d.ZERO;
+    private static Vec3 vec3dFromNbt(ListTag list) {
+        if (list == null || list.size() < 3) return Vec3.ZERO;
         double x = list.getDouble(0).orElse(0.0);
         double y = list.getDouble(1).orElse(0.0);
         double z = list.getDouble(2).orElse(0.0);
-        return new Vec3d(x, y, z);
+        return new Vec3(x, y, z);
     }
 
-    private static NbtCompound movementToNbt(AreaMovementConfig cfg) {
-        NbtCompound tag = new NbtCompound();
+    private static CompoundTag movementToNbt(AreaMovementConfig cfg) {
+        CompoundTag tag = new CompoundTag();
         tag.putString("id", cfg.id != null ? cfg.id.toString() : UUID.randomUUID().toString());
         tag.putString("type", cfg.movementType != null ? cfg.movementType : "");
         if (cfg.name != null) tag.putString("name", cfg.name);
         tag.putBoolean("enabled", cfg.enabled);
         tag.putFloat("weight", cfg.weight);
-        NbtList filters = new NbtList();
+        ListTag filters = new ListTag();
         for (String filter : cfg.stateFilters) {
-            filters.add(net.minecraft.nbt.NbtString.of(filter));
+            filters.add(net.minecraft.nbt.StringTag.valueOf(filter));
         }
         tag.put("filters", filters);
         String json = GSON.toJson(cfg.settings, SETTINGS_TYPE);
@@ -358,7 +357,7 @@ public class AreaInstanceDTO {
         return tag;
     }
 
-    private static AreaMovementConfig movementFromNbt(NbtCompound tag) {
+    private static AreaMovementConfig movementFromNbt(CompoundTag tag) {
         AreaMovementConfig cfg = new AreaMovementConfig();
         tag.getString("id").ifPresent(idStr -> {
             try {
@@ -371,8 +370,8 @@ public class AreaInstanceDTO {
         cfg.weight = tag.getFloat("weight").orElse(1.0f);
         cfg.stateFilters.clear();
         tag.getList("filters").ifPresent(list -> {
-            for (NbtElement element : list) {
-                if (element instanceof net.minecraft.nbt.NbtString str) {
+            for (Tag element : list) {
+                if (element instanceof net.minecraft.nbt.StringTag str) {
                     str.asString().ifPresent(cfg.stateFilters::add);
                 }
             }

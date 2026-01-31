@@ -1,7 +1,7 @@
 package ninja.trek.mixin.client;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.Mouse;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
 import ninja.trek.Craneshot;
 import ninja.trek.CraneshotClient;
 import ninja.trek.IMouseMixin;
@@ -13,21 +13,21 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(Mouse.class)
+@Mixin(MouseHandler.class)
 public class MouseMixin implements IMouseMixin {
-    @Shadow private double cursorDeltaX;
-    @Shadow private double cursorDeltaY;
-    
+    @Shadow private double accumulatedDX;
+    @Shadow private double accumulatedDY;
+
     private double capturedDeltaX;
     private double capturedDeltaY;
     private double lastScrollValue;
 
-    @Inject(method = "onMouseScroll", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
     private void onMouseScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         // Always allow scrolling if any screen is open (game menu, mod menu, etc)
-        if (client.currentScreen != null) {
+        if (client.screen != null) {
             return;
         }
 
@@ -42,12 +42,12 @@ public class MouseMixin implements IMouseMixin {
         // Also intercept if any camera slot key or select movement key is pressed
         if (!shouldIntercept) {
             for (int i = 0; i < CraneshotClient.cameraKeyBinds.length; i++) {
-                if (CraneshotClient.cameraKeyBinds[i].isPressed()) {
+                if (CraneshotClient.cameraKeyBinds[i].isDown()) {
                     shouldIntercept = true;
                     break;
                 }
             }
-            if (CraneshotClient.selectMovementType.isPressed()) {
+            if (CraneshotClient.selectMovementType.isDown()) {
                 shouldIntercept = true;
             }
         }
@@ -59,12 +59,12 @@ public class MouseMixin implements IMouseMixin {
         }
     }
 
-    @Inject(method = "updateMouse", at = @At("HEAD"), cancellable = true)
-    private void onUpdateMouse(double timeDelta, CallbackInfo ci) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    @Inject(method = "handleAccumulatedMovement", at = @At("HEAD"), cancellable = true)
+    private void onUpdateMouse(CallbackInfo ci) {
+        Minecraft client = Minecraft.getInstance();
 
         // Adjust mouse sensitivity based on zoom level BEFORE any other processing
-        if (client.currentScreen == null && !MouseInterceptor.isIntercepting()) {
+        if (client.screen == null && !MouseInterceptor.isIntercepting()) {
             if (CraneshotClient.MOVEMENT_MANAGER != null) {
                 ninja.trek.cameramovements.movements.ZoomMovement zoomMovement =
                     CraneshotClient.MOVEMENT_MANAGER.getActiveZoomOverlay();
@@ -75,26 +75,26 @@ public class MouseMixin implements IMouseMixin {
                     float fovMultiplier = zoomMovement.getTargetZoomFov();
 
                     // Scale mouse deltas by FOV multiplier to reduce sensitivity when zoomed in
-                    cursorDeltaX *= fovMultiplier;
-                    cursorDeltaY *= fovMultiplier;
+                    accumulatedDX *= fovMultiplier;
+                    accumulatedDY *= fovMultiplier;
                 }
             }
         }
 
         // Handle mouse interception for camera control
-        if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
-            capturedDeltaX = cursorDeltaX;
-            capturedDeltaY = cursorDeltaY;
-            cursorDeltaX = 0;
-            cursorDeltaY = 0;
+        if (MouseInterceptor.isIntercepting() && client.screen == null) {
+            capturedDeltaX = accumulatedDX;
+            capturedDeltaY = accumulatedDY;
+            accumulatedDX = 0;
+            accumulatedDY = 0;
             ci.cancel();
         }
     }
 
-    @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
-    private void onMouseButton(long window, net.minecraft.client.input.MouseInput input, int action, CallbackInfo ci) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (MouseInterceptor.isIntercepting() && client.currentScreen == null) {
+    @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
+    private void onMouseButton(long window, net.minecraft.client.input.MouseButtonInfo input, int action, CallbackInfo ci) {
+        Minecraft client = Minecraft.getInstance();
+        if (MouseInterceptor.isIntercepting() && client.screen == null) {
             ci.cancel();
         }
     }
@@ -108,12 +108,12 @@ public class MouseMixin implements IMouseMixin {
     public double getCapturedDeltaY() {
         return capturedDeltaY;
     }
-    
+
     @Override
     public double getLastScrollValue() {
         return lastScrollValue;
     }
-    
+
     @Override
     public void setLastScrollValue(double value) {
         this.lastScrollValue = value;

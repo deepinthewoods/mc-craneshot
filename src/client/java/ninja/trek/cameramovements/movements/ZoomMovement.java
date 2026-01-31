@@ -1,7 +1,7 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
@@ -33,7 +33,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     }
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         current = CameraTarget.fromCamera(camera);
         // Set initial FOV to target zoom level
         current = new CameraTarget(
@@ -46,14 +46,14 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) {
             return new MovementState(current, true);
         }
 
         // Get player position and rotation (follow player)
-        float playerYaw = client.player.getYaw();
-        float playerPitch = client.player.getPitch();
+        float playerYaw = client.player.getYRot();
+        float playerPitch = client.player.getXRot();
 
         // Target FOV depends on whether we're resetting
         float targetFov = resetting ? 1.0f : targetZoomFov;
@@ -79,7 +79,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
 
         // Update camera target with player rotation and new FOV
         current = new CameraTarget(
-            client.player.getEyePos(),
+            client.player.getEyePosition(),
             playerYaw,
             playerPitch,
             newFov
@@ -95,7 +95,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         if (!resetting) {
             resetting = true;
             current = CameraTarget.fromCamera(camera);
@@ -103,13 +103,13 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         // Not used for zoom - we use adjustFov instead
         // But required by ICameraMovement interface
     }
 
     @Override
-    public void adjustFov(boolean increase, MinecraftClient client) {
+    public void adjustFov(boolean increase, Minecraft client) {
         // Adjust zoom level via scroll wheel
         // increase=true means scroll up (zoom out), increase=false means scroll down (zoom in)
         float change = increase ? 0.1f : -0.1f;

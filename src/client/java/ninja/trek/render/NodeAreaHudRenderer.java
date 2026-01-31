@@ -1,13 +1,13 @@
 package ninja.trek.render;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.NodeManager.PlayerStateSnapshot;
 import ninja.trek.nodes.model.Area;
@@ -26,16 +26,16 @@ public class NodeAreaHudRenderer {
         HudRenderCallback.EVENT.register(NodeAreaHudRenderer::onHudRender);
     }
 
-    private static void onHudRender(DrawContext ctx, RenderTickCounter tickCounter) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null || client.player == null) return;
+    private static void onHudRender(GuiGraphics ctx, DeltaTracker tickCounter) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null || client.player == null) return;
 
         NodeManager nodeManager = NodeManager.get();
         if (nodeManager.getAreas().isEmpty()) return;
 
-        Vec3d playerPos = client.player.getEyePos();
-        TextRenderer textRenderer = client.textRenderer;
-        int screenHeight = client.getWindow().getScaledHeight();
+        Vec3 playerPos = client.player.getEyePosition();
+        Font textRenderer = client.font;
+        int screenHeight = client.getWindow().getGuiScaledHeight();
 
         // Collect active areas with their influences
         List<AreaInfluenceInfo> activeAreas = new ArrayList<>();
@@ -64,9 +64,9 @@ public class NodeAreaHudRenderer {
 
             int color = info.selected ? 0xFF66FFAA : 0xFF4CB3FF;
 
-            ctx.drawTextWithShadow(
+            ctx.drawString(
                 textRenderer,
-                Text.literal(text),
+                Component.literal(text),
                 MARGIN_LEFT,
                 y,
                 color
@@ -88,7 +88,7 @@ public class NodeAreaHudRenderer {
     }
 
     // Copied from NodeManager - calculates influence for an area
-    private static double calculateInfluence(Vec3d pos, Area area) {
+    private static double calculateInfluence(Vec3 pos, Area area) {
         if (area.shape == AreaShape.SPHERE) {
             return influenceForSphereArea(pos, area);
         } else {
@@ -96,8 +96,8 @@ public class NodeAreaHudRenderer {
         }
     }
 
-    private static double influenceForSphereArea(Vec3d pos, Area area) {
-        Vec3d d = pos.subtract(area.center);
+    private static double influenceForSphereArea(Vec3 pos, Area area) {
+        Vec3 d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             // Ellipsoids defined by insideRadii and outsideRadii
             double distAtInside = Math.sqrt(
@@ -112,7 +112,7 @@ public class NodeAreaHudRenderer {
             if (distAtInside <= 1.0) return 1.0;
             if (distAtOutside >= 1.0) return 0.0;
             double t = (distAtOutside - 1.0) / (distAtOutside - distAtInside);
-            return MathHelper.clamp(t, 0.0, 1.0);
+            return Mth.clamp(t, 0.0, 1.0);
         } else {
             double dist = pos.distanceTo(area.center);
             if (dist <= area.insideRadius) return 1.0;
@@ -121,8 +121,8 @@ public class NodeAreaHudRenderer {
         }
     }
 
-    private static double influenceForBoxArea(Vec3d pos, Area area) {
-        Vec3d d = pos.subtract(area.center);
+    private static double influenceForBoxArea(Vec3 pos, Area area) {
+        Vec3 d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
             if (ax <= area.insideRadii.x && ay <= area.insideRadii.y && az <= area.insideRadii.z) return 1.0;
@@ -135,7 +135,7 @@ public class NodeAreaHudRenderer {
             double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.insideRadii.y) / ry) : 1.0;
             double nz = rz > 1e-6 ? Math.max(0.0, (az - area.insideRadii.z) / rz) : 1.0;
             double t = 1.0 - Math.max(nx, Math.max(ny, nz));
-            return MathHelper.clamp(t, 0.0, 1.0);
+            return Mth.clamp(t, 0.0, 1.0);
         } else {
             double dist = cubeDistance(pos, area.center, area.outsideRadius);
             if (dist <= 0.0) return 1.0;
@@ -143,11 +143,11 @@ public class NodeAreaHudRenderer {
             if (inner <= 0.0) return 1.0;
             double denom = (inner);
             double t = 1.0 - Math.min(1.0, dist / Math.max(1e-6, denom));
-            return MathHelper.clamp(t, 0.0, 1.0);
+            return Mth.clamp(t, 0.0, 1.0);
         }
     }
 
-    private static double cubeDistance(Vec3d p, Vec3d c, double r) {
+    private static double cubeDistance(Vec3 p, Vec3 c, double r) {
         double dx = Math.max(Math.abs(p.x - c.x) - r, 0);
         double dy = Math.max(Math.abs(p.y - c.y) - r, 0);
         double dz = Math.max(Math.abs(p.z - c.z) - r, 0);

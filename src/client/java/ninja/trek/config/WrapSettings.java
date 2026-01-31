@@ -2,14 +2,13 @@ package ninja.trek.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.minecraft.client.MinecraftClient;
-
 import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 
 public class WrapSettings {
-    private static final File CONFIG_FILE = new File(MinecraftClient.getInstance().runDirectory, "config/craneshot_wrap.json");
+    private static final File CONFIG_FILE = new File(Minecraft.getInstance().gameDirectory, "config/craneshot_wrap.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static Map<Integer, Boolean> wrapStates = new HashMap<>();
 

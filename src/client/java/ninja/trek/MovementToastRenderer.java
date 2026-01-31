@@ -1,11 +1,11 @@
 package ninja.trek;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.text.Text;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.util.List;
 
@@ -30,13 +30,13 @@ public class MovementToastRenderer {
     }
 
     public static void register() {
-        HudRenderCallback.EVENT.register((DrawContext context, RenderTickCounter tickDelta) -> {
+        HudRenderCallback.EVENT.register((GuiGraphics context, DeltaTracker tickDelta) -> {
             // Early exit if we shouldn't render
             if (!shouldRender || startTime == null || currentToastSlot == null) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player == null) return;
 
             long currentTime = System.currentTimeMillis();
@@ -69,17 +69,17 @@ public class MovementToastRenderer {
             int selectedIndex = CraneshotClient.MOVEMENT_MANAGER.getCurrentTypeForSlot(currentToastSlot);
 
             // Calculate dimensions
-            TextRenderer textRenderer = client.textRenderer;
+            Font textRenderer = client.font;
             int maxWidth = 0;
             for (ICameraMovement movement : movements) {
-                maxWidth = Math.max(maxWidth, textRenderer.getWidth(movement.getName()));
+                maxWidth = Math.max(maxWidth, textRenderer.width(movement.getName()));
             }
 
             int totalHeight = movements.size() * LINE_HEIGHT;
             int width = maxWidth + (PADDING * 2);
 
             // Calculate position
-            int screenHeight = client.getWindow().getScaledHeight();
+            int screenHeight = client.getWindow().getGuiScaledHeight();
             int x = MARGIN_LEFT;
             int y = screenHeight - MARGIN_BOTTOM - totalHeight;
 
@@ -91,11 +91,11 @@ public class MovementToastRenderer {
                 int baseColor = (i == selectedIndex) ? WHITE_COLOR : GRAY_COLOR;
                 int color = applyOpacity(baseColor, opacity);
 
-                context.drawTextWithShadow(
+                context.drawString(
                         textRenderer,
-                        Text.literal(movement.getName()),
+                        Component.literal(movement.getName()),
                         x + PADDING,
-                        textY + (LINE_HEIGHT - textRenderer.fontHeight) / 2,
+                        textY + (LINE_HEIGHT - textRenderer.lineHeight) / 2,
                         color
                 );
             }

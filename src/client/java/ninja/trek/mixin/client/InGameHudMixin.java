@@ -1,9 +1,9 @@
 package ninja.trek.mixin.client;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.Identifier;
 import ninja.trek.Craneshot;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,37 +11,37 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-@Mixin(InGameHud.class)
+@Mixin(Gui.class)
 public class InGameHudMixin {
-    @Shadow @Final private static Identifier CROSSHAIR_TEXTURE;
-    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_FULL_TEXTURE;
-    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_BACKGROUND_TEXTURE;
-    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_PROGRESS_TEXTURE;
+    @Shadow @Final private static Identifier CROSSHAIR_SPRITE;
+    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_FULL_SPRITE;
+    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_BACKGROUND_SPRITE;
+    @Shadow @Final private static Identifier CROSSHAIR_ATTACK_INDICATOR_PROGRESS_SPRITE;
     private static boolean craneshot$loggedCrosshairRedirect;
 
     @Redirect(
-            method = "renderCrosshair(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V",
+            method = "renderCrosshair(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/DeltaTracker;)V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/DrawContext;drawGuiTexture(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/util/Identifier;IIII)V"
+                    target = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"
             )
     )
-    private void craneshot$maybeDrawCrosshairTexture(DrawContext context, RenderPipeline pipeline, Identifier texture, int x, int y, int width, int height) {
+    private void craneshot$maybeDrawCrosshairTexture(GuiGraphics context, RenderPipeline pipeline, Identifier texture, int x, int y, int width, int height) {
         if (craneshot$shouldDrawCrosshairTexture(texture)) {
-            context.drawGuiTexture(pipeline, texture, x, y, width, height);
+            context.blitSprite(pipeline, texture, x, y, width, height);
         }
     }
 
     @Redirect(
-            method = "renderCrosshair(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V",
+            method = "renderCrosshair(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/client/DeltaTracker;)V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/DrawContext;drawGuiTexture(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/util/Identifier;IIIIIIII)V"
+                    target = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIIIIII)V"
             )
     )
-    private void craneshot$maybeDrawCrosshairTexture(DrawContext context, RenderPipeline pipeline, Identifier texture, int u, int v, int width, int height, int x, int y, int regionWidth, int regionHeight) {
+    private void craneshot$maybeDrawCrosshairTexture(GuiGraphics context, RenderPipeline pipeline, Identifier texture, int u, int v, int width, int height, int x, int y, int regionWidth, int regionHeight) {
         if (craneshot$shouldDrawCrosshairTexture(texture)) {
-            context.drawGuiTexture(pipeline, texture, u, v, width, height, x, y, regionWidth, regionHeight);
+            context.blitSprite(pipeline, texture, u, v, width, height, x, y, regionWidth, regionHeight);
         }
     }
 
@@ -58,9 +58,9 @@ public class InGameHudMixin {
     }
 
     private static boolean craneshot$isVanillaCrosshairTexture(Identifier texture) {
-        return texture.equals(CROSSHAIR_TEXTURE)
-                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_FULL_TEXTURE)
-                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_BACKGROUND_TEXTURE)
-                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_PROGRESS_TEXTURE);
+        return texture.equals(CROSSHAIR_SPRITE)
+                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_FULL_SPRITE)
+                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_BACKGROUND_SPRITE)
+                || texture.equals(CROSSHAIR_ATTACK_INDICATOR_PROGRESS_SPRITE);
     }
 }

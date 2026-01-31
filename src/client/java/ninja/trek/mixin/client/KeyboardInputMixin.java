@@ -1,9 +1,9 @@
 package ninja.trek.mixin.client;
 
-import net.minecraft.client.input.Input;
-import net.minecraft.client.input.KeyboardInput;
-import net.minecraft.util.PlayerInput;
-import net.minecraft.util.math.Vec2f;
+import net.minecraft.client.player.ClientInput;
+import net.minecraft.client.player.KeyboardInput;
+import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.phys.Vec2;
 import ninja.trek.IKeyboardInputMixin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -11,22 +11,22 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(KeyboardInput.class)
-public abstract class KeyboardInputMixin extends Input implements IKeyboardInputMixin {
+public abstract class KeyboardInputMixin extends ClientInput implements IKeyboardInputMixin {
     private boolean disabled = false;
-    private PlayerInput savedInput;
-    private Vec2f savedMovementVector;
+    private Input savedInput;
+    private Vec2 savedMovementVector;
 
     @Override
     public void setDisabled(boolean disabled) {
         if (this.disabled != disabled) {
             if (disabled) {
                 // Store current state when disabling
-                this.savedInput = this.playerInput;
-                this.savedMovementVector = this.movementVector;
+                this.savedInput = this.keyPresses;
+                this.savedMovementVector = this.moveVector;
 
                 // Immediately clear all movement
-                this.playerInput = PlayerInput.DEFAULT;
-                this.movementVector = Vec2f.ZERO;
+                this.keyPresses = Input.EMPTY;
+                this.moveVector = Vec2.ZERO;
             }
             this.disabled = disabled;
         }
@@ -36,13 +36,13 @@ public abstract class KeyboardInputMixin extends Input implements IKeyboardInput
     private void onTick(CallbackInfo ci) {
         if (disabled) {
             // Force all movement values to zero
-            this.playerInput = PlayerInput.DEFAULT;
-            this.movementVector = Vec2f.ZERO;
+            this.keyPresses = Input.EMPTY;
+            this.moveVector = Vec2.ZERO;
             ci.cancel();
         } else if (savedInput != null) {
             // Restore saved state when not disabled
-            this.playerInput = this.savedInput;
-            this.movementVector = this.savedMovementVector;
+            this.keyPresses = this.savedInput;
+            this.moveVector = this.savedMovementVector;
         }
     }
 }

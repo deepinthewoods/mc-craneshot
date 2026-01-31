@@ -1,9 +1,5 @@
 package ninja.trek;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.client.render.Camera;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.cameramovements.*;
 import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
@@ -16,6 +12,10 @@ import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
 
 import java.util.*;
+import net.minecraft.client.Camera;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 
 public class CameraMovementManager {
     public static final int SLOT_COUNT = 6;
@@ -127,7 +127,7 @@ public class CameraMovementManager {
         return slots.size();
     }
 
-    public void cancelAllMovements(MinecraftClient client, Camera camera) {
+    public void cancelAllMovements(Minecraft client, Camera camera) {
         activeMovement = null;
         activeMovementSlot = null;
         inFreeCamReturnPhase = false;
@@ -163,19 +163,19 @@ public class CameraMovementManager {
      * Snaps the camera to the player if it's very far away.
      * Prevents long camera travel when starting movements after teleports/portals.
      */
-    private void snapCameraIfFarFromPlayer(MinecraftClient client, Camera camera) {
+    private void snapCameraIfFarFromPlayer(Minecraft client, Camera camera) {
         if (client == null || client.player == null) return;
 
-        Vec3d playerPos = client.player.getEyePos();
-        float playerYaw = client.player.getYaw();
-        float playerPitch = client.player.getPitch();
+        Vec3 playerPos = client.player.getEyePosition();
+        float playerYaw = client.player.getYRot();
+        float playerPitch = client.player.getXRot();
 
         CameraSystem cameraSystem = CameraSystem.getInstance();
-        Vec3d cameraPos = null;
+        Vec3 cameraPos = null;
         if (cameraSystem.isCameraActive()) {
             cameraPos = cameraSystem.getCameraPosition();
         } else if (camera != null) {
-            cameraPos = camera.getPos();
+            cameraPos = camera.position();
         }
 
         if (cameraPos == null) return;
@@ -257,7 +257,7 @@ public class CameraMovementManager {
         return keyPressStartTimes.containsKey(slotIndex);
     }
 
-    public void startTransition(MinecraftClient client, Camera camera, int slotIndex) {
+    public void startTransition(Minecraft client, Camera camera, int slotIndex) {
         ICameraMovement movement = getMovementAt(slotIndex);
         if (movement == null) return;
 
@@ -300,7 +300,7 @@ public class CameraMovementManager {
         MovementToastRenderer.showToast(slotIndex);
     }
 
-    public void startFollowMovement(MinecraftClient client, Camera camera) {
+    public void startFollowMovement(Minecraft client, Camera camera) {
         FollowMovement follow = GeneralMenuSettings.getFollowMovement();
         if (follow == null) return;
         if (activeMovement == follow) {
@@ -333,7 +333,7 @@ public class CameraMovementManager {
         }
     }
 
-    private boolean resumeOutPhaseIfReturning(MinecraftClient client, Camera camera) {
+    private boolean resumeOutPhaseIfReturning(Minecraft client, Camera camera) {
         if (activeMovement instanceof LinearMovement linear && linear.isResetting()) {
             linear.resumeOutPhase(client, camera);
             isOut = false;
@@ -347,14 +347,14 @@ public class CameraMovementManager {
         return false;
     }
 
-    public void stopFollowMovement(MinecraftClient client, Camera camera) {
+    public void stopFollowMovement(Minecraft client, Camera camera) {
         FollowMovement follow = GeneralMenuSettings.getFollowMovement();
         if (follow == null) return;
         if (activeMovement != follow) return;
         activeMovement.queueReset(client, camera);
     }
 
-    public void startZoomMovement(MinecraftClient client, Camera camera) {
+    public void startZoomMovement(Minecraft client, Camera camera) {
         ninja.trek.cameramovements.movements.ZoomMovement zoom = GeneralMenuSettings.getZoomMovement();
         if (zoom == null) return;
         if (isZoomActive) return;
@@ -365,12 +365,12 @@ public class CameraMovementManager {
         zoom.start(client, camera);
     }
 
-    public void stopZoomMovement(MinecraftClient client, Camera camera) {
+    public void stopZoomMovement(Minecraft client, Camera camera) {
         if (!isZoomActive || zoomOverlay == null) return;
         zoomOverlay.queueReset(client, camera);
     }
 
-    public void finishTransition(MinecraftClient client, Camera camera) {
+    public void finishTransition(Minecraft client, Camera camera) {
         if (activeMovement != null) {
             // Check if we're in free camera mode before initiating return
             boolean inFreeCameraMode = 
@@ -392,9 +392,9 @@ public class CameraMovementManager {
                     // it holds the actual position, not CameraSystem
                     ninja.trek.util.CameraEntity camEnt = ninja.trek.util.CameraEntity.getCamera();
                     if (camEnt != null) {
-                        ninja.trek.CameraController.freeCamPosition = new Vec3d(camEnt.getX(), camEnt.getY(), camEnt.getZ());
-                        ninja.trek.CameraController.freeCamYaw = camEnt.getYaw();
-                        ninja.trek.CameraController.freeCamPitch = camEnt.getPitch();
+                        ninja.trek.CameraController.freeCamPosition = new Vec3(camEnt.getX(), camEnt.getY(), camEnt.getZ());
+                        ninja.trek.CameraController.freeCamYaw = camEnt.getYRot();
+                        ninja.trek.CameraController.freeCamPitch = camEnt.getXRot();
                     } else {
                         ninja.trek.camera.CameraSystem camSys = ninja.trek.camera.CameraSystem.getInstance();
                         if (camSys.isCameraActive()) {
@@ -402,9 +402,9 @@ public class CameraMovementManager {
                             ninja.trek.CameraController.freeCamYaw = camSys.getCameraYaw();
                             ninja.trek.CameraController.freeCamPitch = camSys.getCameraPitch();
                         } else if (camera != null) {
-                            ninja.trek.CameraController.freeCamPosition = camera.getPos();
-                            ninja.trek.CameraController.freeCamYaw = camera.getYaw();
-                            ninja.trek.CameraController.freeCamPitch = camera.getPitch();
+                            ninja.trek.CameraController.freeCamPosition = camera.position();
+                            ninja.trek.CameraController.freeCamYaw = camera.yRot();
+                            ninja.trek.CameraController.freeCamPitch = camera.xRot();
                         }
                     }
                 } catch (Throwable ignore) { }
@@ -442,7 +442,7 @@ public class CameraMovementManager {
 
             // For movements that use queueReset(), capture current freecam pose first,
             // then deactivate so subsequent frames apply movement transforms smoothly
-            Vec3d prevBase = baseTarget != null ? baseTarget.getPosition() : null;
+            Vec3 prevBase = baseTarget != null ? baseTarget.getPosition() : null;
             activeMovement.queueReset(client, camera);
 
             // Fully deactivate camera system after seeding queueReset() from the freecam entity
@@ -455,7 +455,7 @@ public class CameraMovementManager {
         }
     }
 
-    public void handleKeyStateChange(int keyIndex, boolean pressed, MinecraftClient client, Camera camera, boolean isToggleMode) {
+    public void handleKeyStateChange(int keyIndex, boolean pressed, Minecraft client, Camera camera, boolean isToggleMode) {
         if (pressed) {
             // Key press logic
             keyPressStartTimes.put(keyIndex, System.currentTimeMillis());
@@ -511,7 +511,7 @@ public class CameraMovementManager {
         }
     }
 
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) {
             return null;
         }
@@ -564,9 +564,9 @@ public class CameraMovementManager {
                     cameraSystem.deactivateCamera();
 
                     // Explicitly reset controller state
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePos();
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYaw();
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getPitch();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePosition();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYRot();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getXRot();
                     CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                     ninja.trek.MouseInterceptor.setIntercepting(false);
                     CraneshotClient.CAMERA_CONTROLLER.onComplete();
@@ -669,7 +669,7 @@ public class CameraMovementManager {
         return state;
     }
 
-    public CameraTarget update(MinecraftClient client, Camera camera, float deltaSeconds) {
+    public CameraTarget update(Minecraft client, Camera camera, float deltaSeconds) {
         // If no active movement and allowed, start default idle movement (Linear)
         if ((activeMovement == null) && client.player != null) {
             if (ninja.trek.config.GeneralMenuSettings.isUseDefaultIdleMovement()) {
@@ -734,14 +734,14 @@ public class CameraMovementManager {
             // Currently in third-person - only switch to first-person if we get close enough
             if (dist < DISTANCE_SWITCH_TO_FIRST_PERSON) {
                 isCurrentlyThirdPerson = false;
-                client.options.setPerspective(Perspective.FIRST_PERSON);
+                client.options.setCameraType(CameraType.FIRST_PERSON);
             }
             // else: stay in third-person
         } else {
             // Currently in first-person - only switch to third-person if we get far enough
             if (dist >= DISTANCE_SWITCH_TO_THIRD_PERSON) {
                 isCurrentlyThirdPerson = true;
-                client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+                client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             }
             // else: stay in first-person
         }
@@ -819,7 +819,7 @@ public class CameraMovementManager {
      * Starts a follower movement that runs permanently (for secondary/follower instances).
      * The movement auto-restarts on completion, creating a continuous loop.
      */
-    public void startFollowerMovement(ICameraMovement movement, MinecraftClient client, Camera camera) {
+    public void startFollowerMovement(ICameraMovement movement, Minecraft client, Camera camera) {
         if (movement == null) return;
 
         // Cancel any existing movement
@@ -851,7 +851,7 @@ public class CameraMovementManager {
      * Checks if the active follower movement has completed and restarts it.
      * Called from the tick handler for follower instances.
      */
-    public void restartFollowerMovementIfComplete(ICameraMovement followerMovement, MinecraftClient client, Camera camera) {
+    public void restartFollowerMovementIfComplete(ICameraMovement followerMovement, Minecraft client, Camera camera) {
         // If our follower movement completed (activeMovement went null), restart it
         if (activeMovement == null && followerMovement != null) {
             startFollowerMovement(followerMovement, client, camera);
@@ -870,12 +870,12 @@ public class CameraMovementManager {
         return AbstractMovementSettings.SCROLL_WHEEL.NONE;
     }
 
-    public void syncPerspectiveState(Perspective perspective) {
+    public void syncPerspectiveState(CameraType perspective) {
         if (perspective == null) {
             isCurrentlyThirdPerson = false;
             return;
         }
-        isCurrentlyThirdPerson = perspective != Perspective.FIRST_PERSON;
+        isCurrentlyThirdPerson = perspective != CameraType.FIRST_PERSON;
     }
 
     /**

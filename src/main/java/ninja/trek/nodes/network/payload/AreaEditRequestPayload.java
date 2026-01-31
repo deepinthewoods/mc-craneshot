@@ -1,60 +1,60 @@
 package ninja.trek.nodes.network.payload;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 
 import java.util.UUID;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
 
 public record AreaEditRequestPayload(
         EditOperation operation,
-        RegistryKey<World> dimension,
+        ResourceKey<Level> dimension,
         AreaInstanceDTO areaData,
         UUID areaIdForDelete
-) implements CustomPayload {
-    public static final Id<AreaEditRequestPayload> ID = new Id<>(Identifier.of(Craneshot.MOD_ID, "area_edit_request"));
+) implements CustomPacketPayload {
+    public static final Type<AreaEditRequestPayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "area_edit_request"));
 
-    public static final PacketCodec<RegistryByteBuf, AreaEditRequestPayload> CODEC = PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, AreaEditRequestPayload> CODEC = StreamCodec.ofMember(
             AreaEditRequestPayload::write,
             AreaEditRequestPayload::read
     );
 
-    private AreaEditRequestPayload(RegistryByteBuf buf) {
+    private AreaEditRequestPayload(RegistryFriendlyByteBuf buf) {
         this(
-                buf.readEnumConstant(EditOperation.class),
-                RegistryKey.of(RegistryKeys.WORLD, buf.readIdentifier()),
+                buf.readEnum(EditOperation.class),
+                ResourceKey.create(Registries.DIMENSION, buf.readIdentifier()),
                 readAreaData(buf),
                 readAreaId(buf)
         );
     }
 
-    private static AreaInstanceDTO readAreaData(RegistryByteBuf buf) {
+    private static AreaInstanceDTO readAreaData(RegistryFriendlyByteBuf buf) {
         if (buf.readBoolean()) {
             return AreaInstanceDTO.read(buf);
         }
         return null;
     }
 
-    private static UUID readAreaId(RegistryByteBuf buf) {
+    private static UUID readAreaId(RegistryFriendlyByteBuf buf) {
         if (buf.readBoolean()) {
-            return buf.readUuid();
+            return buf.readUUID();
         }
         return null;
     }
 
-    private static AreaEditRequestPayload read(RegistryByteBuf buf) {
+    private static AreaEditRequestPayload read(RegistryFriendlyByteBuf buf) {
         return new AreaEditRequestPayload(buf);
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeEnumConstant(operation);
-        buf.writeIdentifier(dimension.getValue());
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeEnum(operation);
+        buf.writeIdentifier(dimension.identifier());
         boolean hasAreaData = areaData != null;
         buf.writeBoolean(hasAreaData);
         if (hasAreaData) {
@@ -63,12 +63,12 @@ public record AreaEditRequestPayload(
         boolean hasAreaId = areaIdForDelete != null;
         buf.writeBoolean(hasAreaId);
         if (hasAreaId) {
-            buf.writeUuid(areaIdForDelete);
+            buf.writeUUID(areaIdForDelete);
         }
     }
 
     @Override
-    public Id<AreaEditRequestPayload> getId() {
+    public Type<AreaEditRequestPayload> type() {
         return ID;
     }
 
@@ -76,15 +76,15 @@ public record AreaEditRequestPayload(
         CREATE, UPDATE, DELETE
     }
 
-    public static AreaEditRequestPayload create(RegistryKey<World> dimension, AreaInstanceDTO area) {
+    public static AreaEditRequestPayload create(ResourceKey<Level> dimension, AreaInstanceDTO area) {
         return new AreaEditRequestPayload(EditOperation.CREATE, dimension, area, null);
     }
 
-    public static AreaEditRequestPayload update(RegistryKey<World> dimension, AreaInstanceDTO area) {
+    public static AreaEditRequestPayload update(ResourceKey<Level> dimension, AreaInstanceDTO area) {
         return new AreaEditRequestPayload(EditOperation.UPDATE, dimension, area, null);
     }
 
-    public static AreaEditRequestPayload delete(RegistryKey<World> dimension, UUID areaId) {
+    public static AreaEditRequestPayload delete(ResourceKey<Level> dimension, UUID areaId) {
         return new AreaEditRequestPayload(EditOperation.DELETE, dimension, null, areaId);
     }
 }

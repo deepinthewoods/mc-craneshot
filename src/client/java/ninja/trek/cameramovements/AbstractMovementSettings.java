@@ -1,6 +1,4 @@
 package ninja.trek.cameramovements;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
 import ninja.trek.config.GeneralMenuSettings;
@@ -10,6 +8,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 
 public abstract class AbstractMovementSettings {
     private String customName = null;
@@ -142,11 +142,11 @@ public abstract class AbstractMovementSettings {
     @MovementSetting(label = "FOV Multiplier", min = 0.1, max = 3.0)
     public float fovMultiplier = 1.0f;
 
-    public void adjustFov(boolean increase, MinecraftClient client){
+    public void adjustFov(boolean increase, Minecraft client){
         // Change target multiplier by 20% each scroll
         float change = increase ? 0.2f : -0.2f;
         float newMultiplier = fovMultiplier + change;
-        float basefov = client.options.getFov().getValue();
+        float basefov = client.options.fov().get();
 
         // Calculate the new FOV
         float newFov = basefov * newMultiplier;
@@ -174,7 +174,7 @@ public abstract class AbstractMovementSettings {
         return headLockedToCamera;
     }
 
-    protected Vec3d lastReturnTargetPos = null;
+    protected Vec3 lastReturnTargetPos = null;
 
     protected void resetReturnTargetTracking() {
         lastReturnTargetPos = null;
@@ -294,13 +294,13 @@ public abstract class AbstractMovementSettings {
         }
     }
 
-    protected Vec3d applyMinimumSpeedDuringReturn(
-            Vec3d currentPos,
-            Vec3d desiredPos,
-            Vec3d targetPos,
+    protected Vec3 applyMinimumSpeedDuringReturn(
+            Vec3 currentPos,
+            Vec3 desiredPos,
+            Vec3 targetPos,
             float deltaSeconds,
-            MinecraftClient client) {
-        Vec3d toTarget = targetPos.subtract(currentPos);
+            Minecraft client) {
+        Vec3 toTarget = targetPos.subtract(currentPos);
         double distToTarget = toTarget.length();
 
         // If we're extremely close, just snap to target
@@ -322,8 +322,8 @@ public abstract class AbstractMovementSettings {
         }
 
         // Use only HORIZONTAL velocity to avoid overly aggressive minimum speeds when falling
-        Vec3d playerVel = client.player.getVelocity();
-        double playerSpeedPerSecond = new Vec3d(playerVel.x, 0, playerVel.z).length() * 20.0;
+        Vec3 playerVel = client.player.getDeltaMovement();
+        double playerSpeedPerSecond = new Vec3(playerVel.x, 0, playerVel.z).length() * 20.0;
         double baseSpeedPerSecond = Math.max(playerSpeedPerSecond, targetSpeedPerSecond);
         if (baseSpeedPerSecond < 0.001) {
             return desiredPos;
@@ -343,6 +343,6 @@ public abstract class AbstractMovementSettings {
         }
 
         // Apply minimum speed movement toward target
-        return currentPos.add(toTarget.normalize().multiply(minMoveDistance));
+        return currentPos.add(toTarget.normalize().scale(minMoveDistance));
     }
 }

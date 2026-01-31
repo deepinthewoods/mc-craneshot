@@ -1,17 +1,17 @@
 package ninja.trek.config;
 
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.network.chat.Component;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 
-class SettingSlider extends SliderWidget {
+class SettingSlider extends AbstractSliderButton {
     private final double min;
     private final double max;
     private final String fieldName;
     private final AbstractMovementSettings settings;
-    private final Text label;
+    private final Component label;
 
-    public SettingSlider(int x, int y, int width, int height, Text label,
+    public SettingSlider(int x, int y, int width, int height, Component label,
                          double min, double max, double value, String fieldName, AbstractMovementSettings settings) {
         super(x, y, width, height, label, (value - min) / (max - min));
         this.min = min;
@@ -24,7 +24,7 @@ class SettingSlider extends SliderWidget {
 
     @Override
     protected void updateMessage() {
-        setMessage(Text.literal(String.format("%.2f", getValue())));
+        setMessage(Component.literal(String.format("%.2f", getValue())));
     }
 
     @Override
@@ -33,7 +33,7 @@ class SettingSlider extends SliderWidget {
         settings.updateSetting(fieldName, value);
     }
 
-    public Text getLabel() {
+    public Component getLabel() {
         return label;
     }
 

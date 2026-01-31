@@ -1,16 +1,5 @@
 package ninja.trek.nodes.ui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.camera.CameraSystem;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.CameraNode;
@@ -18,6 +7,16 @@ import ninja.trek.nodes.model.AreaInstance;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.Vec3;
 
 public class NodeEditorScreen extends Screen {
     private double lastMouseX, lastMouseY;
@@ -29,18 +28,18 @@ public class NodeEditorScreen extends Screen {
     private static final double CLICK_MOVEMENT_THRESHOLD_PX = 5.0;
     private static final double AREA_CENTER_STEP = 1.0;
 
-    private ButtonWidget areaXButton;
-    private ButtonWidget areaYButton;
-    private ButtonWidget areaZButton;
+    private Button areaXButton;
+    private Button areaYButton;
+    private Button areaZButton;
 
     private enum AreaAxis { X, Y, Z }
 
     public NodeEditorScreen() {
-        super(Text.literal("Node Edit"));
+        super(Component.literal("Node Edit"));
     }
 
     @Override protected void init() {
-        this.clearChildren();
+        this.clearWidgets();
         areaXButton = null;
         areaYButton = null;
         areaZButton = null;
@@ -49,31 +48,31 @@ public class NodeEditorScreen extends Screen {
         int w = 110, h = 20, sp=4;
 
         // Initialize edit rotation to current camera orientation
-        net.minecraft.client.render.Camera cam0 = MinecraftClient.getInstance().gameRenderer.getCamera();
+        net.minecraft.client.Camera cam0 = Minecraft.getInstance().gameRenderer.getMainCamera();
         if (cam0 != null) {
-            ninja.trek.nodes.NodeManager.get().setEditRotation(cam0.getYaw(), cam0.getPitch());
+            ninja.trek.nodes.NodeManager.get().setEditRotation(cam0.yRot(), cam0.xRot());
         }
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Color"), b-> {
-            client.setScreen(new ColorPickerModal(col -> {
+        addRenderableWidget(Button.builder(Component.literal("Color"), b-> {
+            minecraft.setScreen(new ColorPickerModal(col -> {
                 CameraNode sel = NodeManager.get().getSelected();
                 if (sel != null) { sel.colorARGB = col; NodeManager.get().save(); }
             }));
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
         // Node edit utility buttons
-        addDrawableChild(ButtonWidget.builder(Text.literal("Rename"), b-> {
+        addRenderableWidget(Button.builder(Component.literal("Rename"), b-> {
             CameraNode sel = NodeManager.get().getSelected();
             if (sel != null) {
-                client.setScreen(new ninja.trek.nodes.ui.NodeRenameModal(sel.name, newName -> {
+                minecraft.setScreen(new ninja.trek.nodes.ui.NodeRenameModal(sel.name, newName -> {
                     sel.name = newName;
                     NodeManager.get().save();
-                    client.setScreen(this);
+                    minecraft.setScreen(this);
                 }));
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Duplicate"), b-> {
+        addRenderableWidget(Button.builder(Component.literal("Duplicate"), b-> {
             CameraNode sel = NodeManager.get().getSelected();
             if (sel != null) {
                 CameraNode n = new CameraNode();
@@ -97,158 +96,158 @@ public class NodeEditorScreen extends Screen {
                     added.timelapseFovMultiplier = sel.timelapseFovMultiplier;
                     NodeManager.get().save();
                 }
-                this.init(client, this.width, this.height);
+                this.init(this.width, this.height);
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
         
 
         // Export/Import node sets
-        addDrawableChild(ButtonWidget.builder(Text.literal("Export"), b-> {
+        addRenderableWidget(Button.builder(Component.literal("Export"), b-> {
             boolean ok = ninja.trek.nodes.io.NodeStorage.exportData(
                     new java.util.ArrayList<>(NodeManager.get().getNodes()),
                     new java.util.ArrayList<>(NodeManager.get().getAreas()));
             if (!ok) {
                 // no toast; silent
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Import"), b-> {
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
+        addRenderableWidget(Button.builder(Component.literal("Import"), b-> {
             ninja.trek.nodes.io.NodeStorage.Payload payload = ninja.trek.nodes.io.NodeStorage.importData();
             if (!payload.nodes.isEmpty() || !payload.areas.isEmpty()) {
                 NodeManager.get().replaceAll(payload.nodes, payload.areas);
-                this.init(client, this.width, this.height);
+                this.init(this.width, this.height);
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Add Node"), b-> {
-            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+        addRenderableWidget(Button.builder(Component.literal("Add Node"), b-> {
+            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
             if (cam != null) {
-                CameraNode n = NodeManager.get().addNode(cam.getPos());
+                CameraNode n = NodeManager.get().addNode(cam.position());
                 NodeManager.get().setSelected(n.id);
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Add Timelapse"), b-> {
-            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+        addRenderableWidget(Button.builder(Component.literal("Add Timelapse"), b-> {
+            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
             if (cam != null) {
                 float fovMul = 1.0f;
                 try {
-                    fovMul = ((ninja.trek.mixin.client.FovAccessor) MinecraftClient.getInstance().gameRenderer).getFovModifier();
+                    fovMul = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer).getFovModifier();
                     if (fovMul == 0) fovMul = 1.0f;
                 } catch (Throwable ignored) {}
-                CameraNode n = NodeManager.get().addTimelapseNode(cam.getPos(), cam.getYaw(), cam.getPitch(), fovMul);
+                CameraNode n = NodeManager.get().addTimelapseNode(cam.position(), cam.yRot(), cam.xRot(), fovMul);
                 NodeManager.get().setSelected(n.id);
-                this.init(client, this.width, this.height);
+                this.init(this.width, this.height);
             }
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Delete Node"), b-> NodeManager.get().removeSelected())
-                .dimensions(rightX,y,w,h).build()); y+=h+sp;
+        addRenderableWidget(Button.builder(Component.literal("Delete Node"), b-> NodeManager.get().removeSelected())
+                .bounds(rightX,y,w,h).build()); y+=h+sp;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Add Area"), b-> {
-            Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
-            Vec3d pos = cam != null ? cam.getPos() : Vec3d.ZERO;
+        addRenderableWidget(Button.builder(Component.literal("Add Area"), b-> {
+            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+            Vec3 pos = cam != null ? cam.position() : Vec3.ZERO;
             var area = NodeManager.get().addArea(pos);
             NodeManager.get().setSelectedArea(area.id);
-            this.init(client, this.width, this.height);
-        }).dimensions(rightX,y,w,h).build()); y+=h+sp;
+            this.init(this.width, this.height);
+        }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
 
         // Node type and DroneShot controls for selected node
         CameraNode selType = NodeManager.get().getSelected();
         if (selType != null) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("Type: "+selType.type), b-> {
+            addRenderableWidget(Button.builder(Component.literal("Type: "+selType.type), b-> {
                 ninja.trek.nodes.model.NodeType[] types = ninja.trek.nodes.model.NodeType.values();
                 int idx = selType.type.ordinal();
                 selType.type = types[(idx + 1) % types.length];
                 NodeManager.get().save();
-                this.init(client, this.width, this.height);
-            }).dimensions(rightX, y, w, h).build());
+                this.init(this.width, this.height);
+            }).bounds(rightX, y, w, h).build());
             y += h + sp;
 
             if (selType.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
                 // Update Camera button: re-capture current camera state into this timelapse node
-                addDrawableChild(ButtonWidget.builder(Text.literal("Update Camera"), b-> {
-                    Camera cam2 = MinecraftClient.getInstance().gameRenderer.getCamera();
+                addRenderableWidget(Button.builder(Component.literal("Update Camera"), b-> {
+                    Camera cam2 = Minecraft.getInstance().gameRenderer.getMainCamera();
                     if (cam2 != null) {
-                        selType.position = cam2.getPos();
-                        selType.timelapseYaw = cam2.getYaw();
-                        selType.timelapsePitch = cam2.getPitch();
+                        selType.position = cam2.position();
+                        selType.timelapseYaw = cam2.yRot();
+                        selType.timelapsePitch = cam2.xRot();
                         try {
-                            float fov = ((ninja.trek.mixin.client.FovAccessor) MinecraftClient.getInstance().gameRenderer).getFovModifier();
+                            float fov = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer).getFovModifier();
                             if (fov != 0) selType.timelapseFovMultiplier = fov;
                         } catch (Throwable ignored) {}
                         NodeManager.get().save();
-                        this.init(client, this.width, this.height);
+                        this.init(this.width, this.height);
                     }
-                }).dimensions(rightX, y, w, h).build());
+                }).bounds(rightX, y, w, h).build());
                 y += h + sp;
 
                 // Yaw +/- controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("Yaw -"), b-> {
+                addRenderableWidget(Button.builder(Component.literal("Yaw -"), b-> {
                     selType.timelapseYaw -= 5f;
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, (w/2)-2, h).build());
+                addRenderableWidget(Button.builder(Component.literal("+"), b-> {
                     selType.timelapseYaw += 5f;
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                    this.init(this.width, this.height);
+                }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
 
                 // Pitch +/- controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("Pitch -"), b-> {
+                addRenderableWidget(Button.builder(Component.literal("Pitch -"), b-> {
                     selType.timelapsePitch = Math.max(-90f, selType.timelapsePitch - 5f);
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, (w/2)-2, h).build());
+                addRenderableWidget(Button.builder(Component.literal("+"), b-> {
                     selType.timelapsePitch = Math.min(90f, selType.timelapsePitch + 5f);
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                    this.init(this.width, this.height);
+                }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
 
                 // FOV +/- controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("FOV -"), b-> {
+                addRenderableWidget(Button.builder(Component.literal("FOV -"), b-> {
                     selType.timelapseFovMultiplier = Math.max(0.1f, selType.timelapseFovMultiplier - 0.1f);
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, (w/2)-2, h).build());
+                addRenderableWidget(Button.builder(Component.literal("+"), b-> {
                     selType.timelapseFovMultiplier += 0.1f;
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                    this.init(this.width, this.height);
+                }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
             }
 
             if (selType.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
                 // Radius controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("Radius -"), b-> {
+                addRenderableWidget(Button.builder(Component.literal("Radius -"), b-> {
                     selType.droneRadius = Math.max(0.5, selType.droneRadius - 0.5);
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, (w/2)-2, h).build());
+                addRenderableWidget(Button.builder(Component.literal("+"), b-> {
                     selType.droneRadius = selType.droneRadius + 0.5;
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                    this.init(this.width, this.height);
+                }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
 
                 // Speed controls
-                addDrawableChild(ButtonWidget.builder(Text.literal("Speed -"), b-> {
+                addRenderableWidget(Button.builder(Component.literal("Speed -"), b-> {
                     selType.droneSpeedDegPerSec = Math.max(0.0, selType.droneSpeedDegPerSec - 5.0);
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX, y, (w/2)-2, h).build());
-                addDrawableChild(ButtonWidget.builder(Text.literal("+"), b-> {
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, (w/2)-2, h).build());
+                addRenderableWidget(Button.builder(Component.literal("+"), b-> {
                     selType.droneSpeedDegPerSec = selType.droneSpeedDegPerSec + 5.0;
                     NodeManager.get().save();
-                    this.init(client, this.width, this.height);
-                }).dimensions(rightX + (w/2) + 2, y, (w/2)-2, h).build());
+                    this.init(this.width, this.height);
+                }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
             }
         }
@@ -262,23 +261,23 @@ public class NodeEditorScreen extends Screen {
             String displayName = (area.name != null && !area.name.isBlank()) ? area.name : "Area " + areaIdx;
             if (isSelected) displayName = "* " + displayName;
 
-            addDrawableChild(ButtonWidget.builder(Text.literal(displayName), b -> {
+            addRenderableWidget(Button.builder(Component.literal(displayName), b -> {
                 NodeManager.get().setSelectedArea(area.id);
-                client.setScreen(new AreaSettingsModal(area, updated -> {
+                minecraft.setScreen(new AreaSettingsModal(area, updated -> {
                     NodeManager.get().save();
-                    client.setScreen(this);
+                    minecraft.setScreen(this);
                 }));
-            }).dimensions(areaListX, areaListY, 140, 18).build());
+            }).bounds(areaListX, areaListY, 140, 18).build());
 
-            addDrawableChild(ButtonWidget.builder(Text.literal("Sel"), b -> {
+            addRenderableWidget(Button.builder(Component.literal("Sel"), b -> {
                 NodeManager.get().setSelectedArea(area.id);
-                this.init(client, this.width, this.height);
-            }).dimensions(areaListX + 145, areaListY, 32, 18).build());
+                this.init(this.width, this.height);
+            }).bounds(areaListX + 145, areaListY, 32, 18).build());
 
-            addDrawableChild(ButtonWidget.builder(Text.literal("-"), b -> {
+            addRenderableWidget(Button.builder(Component.literal("-"), b -> {
                 NodeManager.get().removeArea(area.id);
-                this.init(client, this.width, this.height);
-            }).dimensions(areaListX + 182, areaListY, 18, 18).build());
+                this.init(this.width, this.height);
+            }).bounds(areaListX + 182, areaListY, 18, 18).build());
 
             areaListY += 22;
             areaIdx++;
@@ -290,29 +289,29 @@ public class NodeEditorScreen extends Screen {
             int coordHeight = 18;
             int coordSpacing = 4;
             int coordY = areaListY + 8;
-            Vec3d center = selectedArea.center != null ? selectedArea.center : Vec3d.ZERO;
-            areaXButton = ButtonWidget.builder(areaAxisText("X", center.x), b -> {
+            Vec3 center = selectedArea.center != null ? selectedArea.center : Vec3.ZERO;
+            areaXButton = Button.builder(areaAxisText("X", center.x), b -> {
                 adjustSelectedAreaCenter(AreaAxis.X, AREA_CENTER_STEP);
-            }).dimensions(areaListX, coordY, coordWidth, coordHeight).build();
-            areaXButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaXButton);
+            }).bounds(areaListX, coordY, coordWidth, coordHeight).build();
+            areaXButton.setTooltip(Tooltip.create(Component.literal("Left click +1, Right click -1")));
+            addRenderableWidget(areaXButton);
 
-            areaYButton = ButtonWidget.builder(areaAxisText("Y", center.y), b -> {
+            areaYButton = Button.builder(areaAxisText("Y", center.y), b -> {
                 adjustSelectedAreaCenter(AreaAxis.Y, AREA_CENTER_STEP);
-            }).dimensions(areaListX + coordWidth + coordSpacing, coordY, coordWidth, coordHeight).build();
-            areaYButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaYButton);
+            }).bounds(areaListX + coordWidth + coordSpacing, coordY, coordWidth, coordHeight).build();
+            areaYButton.setTooltip(Tooltip.create(Component.literal("Left click +1, Right click -1")));
+            addRenderableWidget(areaYButton);
 
-            areaZButton = ButtonWidget.builder(areaAxisText("Z", center.z), b -> {
+            areaZButton = Button.builder(areaAxisText("Z", center.z), b -> {
                 adjustSelectedAreaCenter(AreaAxis.Z, AREA_CENTER_STEP);
-            }).dimensions(areaListX + (coordWidth + coordSpacing) * 2, coordY, coordWidth, coordHeight).build();
-            areaZButton.setTooltip(Tooltip.of(Text.literal("Left click +1, Right click -1")));
-            addDrawableChild(areaZButton);
+            }).bounds(areaListX + (coordWidth + coordSpacing) * 2, coordY, coordWidth, coordHeight).build();
+            areaZButton.setTooltip(Tooltip.create(Component.literal("Left click +1, Right click -1")));
+            addRenderableWidget(areaZButton);
         }
         updateAreaCoordButtons();
     }
 
-    @Override public boolean shouldPause() { return false; }
+    @Override public boolean isPauseScreen() { return false; }
 
     @Override
     public void tick() {
@@ -320,10 +319,10 @@ public class NodeEditorScreen extends Screen {
         // Key forwarding is handled in keyPressed/keyReleased; no per-tick polling here.
     }
 
-    @Override public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    @Override public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         // Render only our widgets; skip Screen default background/separators entirely
-        for (net.minecraft.client.gui.Element e : this.children()) {
-            if (e instanceof net.minecraft.client.gui.Drawable d) {
+        for (net.minecraft.client.gui.components.events.GuiEventListener e : this.children()) {
+            if (e instanceof net.minecraft.client.gui.components.Renderable d) {
                 d.render(context, mouseX, mouseY, delta);
             }
         }
@@ -333,66 +332,66 @@ public class NodeEditorScreen extends Screen {
         int y = 10;
         CameraNode selNode = NodeManager.get().getSelected();
         if (selNode != null) {
-            context.drawText(textRenderer, Text.literal("Node: "+selNode.name), rightX, y, 0xFFFFFF, true); y+=12;
-            context.drawText(textRenderer, Text.literal("Type: "+selNode.type), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawString(font, Component.literal("Node: "+selNode.name), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawString(font, Component.literal("Type: "+selNode.type), rightX, y, 0xFFFFFF, true); y+=12;
             if (selNode.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
-                context.drawText(textRenderer, Text.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
             }
             if (selNode.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
-                context.drawText(textRenderer, Text.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
             }
         } else {
-            context.drawText(textRenderer, Text.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;
+            context.drawString(font, Component.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;
         }
 
         y += 6;
 
         AreaInstance selArea = NodeManager.get().getSelectedArea();
         if (selArea != null) {
-            context.drawText(textRenderer, Text.literal("Area: "+(selArea.name != null ? selArea.name : selArea.id.toString())), rightX, y, 0xFFFFFF, true); y+=12;
-            context.drawText(textRenderer, Text.literal("Shape: "+selArea.shape), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawString(font, Component.literal("Area: "+(selArea.name != null ? selArea.name : selArea.id.toString())), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawString(font, Component.literal("Shape: "+selArea.shape), rightX, y, 0xFFFFFF, true); y+=12;
             if (selArea.advanced && selArea.insideRadii != null && selArea.outsideRadii != null) {
-                context.drawText(textRenderer, Text.literal(String.format("Inside: %.1f/%.1f/%.1f", selArea.insideRadii.x, selArea.insideRadii.y, selArea.insideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Outside: %.1f/%.1f/%.1f", selArea.outsideRadii.x, selArea.outsideRadii.y, selArea.outsideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Inside: %.1f/%.1f/%.1f", selArea.insideRadii.x, selArea.insideRadii.y, selArea.insideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Outside: %.1f/%.1f/%.1f", selArea.outsideRadii.x, selArea.outsideRadii.y, selArea.outsideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
             } else {
-                context.drawText(textRenderer, Text.literal(String.format("Inside: %.1f", selArea.insideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawText(textRenderer, Text.literal(String.format("Outside: %.1f", selArea.outsideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Inside: %.1f", selArea.insideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(String.format("Outside: %.1f", selArea.outsideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
             }
-            context.drawText(textRenderer, Text.literal("Curve: "+selArea.easing), rightX, y, 0xFFFFFF, true); y+=12;
+            context.drawString(font, Component.literal("Curve: "+selArea.easing), rightX, y, 0xFFFFFF, true); y+=12;
         } else {
-            context.drawText(textRenderer, Text.literal("No area selected"), rightX, y, 0xAAAAAA, true);
+            context.drawString(font, Component.literal("No area selected"), rightX, y, 0xAAAAAA, true);
         }
     }
 
     // Disable the default translucent in-game gradient background to avoid flicker
     @Override
-    public void renderInGameBackground(DrawContext context) {
+    public void renderTransparentBackground(GuiGraphics context) {
         // no-op: keep full game view without gradient/blur
     }
 
     // Belt/world blur guard: override to prevent any blur application
     @Override
-    protected void applyBlur(DrawContext context) {
+    protected void renderBlurredBackground(GuiGraphics context) {
         // no-op
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         // Close and start return on ESC
-        if (input.getKeycode() == GLFW.GLFW_KEY_ESCAPE) {
+        if (input.input() == GLFW.GLFW_KEY_ESCAPE) {
             closeAndStartReturn();
             return true;
         }
 
         // If user hits the active slot hotkey again while editing, close and start return
-        if (this.client != null) {
+        if (this.minecraft != null) {
             Integer activeSlot = ninja.trek.CraneshotClient.MOVEMENT_MANAGER.getActiveMovementSlot();
             if (activeSlot != null && activeSlot >= 0 && activeSlot < ninja.trek.CraneshotClient.cameraKeyBinds.length) {
-                net.minecraft.client.option.KeyBinding kb = ninja.trek.CraneshotClient.cameraKeyBinds[activeSlot];
-                if (kb != null && kb.matchesKey(input)) {
+                net.minecraft.client.KeyMapping kb = ninja.trek.CraneshotClient.cameraKeyBinds[activeSlot];
+                if (kb != null && kb.matches(input)) {
                     closeAndStartReturn();
                     return true;
                 }
@@ -400,15 +399,15 @@ public class NodeEditorScreen extends Screen {
         }
 
         // Forward movement keys by bound mapping so freecam can move while screen is open
-        if (this.client != null) {
-            var o = this.client.options;
-            if (o.forwardKey.matchesKey(input)) { o.forwardKey.setPressed(true); return true; }
-            if (o.backKey.matchesKey(input)) { o.backKey.setPressed(true); return true; }
-            if (o.leftKey.matchesKey(input)) { o.leftKey.setPressed(true); return true; }
-            if (o.rightKey.matchesKey(input)) { o.rightKey.setPressed(true); return true; }
-            if (o.jumpKey.matchesKey(input)) { o.jumpKey.setPressed(true); return true; }
-            if (o.sneakKey.matchesKey(input)) { o.sneakKey.setPressed(true); return true; }
-            if (o.sprintKey.matchesKey(input)) { o.sprintKey.setPressed(true); return true; }
+        if (this.minecraft != null) {
+            var o = this.minecraft.options;
+            if (o.keyUp.matches(input)) { o.keyUp.setDown(true); return true; }
+            if (o.keyDown.matches(input)) { o.keyDown.setDown(true); return true; }
+            if (o.keyLeft.matches(input)) { o.keyLeft.setDown(true); return true; }
+            if (o.keyRight.matches(input)) { o.keyRight.setDown(true); return true; }
+            if (o.keyJump.matches(input)) { o.keyJump.setDown(true); return true; }
+            if (o.keyShift.matches(input)) { o.keyShift.setDown(true); return true; }
+            if (o.keySprint.matches(input)) { o.keySprint.setDown(true); return true; }
         }
 
         // Let super handle other UI keys
@@ -420,9 +419,9 @@ public class NodeEditorScreen extends Screen {
         ninja.trek.nodes.NodeManager.get().setEditing(false);
         // Clear any forwarded key states to avoid stuck keys
         clearMovementKeys();
-        if (this.client != null) {
-            ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.client, this.client.gameRenderer.getCamera());
-            this.client.setScreen(null);
+        if (this.minecraft != null) {
+            ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.minecraft, this.minecraft.gameRenderer.getMainCamera());
+            this.minecraft.setScreen(null);
         }
     }
 
@@ -431,14 +430,14 @@ public class NodeEditorScreen extends Screen {
         // Ensure keys are cleared if the screen is closed by any means
         clearMovementKeys();
         // Ensure cursor is released when screen is closed
-        if (client != null && client.getWindow() != null) {
-            GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        if (minecraft != null && minecraft.getWindow() != null) {
+            GLFW.glfwSetInputMode(minecraft.getWindow().handle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }
         super.removed();
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean fromInside) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean fromInside) {
         if (click != null) {
             if (handleAreaCoordinateRightClick(click)) {
                 return true;
@@ -456,18 +455,18 @@ public class NodeEditorScreen extends Screen {
             mouseDownY = click.y();
 
             // Capture mouse cursor when dragging starts
-            if (client != null && client.getWindow() != null) {
-                GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+            if (minecraft != null && minecraft.getWindow() != null) {
+                GLFW.glfwSetInputMode(minecraft.getWindow().handle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
             }
         }
         return true;
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         // Release mouse cursor when dragging ends
-        if (client != null && client.getWindow() != null) {
-            GLFW.glfwSetInputMode(client.getWindow().getHandle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        if (minecraft != null && minecraft.getWindow() != null) {
+            GLFW.glfwSetInputMode(minecraft.getWindow().handle(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
         }
 
         dragging = false;
@@ -482,17 +481,17 @@ public class NodeEditorScreen extends Screen {
             if (clickDuration < CLICK_TIME_THRESHOLD_MS && distance < CLICK_MOVEMENT_THRESHOLD_PX) {
                 // This was a click, not a drag - select the node
                 try {
-                    Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+                    Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
                     if (cam != null) {
                         NodeManager.get().selectNearestToScreen(click.x(), click.y(), this.width, this.height, cam);
-                        this.init(client, this.width, this.height);
+                        this.init(this.width, this.height);
                     }
                 } catch (Throwable t) {
                     // Fallback: select center
-                    Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
+                    Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
                     if (cam != null) {
                         NodeManager.get().selectNearestToScreen(this.width/2.0, this.height/2.0, this.width, this.height, cam);
-                        this.init(client, this.width, this.height);
+                        this.init(this.width, this.height);
                     }
                 }
             }
@@ -503,10 +502,10 @@ public class NodeEditorScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         if (dragging) {
             // 3x sensitivity for node editing
-            double sens = MinecraftClient.getInstance().options.getMouseSensitivity().getValue();
+            double sens = Minecraft.getInstance().options.sensitivity().get();
             double calc = 0.6 * sens * sens * sens + 0.2;
             calc *= 3.0;
 
@@ -527,41 +526,41 @@ public class NodeEditorScreen extends Screen {
 
     // Reset movement key pressed states
     private void clearMovementKeys() {
-        if (this.client == null) return;
-        var opts = this.client.options;
-        opts.forwardKey.setPressed(false);
-        opts.backKey.setPressed(false);
-        opts.leftKey.setPressed(false);
-        opts.rightKey.setPressed(false);
-        opts.jumpKey.setPressed(false);
-        opts.sneakKey.setPressed(false);
-        opts.sprintKey.setPressed(false);
+        if (this.minecraft == null) return;
+        var opts = this.minecraft.options;
+        opts.keyUp.setDown(false);
+        opts.keyDown.setDown(false);
+        opts.keyLeft.setDown(false);
+        opts.keyRight.setDown(false);
+        opts.keyJump.setDown(false);
+        opts.keyShift.setDown(false);
+        opts.keySprint.setDown(false);
     }
 
     // (keyPressed override lives earlier in the file)
 
     @Override
-    public boolean keyReleased(KeyInput input) {
-        if (this.client != null) {
-            var o = this.client.options;
-            if (o.forwardKey.matchesKey(input)) { o.forwardKey.setPressed(false); return true; }
-            if (o.backKey.matchesKey(input)) { o.backKey.setPressed(false); return true; }
-            if (o.leftKey.matchesKey(input)) { o.leftKey.setPressed(false); return true; }
-            if (o.rightKey.matchesKey(input)) { o.rightKey.setPressed(false); return true; }
-            if (o.jumpKey.matchesKey(input)) { o.jumpKey.setPressed(false); return true; }
-            if (o.sneakKey.matchesKey(input)) { o.sneakKey.setPressed(false); return true; }
-            if (o.sprintKey.matchesKey(input)) { o.sprintKey.setPressed(false); return true; }
+    public boolean keyReleased(KeyEvent input) {
+        if (this.minecraft != null) {
+            var o = this.minecraft.options;
+            if (o.keyUp.matches(input)) { o.keyUp.setDown(false); return true; }
+            if (o.keyDown.matches(input)) { o.keyDown.setDown(false); return true; }
+            if (o.keyLeft.matches(input)) { o.keyLeft.setDown(false); return true; }
+            if (o.keyRight.matches(input)) { o.keyRight.setDown(false); return true; }
+            if (o.keyJump.matches(input)) { o.keyJump.setDown(false); return true; }
+            if (o.keyShift.matches(input)) { o.keyShift.setDown(false); return true; }
+            if (o.keySprint.matches(input)) { o.keySprint.setDown(false); return true; }
         }
         return super.keyReleased(input);
     }
 
-    private boolean handleAreaCoordinateRightClick(Click click) {
+    private boolean handleAreaCoordinateRightClick(MouseButtonEvent click) {
         if (click == null || click.button() != 1) {
             return false;
         }
         double mx = click.x();
         double my = click.y();
-        var soundManager = MinecraftClient.getInstance().getSoundManager();
+        var soundManager = Minecraft.getInstance().getSoundManager();
         if (areaXButton != null && areaXButton.active && areaXButton.isMouseOver(mx, my)) {
             areaXButton.playDownSound(soundManager);
             adjustSelectedAreaCenter(AreaAxis.X, -AREA_CENTER_STEP);
@@ -585,7 +584,7 @@ public class NodeEditorScreen extends Screen {
         if (area == null) {
             return;
         }
-        Vec3d center = area.center != null ? area.center : Vec3d.ZERO;
+        Vec3 center = area.center != null ? area.center : Vec3.ZERO;
         double x = center.x;
         double y = center.y;
         double z = center.z;
@@ -594,7 +593,7 @@ public class NodeEditorScreen extends Screen {
             case Y -> y += delta;
             case Z -> z += delta;
         }
-        area.center = new Vec3d(x, y, z);
+        area.center = new Vec3(x, y, z);
         NodeManager.get().markAreaDirty(area.id);
         NodeManager.get().save();
         updateAreaCoordButtons();
@@ -631,12 +630,12 @@ public class NodeEditorScreen extends Screen {
         }
     }
 
-    private static Text areaAxisText(String axis, double value) {
-        return Text.literal(String.format(Locale.US, "%s: %.1f", axis, value));
+    private static Component areaAxisText(String axis, double value) {
+        return Component.literal(String.format(Locale.US, "%s: %.1f", axis, value));
     }
 
-    private static Text areaAxisPlaceholder(String axis) {
-        return Text.literal(axis + ": --");
+    private static Component areaAxisPlaceholder(String axis) {
+        return Component.literal(axis + ": --");
     }
 }
 

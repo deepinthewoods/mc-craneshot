@@ -1,9 +1,5 @@
 package ninja.trek.cameramovements.movements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.client.util.ScreenshotRecorder;
-import net.minecraft.util.math.Vec3d;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -16,6 +12,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.world.phys.Vec3;
 
 @CameraMovementType(
         name = "Timelapse",
@@ -47,7 +47,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
             DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
     @Override
-    public void start(MinecraftClient client, Camera camera) {
+    public void start(Minecraft client, Camera camera) {
         state = State.IDLE;
         lastCaptureTimeMs = 0;
         inRangeNodes.clear();
@@ -57,8 +57,8 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
     }
 
     @Override
-    public MovementState calculateState(MinecraftClient client, Camera camera, float deltaSeconds) {
-        if (client == null || client.player == null || client.world == null) {
+    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+        if (client == null || client.player == null || client.level == null) {
             return new MovementState(buildTarget(client, camera), false);
         }
 
@@ -80,7 +80,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         return new MovementState(buildTarget(client, camera), false);
     }
 
-    private CameraTarget buildTarget(MinecraftClient client, Camera camera) {
+    private CameraTarget buildTarget(Minecraft client, Camera camera) {
         if (captureTarget != null) {
             lastTarget = captureTarget;
             return captureTarget;
@@ -95,14 +95,14 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         return new CameraTarget();
     }
 
-    private void tickIdle(MinecraftClient client) {
+    private void tickIdle(Minecraft client) {
         double intervalMs = intervalSeconds * 1000.0;
         long now = System.currentTimeMillis();
         if (now - lastCaptureTimeMs < intervalMs) {
             return;
         }
 
-        Vec3d playerPos = client.player.getEyePos();
+        Vec3 playerPos = client.player.getEyePosition();
         int playerChunkX = (int) Math.floor(playerPos.x / 16.0);
         int playerChunkZ = (int) Math.floor(playerPos.z / 16.0);
 
@@ -141,7 +141,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         state = State.WAIT_RENDER;
     }
 
-    private void tickTakeScreenshot(MinecraftClient client) {
+    private void tickTakeScreenshot(Minecraft client) {
         if (currentNodeIndex >= inRangeNodes.size()) {
             finishCaptureCycle();
             return;
@@ -150,10 +150,10 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         CameraNode node = inRangeNodes.get(currentNodeIndex);
 
         try {
-            var framebuffer = client.getFramebuffer();
+            var framebuffer = client.getMainRenderTarget();
             if (framebuffer != null) {
                 String sanitizedName = sanitizeName(node.name);
-                File timelapseDir = new File(client.runDirectory, "screenshots/timelapse/" + sanitizedName);
+                File timelapseDir = new File(client.gameDirectory, "screenshots/timelapse/" + sanitizedName);
                 if (!timelapseDir.exists()) {
                     timelapseDir.mkdirs();
                 }
@@ -163,10 +163,10 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
 
                 File outputFile = new File(timelapseDir, fileName);
 
-                ScreenshotRecorder.takeScreenshot(framebuffer, image -> {
-                    net.minecraft.util.Util.getIoWorkerExecutor().execute(() -> {
+                Screenshot.takeScreenshot(framebuffer, image -> {
+                    net.minecraft.util.Util.ioPool().execute(() -> {
                         try {
-                            image.writeTo(outputFile);
+                            image.writeToFile(outputFile);
                         } catch (Exception e) {
                             Craneshot.LOGGER.warn("Failed to save timelapse screenshot: {}", outputFile, e);
                         } finally {
@@ -206,12 +206,12 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
     }
 
     @Override
-    public void queueReset(MinecraftClient client, Camera camera) {
+    public void queueReset(Minecraft client, Camera camera) {
         // no-op
     }
 
     @Override
-    public void adjustDistance(boolean increase, MinecraftClient client) {
+    public void adjustDistance(boolean increase, Minecraft client) {
         // no-op
     }
 

@@ -1,10 +1,10 @@
 package ninja.trek.nodes.model;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.phys.Vec3;
 
 public class AreaDTO {
     private static final int FILTER_WALKING = 1;
@@ -18,12 +18,12 @@ public class AreaDTO {
     private static final int FILTER_CRAWLING = 1 << 8;
 
     public AreaShape shape = AreaShape.CUBE;
-    public Vec3d center = Vec3d.ZERO;
+    public Vec3 center = Vec3.ZERO;
     public double insideRadius = 8.0;
     public double outsideRadius = 16.0;
     public boolean advanced = false;
-    public Vec3d insideRadii = null;
-    public Vec3d outsideRadii = null;
+    public Vec3 insideRadii = null;
+    public Vec3 outsideRadii = null;
     public int filterMask = FILTER_WALKING
             | FILTER_ELYTRA
             | FILTER_MINECART
@@ -77,8 +77,8 @@ public class AreaDTO {
         return dto;
     }
 
-    public void write(PacketByteBuf buf) {
-        buf.writeEnumConstant(shape);
+    public void write(FriendlyByteBuf buf) {
+        buf.writeEnum(shape);
         writeVec3d(buf, center);
         buf.writeDouble(insideRadius);
         buf.writeDouble(outsideRadius);
@@ -86,12 +86,12 @@ public class AreaDTO {
         writeNullableVec3d(buf, insideRadii);
         writeNullableVec3d(buf, outsideRadii);
         buf.writeVarInt(filterMask);
-        buf.writeEnumConstant(easing == null ? EasingCurve.LINEAR : easing);
+        buf.writeEnum(easing == null ? EasingCurve.LINEAR : easing);
     }
 
-    public static AreaDTO read(PacketByteBuf buf) {
+    public static AreaDTO read(FriendlyByteBuf buf) {
         AreaDTO dto = new AreaDTO();
-        dto.shape = buf.readEnumConstant(AreaShape.class);
+        dto.shape = buf.readEnum(AreaShape.class);
         dto.center = readVec3d(buf);
         dto.insideRadius = buf.readDouble();
         dto.outsideRadius = buf.readDouble();
@@ -99,12 +99,12 @@ public class AreaDTO {
         dto.insideRadii = readNullableVec3d(buf);
         dto.outsideRadii = readNullableVec3d(buf);
         dto.filterMask = buf.readVarInt();
-        dto.easing = buf.readEnumConstant(EasingCurve.class);
+        dto.easing = buf.readEnum(EasingCurve.class);
         return dto;
     }
 
-    public NbtCompound toNbt() {
-        NbtCompound tag = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag tag = new CompoundTag();
         tag.putString("shape", shape.name());
         tag.put("center", vec3dToNbt(center));
         tag.putDouble("insideRadius", insideRadius);
@@ -117,7 +117,7 @@ public class AreaDTO {
         return tag;
     }
 
-    public static AreaDTO fromNbt(NbtCompound tag) {
+    public static AreaDTO fromNbt(CompoundTag tag) {
         AreaDTO dto = new AreaDTO();
         tag.getString("shape").ifPresent(shapeName -> {
             try {
@@ -125,7 +125,7 @@ public class AreaDTO {
             } catch (IllegalArgumentException ignored) {}
         });
         tag.getList("center").ifPresent(list -> {
-            if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
+            if (!list.isEmpty() && list.get(0).getId() == Tag.TAG_DOUBLE) {
                 dto.center = vec3dFromNbt(list);
             }
         });
@@ -133,12 +133,12 @@ public class AreaDTO {
         dto.outsideRadius = tag.getDouble("outsideRadius").orElse(16.0);
         dto.advanced = tag.getBoolean("advanced").orElse(false);
         tag.getList("insideRadii").ifPresent(list -> {
-            if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
+            if (!list.isEmpty() && list.get(0).getId() == Tag.TAG_DOUBLE) {
                 dto.insideRadii = vec3dFromNbt(list);
             }
         });
         tag.getList("outsideRadii").ifPresent(list -> {
-            if (!list.isEmpty() && list.get(0).getType() == NbtElement.DOUBLE_TYPE) {
+            if (!list.isEmpty() && list.get(0).getId() == Tag.TAG_DOUBLE) {
                 dto.outsideRadii = vec3dFromNbt(list);
             }
         });
@@ -177,38 +177,38 @@ public class AreaDTO {
         area.filterCrawling1Block = (mask & FILTER_CRAWLING) != 0;
     }
 
-    private static void writeVec3d(PacketByteBuf buf, Vec3d vec) {
+    private static void writeVec3d(FriendlyByteBuf buf, Vec3 vec) {
         buf.writeDouble(vec.x);
         buf.writeDouble(vec.y);
         buf.writeDouble(vec.z);
     }
 
-    private static Vec3d readVec3d(PacketByteBuf buf) {
-        return new Vec3d(buf.readDouble(), buf.readDouble(), buf.readDouble());
+    private static Vec3 readVec3d(FriendlyByteBuf buf) {
+        return new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
     }
 
-    private static void writeNullableVec3d(PacketByteBuf buf, Vec3d vec) {
+    private static void writeNullableVec3d(FriendlyByteBuf buf, Vec3 vec) {
         buf.writeBoolean(vec != null);
         if (vec != null) writeVec3d(buf, vec);
     }
 
-    private static Vec3d readNullableVec3d(PacketByteBuf buf) {
+    private static Vec3 readNullableVec3d(FriendlyByteBuf buf) {
         return buf.readBoolean() ? readVec3d(buf) : null;
     }
 
-    private static NbtList vec3dToNbt(Vec3d vec) {
-        NbtList list = new NbtList();
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.x));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.y));
-        list.add(net.minecraft.nbt.NbtDouble.of(vec.z));
+    private static ListTag vec3dToNbt(Vec3 vec) {
+        ListTag list = new ListTag();
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.x));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.y));
+        list.add(net.minecraft.nbt.DoubleTag.valueOf(vec.z));
         return list;
     }
 
-    private static Vec3d vec3dFromNbt(NbtList list) {
-        if (list == null || list.size() < 3) return Vec3d.ZERO;
+    private static Vec3 vec3dFromNbt(ListTag list) {
+        if (list == null || list.size() < 3) return Vec3.ZERO;
         double x = list.getDouble(0).orElse(0.0);
         double y = list.getDouble(1).orElse(0.0);
         double z = list.getDouble(2).orElse(0.0);
-        return new Vec3d(x, y, z);
+        return new Vec3(x, y, z);
     }
 }

@@ -5,17 +5,15 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayNetworkHandler;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
@@ -46,8 +44,8 @@ public final class ServerNodeNetworking {
         ServerChunkEvents.CHUNK_LOAD.register(ServerNodeNetworking::onChunkLoad);
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             ServerNodeManager.get().resetRateLimiter();
-            for (ServerWorld world : server.getWorlds()) {
-                for (ServerPlayerEntity player : world.getPlayers()) {
+            for (ServerLevel world : server.getAllLevels()) {
+                for (ServerPlayer player : world.players()) {
                     if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
                     syncTrackedChunks(player, world);
                 }
@@ -55,19 +53,19 @@ public final class ServerNodeNetworking {
         });
     }
 
-    private static void onPlayerJoin(ServerPlayNetworkHandler handler, net.fabricmc.fabric.api.networking.v1.PacketSender sender, MinecraftServer server) {
-        ServerPlayerEntity player = handler.player;
+    private static void onPlayerJoin(ServerGamePacketListenerImpl handler, net.fabricmc.fabric.api.networking.v1.PacketSender sender, MinecraftServer server) {
+        ServerPlayer player = handler.player;
         boolean canEdit = ServerNodeManager.get().canEditOnServer(player);
         sendHandshakeOffer(player, canEdit);
         ServerNodeManager.get().markHandshakeSent(player, canEdit);
     }
 
-    private static void onPlayerDisconnect(ServerPlayNetworkHandler handler, MinecraftServer server) {
+    private static void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
         ServerNodeManager.get().onPlayerDisconnected(handler.player);
     }
 
     private static void handleHandshakePayload(HandshakePayload payload, ServerPlayNetworking.Context context) {
-        ServerPlayerEntity player = context.player();
+        ServerPlayer player = context.player();
         // stage 0 is server->client, stage 1 is client->server ack
         if (payload.stage() == 1) {
             if (payload.protocol() != NodeNetworkConstants.PROTOCOL_VERSION) {
@@ -78,8 +76,8 @@ public final class ServerNodeNetworking {
             boolean canEdit = ServerNodeManager.get().canEditOnServer(player);
             ServerNodeManager.get().markHandshakeComplete(player, canEdit);
             // Get the world the player is in by looking through all worlds
-            for (ServerWorld world : context.server().getWorlds()) {
-                if (world.getPlayers().contains(player)) {
+            for (ServerLevel world : context.server().getAllLevels()) {
+                if (world.players().contains(player)) {
                     sendInitialChunks(player, world);
                     break;
                 }
@@ -89,19 +87,19 @@ public final class ServerNodeNetworking {
     }
 
     private static void handleEditRequestPayload(EditRequestPayload payload, ServerPlayNetworking.Context context) {
-        ServerPlayerEntity player = context.player();
+        ServerPlayer player = context.player();
         if (!ServerNodeManager.get().isHandshakeComplete(player)) {
             Craneshot.LOGGER.debug("Ignoring edit request from {} before handshake completion", player.getName().getString());
             return;
         }
         if (!ServerNodeManager.get().consumeRequest(player)) {
-            player.sendMessage(Text.literal("[Craneshot] Too many edit requests; slow down."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Too many edit requests; slow down."), false);
             return;
         }
 
-        ServerWorld world = ServerNodeManager.resolveWorld(context.server(), payload.dimension());
+        ServerLevel world = ServerNodeManager.resolveWorld(context.server(), payload.dimension());
         if (world == null) {
-            Craneshot.LOGGER.warn("Received edit request for unknown dimension {}", payload.dimension().getValue());
+            Craneshot.LOGGER.warn("Received edit request for unknown dimension {}", payload.dimension().identifier());
             return;
         }
 
@@ -113,19 +111,19 @@ public final class ServerNodeNetworking {
     }
 
     private static void handleAreaEditRequestPayload(AreaEditRequestPayload payload, ServerPlayNetworking.Context context) {
-        ServerPlayerEntity player = context.player();
+        ServerPlayer player = context.player();
         if (!ServerNodeManager.get().isHandshakeComplete(player)) {
             Craneshot.LOGGER.debug("Ignoring area edit request from {} before handshake completion", player.getName().getString());
             return;
         }
         if (!ServerNodeManager.get().consumeRequest(player)) {
-            player.sendMessage(Text.literal("[Craneshot] Too many edit requests; slow down."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Too many edit requests; slow down."), false);
             return;
         }
 
-        ServerWorld world = ServerNodeManager.resolveWorld(context.server(), payload.dimension());
+        ServerLevel world = ServerNodeManager.resolveWorld(context.server(), payload.dimension());
         if (world == null) {
-            Craneshot.LOGGER.warn("Received area edit request for unknown dimension {}", payload.dimension().getValue());
+            Craneshot.LOGGER.warn("Received area edit request for unknown dimension {}", payload.dimension().identifier());
             return;
         }
 
@@ -136,20 +134,20 @@ public final class ServerNodeNetworking {
         }
     }
 
-    private static void handleCreate(ServerPlayerEntity player, ServerWorld world, CameraNodeDTO incoming) {
+    private static void handleCreate(ServerPlayer player, ServerLevel world, CameraNodeDTO incoming) {
         if (!ServerNodeManager.get().hasCreatePermission(player)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to create nodes on this server."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to create nodes on this server."), false);
             return;
         }
         String error = ServerNodeManager.get().validateNodePayload(incoming);
         if (error != null) {
-            player.sendMessage(Text.literal("[Craneshot] Invalid node: " + error), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Invalid node: " + error), false);
             return;
         }
 
         UUID tempId = incoming.uuid;
         incoming.uuid = UUID.randomUUID();
-        incoming.owner = player.getUuid();
+        incoming.owner = player.getUUID();
         incoming.clientRequestId = null;
 
         ChunkPos chunk = ServerNodeManager.chunkPosFromNode(incoming);
@@ -158,25 +156,25 @@ public final class ServerNodeNetworking {
         CameraNodeDTO packetDto = incoming.copy();
         packetDto.clientRequestId = tempId;
 
-        NodeDelta delta = NodeDelta.add(world.getRegistryKey(), chunk, packetDto);
+        NodeDelta delta = NodeDelta.add(world.dimension(), chunk, packetDto);
         broadcastDeltas(world, List.of(delta));
         Craneshot.LOGGER.info("Player {} created node {} in chunk {} {}", player.getName().getString(), incoming.uuid, chunk.x, chunk.z);
     }
 
-    private static void handleUpdate(ServerPlayerEntity player, ServerWorld world, CameraNodeDTO incoming) {
+    private static void handleUpdate(ServerPlayer player, ServerLevel world, CameraNodeDTO incoming) {
         CameraNodeDTO existing = ServerNodeManager.get().getNode(world, incoming.uuid);
         if (existing == null) {
-            player.sendMessage(Text.literal("[Craneshot] Node was not found on the server."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Node was not found on the server."), false);
             return;
         }
         if (!ServerNodeManager.get().hasEditPermission(player, existing)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to edit this node."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to edit this node."), false);
             return;
         }
         incoming.owner = existing.owner;
         String error = ServerNodeManager.get().validateNodePayload(incoming);
         if (error != null) {
-            player.sendMessage(Text.literal("[Craneshot] Invalid update: " + error), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Invalid update: " + error), false);
             return;
         }
 
@@ -186,47 +184,47 @@ public final class ServerNodeNetworking {
         if (!oldChunk.equals(newChunk)) {
             ServerNodeManager.get().removeNode(world, existing.uuid);
             ServerNodeManager.get().upsertNode(world, newChunk, incoming);
-            NodeDelta remove = NodeDelta.remove(world.getRegistryKey(), oldChunk, existing.uuid);
-            NodeDelta add = NodeDelta.add(world.getRegistryKey(), newChunk, incoming);
+            NodeDelta remove = NodeDelta.remove(world.dimension(), oldChunk, existing.uuid);
+            NodeDelta add = NodeDelta.add(world.dimension(), newChunk, incoming);
             broadcastDeltas(world, List.of(remove, add));
         } else {
             ServerNodeManager.get().upsertNode(world, newChunk, incoming);
-            NodeDelta update = NodeDelta.update(world.getRegistryKey(), newChunk, incoming);
+            NodeDelta update = NodeDelta.update(world.dimension(), newChunk, incoming);
             broadcastDeltas(world, List.of(update));
         }
         Craneshot.LOGGER.info("Player {} updated node {}", player.getName().getString(), incoming.uuid);
     }
 
-    private static void handleDelete(ServerPlayerEntity player, ServerWorld world, UUID nodeId) {
+    private static void handleDelete(ServerPlayer player, ServerLevel world, UUID nodeId) {
         CameraNodeDTO existing = ServerNodeManager.get().getNode(world, nodeId);
         if (existing == null) return;
         if (!ServerNodeManager.get().hasEditPermission(player, existing)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to delete this node."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to delete this node."), false);
             return;
         }
         ChunkPos chunk = ServerNodeManager.chunkPosFromNode(existing);
         if (ServerNodeManager.get().removeNode(world, nodeId)) {
-            NodeDelta delta = NodeDelta.remove(world.getRegistryKey(), chunk, nodeId);
+            NodeDelta delta = NodeDelta.remove(world.dimension(), chunk, nodeId);
             broadcastDeltas(world, List.of(delta));
             Craneshot.LOGGER.info("Player {} removed node {}", player.getName().getString(), nodeId);
         }
     }
 
-    private static void handleAreaCreate(ServerPlayerEntity player, ServerWorld world, AreaInstanceDTO incoming) {
+    private static void handleAreaCreate(ServerPlayer player, ServerLevel world, AreaInstanceDTO incoming) {
         if (incoming == null) return;
         if (!ServerNodeManager.get().hasCreatePermission(player)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to create areas on this server."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to create areas on this server."), false);
             return;
         }
         String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
         if (error != null) {
-            player.sendMessage(Text.literal("[Craneshot] Invalid area: " + error), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Invalid area: " + error), false);
             return;
         }
 
         UUID tempId = incoming.uuid;
         incoming.uuid = UUID.randomUUID();
-        incoming.owner = player.getUuid();
+        incoming.owner = player.getUUID();
         incoming.clientRequestId = null;
 
         ServerNodeManager.get().upsertArea(world, incoming);
@@ -234,64 +232,64 @@ public final class ServerNodeNetworking {
         AreaInstanceDTO packetDto = AreaInstanceDTO.fromAreaInstance(incoming.toAreaInstance());
         packetDto.clientRequestId = tempId;
 
-        AreaDelta delta = AreaDelta.add(world.getRegistryKey(), packetDto);
+        AreaDelta delta = AreaDelta.add(world.dimension(), packetDto);
         broadcastAreaDeltas(world, List.of(delta));
         Craneshot.LOGGER.info("Player {} created area {}", player.getName().getString(), incoming.uuid);
     }
 
-    private static void handleAreaUpdate(ServerPlayerEntity player, ServerWorld world, AreaInstanceDTO incoming) {
+    private static void handleAreaUpdate(ServerPlayer player, ServerLevel world, AreaInstanceDTO incoming) {
         if (incoming == null) return;
         AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, incoming.uuid);
         if (existing == null) {
-            player.sendMessage(Text.literal("[Craneshot] Area was not found on the server."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Area was not found on the server."), false);
             return;
         }
         if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to edit this area."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to edit this area."), false);
             return;
         }
         incoming.owner = existing.owner;
         String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
         if (error != null) {
-            player.sendMessage(Text.literal("[Craneshot] Invalid area update: " + error), false);
+            player.displayClientMessage(Component.literal("[Craneshot] Invalid area update: " + error), false);
             return;
         }
         incoming.clientRequestId = null;
         ServerNodeManager.get().upsertArea(world, incoming);
         AreaInstanceDTO packetDto = AreaInstanceDTO.fromAreaInstance(incoming.toAreaInstance());
-        AreaDelta delta = AreaDelta.update(world.getRegistryKey(), packetDto);
+        AreaDelta delta = AreaDelta.update(world.dimension(), packetDto);
         broadcastAreaDeltas(world, List.of(delta));
         Craneshot.LOGGER.info("Player {} updated area {}", player.getName().getString(), incoming.uuid);
     }
 
-    private static void handleAreaDelete(ServerPlayerEntity player, ServerWorld world, UUID areaId) {
+    private static void handleAreaDelete(ServerPlayer player, ServerLevel world, UUID areaId) {
         if (areaId == null) return;
         AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, areaId);
         if (existing == null) return;
         if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
-            player.sendMessage(Text.literal("[Craneshot] You do not have permission to delete this area."), false);
+            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to delete this area."), false);
             return;
         }
         if (ServerNodeManager.get().removeArea(world, areaId)) {
-            AreaDelta delta = AreaDelta.remove(world.getRegistryKey(), areaId);
+            AreaDelta delta = AreaDelta.remove(world.dimension(), areaId);
             broadcastAreaDeltas(world, List.of(delta));
             Craneshot.LOGGER.info("Player {} removed area {}", player.getName().getString(), areaId);
         }
     }
 
-    private static void onChunkLoad(ServerWorld world, WorldChunk chunk) {
+    private static void onChunkLoad(ServerLevel world, LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
-        Iterable<ServerPlayerEntity> players = PlayerLookup.tracking(world, pos);
-        for (ServerPlayerEntity player : players) {
+        Iterable<ServerPlayer> players = PlayerLookup.tracking(world, pos);
+        for (ServerPlayer player : players) {
             if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
-            boolean fresh = ServerNodeManager.get().markChunkStreamed(player, world.getRegistryKey(), pos);
+            boolean fresh = ServerNodeManager.get().markChunkStreamed(player, world.dimension(), pos);
             if (fresh) {
                 sendChunkSnapshot(player, world, pos);
             }
         }
     }
 
-    private static void sendHandshakeOffer(ServerPlayerEntity player, boolean canEdit) {
+    private static void sendHandshakeOffer(ServerPlayer player, boolean canEdit) {
         HandshakePayload payload = new HandshakePayload(
             0, // stage 0: server -> client offer
             NodeNetworkConstants.PROTOCOL_VERSION,
@@ -301,24 +299,24 @@ public final class ServerNodeNetworking {
         ServerPlayNetworking.send(player, payload);
     }
 
-    private static void sendInitialChunks(ServerPlayerEntity player, ServerWorld world) {
+    private static void sendInitialChunks(ServerPlayer player, ServerLevel world) {
         syncTrackedChunks(player, world);
     }
 
-    private static void syncTrackedChunks(ServerPlayerEntity player, ServerWorld world) {
-        RegistryKey<World> dimension = world.getRegistryKey();
+    private static void syncTrackedChunks(ServerPlayer player, ServerLevel world) {
+        ResourceKey<Level> dimension = world.dimension();
         if (ServerNodeManager.get().markAreasSynced(player, dimension)) {
             sendAreasSnapshot(player, world);
         }
-        ChunkPos center = player.getChunkPos();
+        ChunkPos center = player.chunkPosition();
         MinecraftServer server = world.getServer();
-        int viewDistance = Math.max(2, server != null ? server.getPlayerManager().getViewDistance() : 10);
+        int viewDistance = Math.max(2, server != null ? server.getPlayerList().getViewDistance() : 10);
         Set<Long> keep = new HashSet<>();
         for (int dx = -viewDistance; dx <= viewDistance; dx++) {
             for (int dz = -viewDistance; dz <= viewDistance; dz++) {
                 int cx = center.x + dx;
                 int cz = center.z + dz;
-                if (world.getChunkManager().isChunkLoaded(cx, cz)) {
+                if (world.getChunkSource().hasChunk(cx, cz)) {
                     ChunkPos pos = new ChunkPos(cx, cz);
                     long key = pos.toLong();
                     keep.add(key);
@@ -331,7 +329,7 @@ public final class ServerNodeNetworking {
         ServerNodeManager.get().retainStreamedChunks(player, dimension, keep);
     }
 
-    private static void sendChunkSnapshot(ServerPlayerEntity player, ServerWorld world, ChunkPos pos) {
+    private static void sendChunkSnapshot(ServerPlayer player, ServerLevel world, ChunkPos pos) {
         List<CameraNodeDTO> nodes = ServerNodeManager.get().getChunkNodes(world, pos);
         // Clear client request IDs for chunk snapshots
         List<CameraNodeDTO> cleanNodes = new ArrayList<>(nodes.size());
@@ -340,11 +338,11 @@ public final class ServerNodeNetworking {
             clean.clientRequestId = null;
             cleanNodes.add(clean);
         }
-        ChunkNodesPayload payload = new ChunkNodesPayload(world.getRegistryKey(), pos, cleanNodes);
+        ChunkNodesPayload payload = new ChunkNodesPayload(world.dimension(), pos, cleanNodes);
         ServerPlayNetworking.send(player, payload);
     }
 
-    private static void sendAreasSnapshot(ServerPlayerEntity player, ServerWorld world) {
+    private static void sendAreasSnapshot(ServerPlayer player, ServerLevel world) {
         List<AreaInstanceDTO> areas = ServerNodeManager.get().getAreas(world);
         List<AreaInstanceDTO> cleanAreas = new ArrayList<>(areas.size());
         for (AreaInstanceDTO dto : areas) {
@@ -352,11 +350,11 @@ public final class ServerNodeNetworking {
             copy.clientRequestId = null;
             cleanAreas.add(copy);
         }
-        AreasSnapshotPayload payload = new AreasSnapshotPayload(world.getRegistryKey(), cleanAreas);
+        AreasSnapshotPayload payload = new AreasSnapshotPayload(world.dimension(), cleanAreas);
         ServerPlayNetworking.send(player, payload);
     }
 
-    private static void broadcastDeltas(ServerWorld world, List<NodeDelta> deltas) {
+    private static void broadcastDeltas(ServerLevel world, List<NodeDelta> deltas) {
         if (deltas.isEmpty()) return;
         Map<ChunkGroupKey, List<NodeDelta>> grouped = new HashMap<>();
         for (NodeDelta delta : deltas) {
@@ -366,8 +364,8 @@ public final class ServerNodeNetworking {
 
         for (var entry : grouped.entrySet()) {
             ChunkPos chunk = entry.getKey().chunk();
-            RegistryKey<World> dimension = entry.getKey().dimension();
-            Iterable<ServerPlayerEntity> players = PlayerLookup.tracking(world, chunk);
+            ResourceKey<Level> dimension = entry.getKey().dimension();
+            Iterable<ServerPlayer> players = PlayerLookup.tracking(world, chunk);
 
             // Convert NodeDelta list to NodeOperation list for payload
             List<NodesDeltaPayload.NodeOperation> operations = new ArrayList<>();
@@ -398,14 +396,14 @@ public final class ServerNodeNetworking {
 
             NodesDeltaPayload payload = new NodesDeltaPayload(dimension, chunk, operations);
 
-            for (ServerPlayerEntity player : players) {
+            for (ServerPlayer player : players) {
                 if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
                 ServerPlayNetworking.send(player, payload);
             }
         }
     }
 
-    private static void broadcastAreaDeltas(ServerWorld world, List<AreaDelta> deltas) {
+    private static void broadcastAreaDeltas(ServerLevel world, List<AreaDelta> deltas) {
         if (deltas.isEmpty()) return;
         List<AreasDeltaPayload.AreaOperation> operations = new ArrayList<>(deltas.size());
         for (AreaDelta delta : deltas) {
@@ -427,26 +425,26 @@ public final class ServerNodeNetworking {
             operations.add(new AreasDeltaPayload.AreaOperation(opType, areaId, areaData));
         }
 
-        AreasDeltaPayload payload = new AreasDeltaPayload(world.getRegistryKey(), operations);
-        for (ServerPlayerEntity player : PlayerLookup.world(world)) {
+        AreasDeltaPayload payload = new AreasDeltaPayload(world.dimension(), operations);
+        for (ServerPlayer player : PlayerLookup.world(world)) {
             if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
             ServerPlayNetworking.send(player, payload);
         }
     }
 
-    private record ChunkGroupKey(RegistryKey<World> dimension, ChunkPos chunk) {}
+    private record ChunkGroupKey(ResourceKey<Level> dimension, ChunkPos chunk) {}
 
-    public record NodeDelta(Type type, RegistryKey<World> dimension, ChunkPos chunk, CameraNodeDTO node, UUID removedId, UUID clientRequestId) {
-        static NodeDelta add(RegistryKey<World> dimension, ChunkPos chunk, CameraNodeDTO node) {
+    public record NodeDelta(Type type, ResourceKey<Level> dimension, ChunkPos chunk, CameraNodeDTO node, UUID removedId, UUID clientRequestId) {
+        static NodeDelta add(ResourceKey<Level> dimension, ChunkPos chunk, CameraNodeDTO node) {
             return new NodeDelta(Type.ADD, dimension, chunk, node, null, node.clientRequestId);
         }
 
-        static NodeDelta update(RegistryKey<World> dimension, ChunkPos chunk, CameraNodeDTO node) {
+        static NodeDelta update(ResourceKey<Level> dimension, ChunkPos chunk, CameraNodeDTO node) {
             node.clientRequestId = null;
             return new NodeDelta(Type.UPDATE, dimension, chunk, node, null, null);
         }
 
-        static NodeDelta remove(RegistryKey<World> dimension, ChunkPos chunk, UUID removedId) {
+        static NodeDelta remove(ResourceKey<Level> dimension, ChunkPos chunk, UUID removedId) {
             return new NodeDelta(Type.REMOVE, dimension, chunk, null, removedId, null);
         }
 
@@ -455,17 +453,17 @@ public final class ServerNodeNetworking {
         }
     }
 
-    public record AreaDelta(Type type, RegistryKey<World> dimension, AreaInstanceDTO area, UUID removedId) {
-        static AreaDelta add(RegistryKey<World> dimension, AreaInstanceDTO area) {
-            return new AreaDelta(Type.ADD, dimension, area, null);
+    public record AreaDelta(ninja.trek.nodes.network.ServerNodeNetworking.AreaDelta.Type type, ResourceKey<Level> dimension, AreaInstanceDTO area, UUID removedId) {
+        static AreaDelta add(ResourceKey<Level> dimension, AreaInstanceDTO area) {
+            return new AreaDelta(ninja.trek.nodes.network.ServerNodeNetworking.AreaDelta.Type.ADD, dimension, area, null);
         }
 
-        static AreaDelta update(RegistryKey<World> dimension, AreaInstanceDTO area) {
-            return new AreaDelta(Type.UPDATE, dimension, area, null);
+        static AreaDelta update(ResourceKey<Level> dimension, AreaInstanceDTO area) {
+            return new AreaDelta(ninja.trek.nodes.network.ServerNodeNetworking.AreaDelta.Type.UPDATE, dimension, area, null);
         }
 
-        static AreaDelta remove(RegistryKey<World> dimension, UUID removedId) {
-            return new AreaDelta(Type.REMOVE, dimension, null, removedId);
+        static AreaDelta remove(ResourceKey<Level> dimension, UUID removedId) {
+            return new AreaDelta(ninja.trek.nodes.network.ServerNodeNetworking.AreaDelta.Type.REMOVE, dimension, null, removedId);
         }
 
         public enum Type {

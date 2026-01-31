@@ -1,12 +1,5 @@
 package ninja.trek.nodes.network.payload;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 
@@ -14,30 +7,37 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
 
 public record AreasDeltaPayload(
-        RegistryKey<World> dimension,
+        ResourceKey<Level> dimension,
         List<AreaOperation> operations
-) implements CustomPayload {
-    public static final Id<AreasDeltaPayload> ID = new Id<>(Identifier.of(Craneshot.MOD_ID, "areas_delta"));
+) implements CustomPacketPayload {
+    public static final Type<AreasDeltaPayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "areas_delta"));
 
-    public static final PacketCodec<RegistryByteBuf, AreasDeltaPayload> CODEC = PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, AreasDeltaPayload> CODEC = StreamCodec.ofMember(
             AreasDeltaPayload::write,
             AreasDeltaPayload::read
     );
 
-    private AreasDeltaPayload(RegistryByteBuf buf) {
+    private AreasDeltaPayload(RegistryFriendlyByteBuf buf) {
         this(
-                RegistryKey.of(RegistryKeys.WORLD, buf.readIdentifier()),
+                ResourceKey.create(Registries.DIMENSION, buf.readIdentifier()),
                 readOperations(buf)
         );
     }
 
-    private static AreasDeltaPayload read(RegistryByteBuf buf) {
+    private static AreasDeltaPayload read(RegistryFriendlyByteBuf buf) {
         return new AreasDeltaPayload(buf);
     }
 
-    private static List<AreaOperation> readOperations(RegistryByteBuf buf) {
+    private static List<AreaOperation> readOperations(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
         List<AreaOperation> ops = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -46,8 +46,8 @@ public record AreasDeltaPayload(
         return ops;
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeIdentifier(dimension.getValue());
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeIdentifier(dimension.identifier());
         buf.writeVarInt(operations.size());
         for (AreaOperation op : operations) {
             op.write(buf);
@@ -55,7 +55,7 @@ public record AreasDeltaPayload(
     }
 
     @Override
-    public Id<AreasDeltaPayload> getId() {
+    public Type<AreasDeltaPayload> type() {
         return ID;
     }
 
@@ -68,9 +68,9 @@ public record AreasDeltaPayload(
             UUID areaId,
             Optional<AreaInstanceDTO> areaData
     ) {
-        public static AreaOperation read(RegistryByteBuf buf) {
-            OperationType type = buf.readEnumConstant(OperationType.class);
-            UUID areaId = buf.readUuid();
+        public static AreaOperation read(RegistryFriendlyByteBuf buf) {
+            OperationType type = buf.readEnum(OperationType.class);
+            UUID areaId = buf.readUUID();
             Optional<AreaInstanceDTO> areaData;
             if (type == OperationType.ADD || type == OperationType.UPDATE) {
                 areaData = Optional.of(AreaInstanceDTO.read(buf));
@@ -80,9 +80,9 @@ public record AreasDeltaPayload(
             return new AreaOperation(type, areaId, areaData);
         }
 
-        public void write(RegistryByteBuf buf) {
-            buf.writeEnumConstant(type);
-            buf.writeUuid(areaId);
+        public void write(RegistryFriendlyByteBuf buf) {
+            buf.writeEnum(type);
+            buf.writeUUID(areaId);
             if (type == OperationType.ADD || type == OperationType.UPDATE) {
                 areaData.ifPresent(dto -> dto.write(buf));
             }

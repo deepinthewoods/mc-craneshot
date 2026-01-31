@@ -1,20 +1,19 @@
 package ninja.trek.nodes;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.movements.StaticMovement;
 import ninja.trek.nodes.io.NodeStorage;
 import ninja.trek.nodes.model.*;
 import ninja.trek.nodes.network.ClientNodeNetworking;
-
 import java.util.*;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 public class NodeManager {
     private static final NodeManager INSTANCE = new NodeManager();
@@ -125,7 +124,7 @@ public class NodeManager {
     public List<CameraNode> getNodes() { return Collections.unmodifiableList(nodes); }
     public List<AreaInstance> getAreas() { return Collections.unmodifiableList(areas); }
 
-    public CameraNode addNode(Vec3d position) {
+    public CameraNode addNode(Vec3 position) {
         CameraNode node = new CameraNode();
         node.position = position;
         nodes.add(node);
@@ -133,7 +132,7 @@ public class NodeManager {
         return node;
     }
 
-    public CameraNode addTimelapseNode(Vec3d position, float yaw, float pitch, float fovMultiplier) {
+    public CameraNode addTimelapseNode(Vec3 position, float yaw, float pitch, float fovMultiplier) {
         CameraNode node = new CameraNode();
         node.position = position;
         node.type = NodeType.TIMELAPSE;
@@ -171,7 +170,7 @@ public class NodeManager {
         return null;
     }
 
-    public AreaInstance addArea(Vec3d center) {
+    public AreaInstance addArea(Vec3 center) {
         AreaInstance area = new AreaInstance();
         area.center = center;
         area.name = "Area " + (areas.size() + 1);
@@ -187,7 +186,7 @@ public class NodeManager {
         if (serverMode) {
             areaLookup.put(area.id, area);
             if (serverCanEdit) {
-                RegistryKey<World> dimension = getCurrentDimension();
+                ResourceKey<Level> dimension = getCurrentDimension();
                 if (dimension != null) {
                     AreaInstanceDTO dto = AreaInstanceDTO.fromAreaInstance(area);
                     dto.clientRequestId = area.id;
@@ -230,7 +229,7 @@ public class NodeManager {
             }
             pendingAreaUpdates.remove(areaId);
             if (areaId.equals(selectedAreaId)) selectedAreaId = null;
-            RegistryKey<World> dimension = getCurrentDimension();
+            ResourceKey<Level> dimension = getCurrentDimension();
             if (dimension != null) {
                 ClientNodeNetworking.sendAreaDelete(dimension, areaId);
             }
@@ -285,17 +284,17 @@ public class NodeManager {
     public CameraNode selectNearestToScreen(double mouseX, double mouseY, int screenW, int screenH, Camera camera) {
         // Phase 2: project node positions to screen using camera basis + FOV; pick nearest in 2D
         if (screenW <= 0 || screenH <= 0 || camera == null) return null;
-        Vec3d camPos = camera.getPos();
-        var rot = camera.getRotation();
+        Vec3 camPos = camera.position();
+        var rot = camera.rotation();
         org.joml.Vector3f rV = new org.joml.Vector3f(1f, 0f, 0f).rotate(rot);
         org.joml.Vector3f uV = new org.joml.Vector3f(0f, 1f, 0f).rotate(rot);
         org.joml.Vector3f fV = new org.joml.Vector3f(0f, 0f, -1f).rotate(rot);
-        Vec3d right = new Vec3d(rV.x, rV.y, rV.z);
-        Vec3d up = new Vec3d(uV.x, uV.y, uV.z);
-        Vec3d forward = new Vec3d(fV.x, fV.y, fV.z);
+        Vec3 right = new Vec3(rV.x, rV.y, rV.z);
+        Vec3 up = new Vec3(uV.x, uV.y, uV.z);
+        Vec3 forward = new Vec3(fV.x, fV.y, fV.z);
 
-        int baseFov = net.minecraft.client.MinecraftClient.getInstance().options.getFov().getValue();
-        float fovMul = ((ninja.trek.mixin.client.GameRendererFovAccessor) net.minecraft.client.MinecraftClient.getInstance().gameRenderer).getFovMultiplier();
+        int baseFov = net.minecraft.client.Minecraft.getInstance().options.fov().get();
+        float fovMul = ((ninja.trek.mixin.client.GameRendererFovAccessor) net.minecraft.client.Minecraft.getInstance().gameRenderer).getFovMultiplier();
         double fovY = Math.toRadians(Math.max(1.0, baseFov * fovMul));
         double aspect = (double)screenW / (double)screenH;
         double tanHalfY = Math.tan(fovY * 0.5);
@@ -304,10 +303,10 @@ public class NodeManager {
         double best = Double.MAX_VALUE;
         CameraNode bestNode = null;
         for (var n : nodes) {
-            Vec3d v = n.position.subtract(camPos);
-            double xCam = v.dotProduct(right);
-            double yCam = v.dotProduct(up);
-            double zCam = v.dotProduct(forward);
+            Vec3 v = n.position.subtract(camPos);
+            double xCam = v.dot(right);
+            double yCam = v.dot(up);
+            double zCam = v.dot(forward);
             if (zCam <= 0.0) continue; // behind camera
             double nx = xCam / (zCam * tanHalfX);
             double ny = yCam / (zCam * tanHalfY);
@@ -325,13 +324,13 @@ public class NodeManager {
     // Influence computation
     public CameraTarget applyInfluence(CameraTarget base, boolean skipInfluence) {
         if (skipInfluence || areas.isEmpty() || base == null) return base;
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) return base;
         PlayerStateSnapshot stateSnapshot = collectPlayerStates(mc);
-        Vec3d playerPos = mc.player.getEyePos();
+        Vec3 playerPos = mc.player.getEyePosition();
 
         double totalWeight = 0.0;
-        Vec3d accumPos = Vec3d.ZERO;
+        Vec3 accumPos = Vec3.ZERO;
         float yawBase = base.getYaw();
         float pitchBase = base.getPitch();
         float baseFov = base.getFovMultiplier();
@@ -348,21 +347,21 @@ public class NodeManager {
                     ? influenceForSphereArea(playerPos, area)
                     : influenceForBoxArea(playerPos, area);
             double easedInfluence = area.easing != null ? area.easing.apply(rawInfluence) : rawInfluence;
-            double areaWeight = MathHelper.clamp(easedInfluence, 0.0, 1.0);
+            double areaWeight = Mth.clamp(easedInfluence, 0.0, 1.0);
             if (areaWeight <= 1e-6) continue;
 
             boolean producedMovement = false;
             for (AreaMovementConfig config : area.movements) {
                 if (config == null || !config.enabled) continue;
                 if (!passesStateFilters(config, stateSnapshot)) continue;
-                double movementWeight = MathHelper.clamp(config.weight, 0.0f, 1.0f);
+                double movementWeight = Mth.clamp(config.weight, 0.0f, 1.0f);
                 if (movementWeight <= 1e-6) continue;
 
                 CameraTarget target = resolveMovementConfig(area, config, base);
                 if (target == null) continue;
 
                 double finalWeight = areaWeight * movementWeight;
-                accumPos = accumPos.add(target.getPosition().multiply(finalWeight));
+                accumPos = accumPos.add(target.getPosition().scale(finalWeight));
                 totalWeight += finalWeight;
 
                 accumYawDelta += wrapAngleDelta(yawBase, target.getYaw()) * finalWeight;
@@ -374,7 +373,7 @@ public class NodeManager {
             }
 
             if (!producedMovement) {
-                accumPos = accumPos.add(area.center.multiply(areaWeight));
+                accumPos = accumPos.add(area.center.scale(areaWeight));
                 totalWeight += areaWeight;
             }
         }
@@ -383,21 +382,21 @@ public class NodeManager {
 
         if (totalWeight > 1.0) {
             double inv = 1.0 / totalWeight;
-            accumPos = accumPos.multiply(inv);
+            accumPos = accumPos.scale(inv);
             accumYawDelta *= inv;
             accumPitch *= inv;
             accumFov *= inv;
             totalWeight = 1.0;
         }
 
-        Vec3d blendedPos = base.getPosition().multiply(1.0 - totalWeight).add(accumPos);
+        Vec3 blendedPos = base.getPosition().scale(1.0 - totalWeight).add(accumPos);
 
         float outYaw = yawBase;
         float outPitch = pitchBase;
         if (anyOrientation) {
             outYaw = normalizeAngle(yawBase + (float)(accumYawDelta * totalWeight));
             outPitch = pitchBase * (1.0f - (float)totalWeight) + (float)(accumPitch * totalWeight);
-            outPitch = MathHelper.clamp(outPitch, -90f, 90f);
+            outPitch = Mth.clamp(outPitch, -90f, 90f);
         }
 
         float outFov = baseFov;
@@ -436,7 +435,7 @@ public class NodeManager {
      * Returns 0.0 if no influence, up to 1.0+ if multiple areas overlap.
      * This is normalized to max 1.0 in applyInfluence(), but raw total is useful for detection.
      */
-    public double getTotalInfluence(Vec3d position) {
+    public double getTotalInfluence(Vec3 position) {
         if (areas.isEmpty() || position == null) return 0.0;
 
         double totalWeight = 0.0;
@@ -447,7 +446,7 @@ public class NodeManager {
                     ? influenceForSphereArea(position, area)
                     : influenceForBoxArea(position, area);
             t = area.easing != null ? area.easing.apply(t) : t;
-            totalWeight += MathHelper.clamp(t, 0.0, 1.0);
+            totalWeight += Mth.clamp(t, 0.0, 1.0);
         }
         return totalWeight;
     }
@@ -469,7 +468,7 @@ public class NodeManager {
         return delta;
     }
 
-    private double cubeDistance(Vec3d p, Vec3d c, double r) {
+    private double cubeDistance(Vec3 p, Vec3 c, double r) {
         // approximate distance to cube by max of axis distances
         double dx = Math.max(Math.abs(p.x - c.x) - r, 0);
         double dy = Math.max(Math.abs(p.y - c.y) - r, 0);
@@ -478,10 +477,10 @@ public class NodeManager {
     }
 
     public PlayerStateSnapshot collectPlayerStates() {
-        return collectPlayerStates(MinecraftClient.getInstance());
+        return collectPlayerStates(Minecraft.getInstance());
     }
 
-    public PlayerStateSnapshot collectPlayerStates(MinecraftClient mc) {
+    public PlayerStateSnapshot collectPlayerStates(Minecraft mc) {
         if (mc == null || mc.player == null) return PlayerStateSnapshot.noPlayer();
         var pl = mc.player;
         boolean isElytra = false;
@@ -493,13 +492,13 @@ public class NodeManager {
             }
         } catch (Throwable ignored) {}
         boolean isSwimming = pl.isSwimming();
-        boolean isSneaking = pl.isSneaking();
+        boolean isSneaking = pl.isShiftKeyDown();
         var vehicle = pl.getVehicle();
-        boolean isBoat = vehicle instanceof net.minecraft.entity.vehicle.BoatEntity;
-        boolean isMinecart = vehicle instanceof net.minecraft.entity.vehicle.AbstractMinecartEntity;
-        boolean isRidingGhast = vehicle instanceof net.minecraft.entity.mob.GhastEntity;
+        boolean isBoat = vehicle instanceof net.minecraft.world.entity.vehicle.boat.Boat;
+        boolean isMinecart = vehicle instanceof net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+        boolean isRidingGhast = vehicle instanceof net.minecraft.world.entity.monster.Ghast;
         boolean isRidingOther = vehicle != null && !isBoat && !isMinecart && !isRidingGhast;
-        boolean isCrawling1Block = pl.isInSwimmingPose() && !pl.isTouchingWater() && !isSwimming;
+        boolean isCrawling1Block = pl.isVisuallySwimming() && !pl.isInWater() && !isSwimming;
         boolean isWalking = !isElytra && !isSwimming && vehicle == null;
 
         EnumSet<PlayerStateKey> activeStates = EnumSet.noneOf(PlayerStateKey.class);
@@ -668,9 +667,9 @@ public class NodeManager {
         }
     }
 
-    private double influenceForSphereArea(Vec3d pos, Area area) {
+    private double influenceForSphereArea(Vec3 pos, Area area) {
         if (area.center == null) return 0.0;
-        Vec3d d = pos.subtract(area.center);
+        Vec3 d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             // insideRadii = inner ellipsoid (100% influence), outsideRadii = outer ellipsoid (0% influence)
             // Normalized distance at inside ellipsoid surface
@@ -691,7 +690,7 @@ public class NodeManager {
             // Between: linear interpolation
             // distAtInside = 1.0 means on inner surface, distAtOutside = 1.0 means on outer surface
             double t = (distAtOutside - 1.0) / (distAtOutside - distAtInside);
-            return MathHelper.clamp(t, 0.0, 1.0);
+            return Mth.clamp(t, 0.0, 1.0);
         } else {
             double dist = pos.distanceTo(area.center);
             // Inside insideRadius => 100% influence
@@ -703,9 +702,9 @@ public class NodeManager {
         }
     }
 
-    private double influenceForBoxArea(Vec3d pos, Area area) {
+    private double influenceForBoxArea(Vec3 pos, Area area) {
         if (area.center == null) return 0.0;
-        Vec3d d = pos.subtract(area.center);
+        Vec3 d = pos.subtract(area.center);
         if (area.advanced && area.insideRadii != null && area.outsideRadii != null) {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
             // Inside inner box => full weight
@@ -720,7 +719,7 @@ public class NodeManager {
             double ny = ry > 1e-6 ? Math.max(0.0, (ay - area.insideRadii.y) / ry) : 1.0;
             double nz = rz > 1e-6 ? Math.max(0.0, (az - area.insideRadii.z) / rz) : 1.0;
             double t = 1.0 - Math.max(nx, Math.max(ny, nz));
-            return MathHelper.clamp(t, 0.0, 1.0);
+            return Mth.clamp(t, 0.0, 1.0);
         } else {
             double ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
             double maxDist = Math.max(ax, Math.max(ay, az));
@@ -760,7 +759,7 @@ public class NodeManager {
         Craneshot.LOGGER.info("Disconnected from server");
     }
 
-    public void applyChunkSnapshot(RegistryKey<World> dimension,
+    public void applyChunkSnapshot(ResourceKey<Level> dimension,
                                     ChunkPos chunk,
                                     List<CameraNodeDTO> nodeList) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
@@ -773,7 +772,7 @@ public class NodeManager {
         }
     }
 
-    public void applyDeltaAdd(RegistryKey<World> dimension,
+    public void applyDeltaAdd(ResourceKey<Level> dimension,
                                ChunkPos chunk,
                                CameraNodeDTO dto) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
@@ -793,7 +792,7 @@ public class NodeManager {
         nodeChunkIndex.put(node.id, chunk);
     }
 
-    public void applyDeltaUpdate(RegistryKey<World> dimension,
+    public void applyDeltaUpdate(ResourceKey<Level> dimension,
                                   ChunkPos chunk,
                                   CameraNodeDTO dto) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
@@ -803,7 +802,7 @@ public class NodeManager {
         replaceNode(node.id, node);
     }
 
-    public void applyDeltaRemove(RegistryKey<World> dimension,
+    public void applyDeltaRemove(ResourceKey<Level> dimension,
                                   ChunkPos chunk,
                                   UUID nodeId) {
         if (!serverMode || nodeId == null || !dimensionMatchesCurrent(dimension)) return;
@@ -812,13 +811,13 @@ public class NodeManager {
         removeNode(nodeId);
     }
 
-    public void handleChunkUnload(RegistryKey<World> dimension,
+    public void handleChunkUnload(ResourceKey<Level> dimension,
                                    ChunkPos chunk) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
         removeNodesInChunk(chunk);
     }
 
-    public void applyAreasSnapshot(RegistryKey<World> dimension, List<AreaInstanceDTO> areaList) {
+    public void applyAreasSnapshot(ResourceKey<Level> dimension, List<AreaInstanceDTO> areaList) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
         UUID previousSelected = selectedAreaId;
         areas.clear();
@@ -837,7 +836,7 @@ public class NodeManager {
         movementStateFilterCache.clear();
     }
 
-    public void applyAreaDeltaAdd(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+    public void applyAreaDeltaAdd(ResourceKey<Level> dimension, AreaInstanceDTO dto) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
         AreaInstance area = dto.toAreaInstance();
         if (dto.clientRequestId != null) {
@@ -851,7 +850,7 @@ public class NodeManager {
         addAreaInstance(area);
     }
 
-    public void applyAreaDeltaUpdate(RegistryKey<World> dimension, AreaInstanceDTO dto) {
+    public void applyAreaDeltaUpdate(ResourceKey<Level> dimension, AreaInstanceDTO dto) {
         if (!serverMode || !dimensionMatchesCurrent(dimension)) return;
         AreaInstance updated = dto.toAreaInstance();
         AreaInstance existing = areaLookup.get(updated.id);
@@ -864,7 +863,7 @@ public class NodeManager {
         }
     }
 
-    public void applyAreaDeltaRemove(RegistryKey<World> dimension, UUID areaId) {
+    public void applyAreaDeltaRemove(ResourceKey<Level> dimension, UUID areaId) {
         if (!serverMode || areaId == null || !dimensionMatchesCurrent(dimension)) return;
         AreaInstance removed = areaLookup.remove(areaId);
         if (removed != null) {
@@ -882,7 +881,7 @@ public class NodeManager {
             pendingAreaUpdates.clear();
             return;
         }
-        RegistryKey<World> dimension = getCurrentDimension();
+        ResourceKey<Level> dimension = getCurrentDimension();
         if (dimension == null) return;
         if (!pendingAreaUpdates.isEmpty()) {
             List<UUID> ids = new ArrayList<>(pendingAreaUpdates);
@@ -896,20 +895,20 @@ public class NodeManager {
         }
     }
 
-    private RegistryKey<World> getCurrentDimension() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.world == null) return null;
-        return mc.world.getRegistryKey();
+    private ResourceKey<Level> getCurrentDimension() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.level == null) return null;
+        return mc.level.dimension();
     }
 
     private UUID getCurrentPlayerId() {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.player == null) return null;
-        return mc.player.getUuid();
+        return mc.player.getUUID();
     }
 
-    private boolean dimensionMatchesCurrent(RegistryKey<World> dimension) {
-        RegistryKey<World> current = getCurrentDimension();
+    private boolean dimensionMatchesCurrent(ResourceKey<Level> dimension) {
+        ResourceKey<Level> current = getCurrentDimension();
         return current == null || current.equals(dimension);
     }
 

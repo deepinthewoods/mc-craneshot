@@ -1,11 +1,11 @@
 package ninja.trek.util;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.WorldRenderer;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.chunk.ChunkStatus;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /**
  * Utility class for camera-related functions.
@@ -37,7 +37,7 @@ public class CameraUtils {
      * @return camera yaw in degrees
      */
     public static float getCameraYaw() {
-        return MathHelper.wrapDegrees(cameraYaw);
+        return Mth.wrapDegrees(cameraYaw);
     }
 
     /**
@@ -45,7 +45,7 @@ public class CameraUtils {
      * @return camera pitch in degrees
      */
     public static float getCameraPitch() {
-        return MathHelper.wrapDegrees(cameraPitch);
+        return Mth.wrapDegrees(cameraPitch);
     }
 
     /**
@@ -98,13 +98,13 @@ public class CameraUtils {
      * @param lastChunkZ previous chunk Z
      */
     public static void markChunksForRebuild(int chunkX, int chunkZ, int lastChunkX, int lastChunkZ) {
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        if (mc.world == null || (chunkX == lastChunkX && chunkZ == lastChunkZ)) {
+        if (mc.level == null || (chunkX == lastChunkX && chunkZ == lastChunkZ)) {
             return;
         }
 
-        final int viewDistance = mc.options.getViewDistance().getValue();
+        final int viewDistance = mc.options.renderDistance().get();
 
         if (chunkX != lastChunkX) {
             final int minCX = chunkX > lastChunkX ? lastChunkX + viewDistance : chunkX     - viewDistance;
@@ -112,8 +112,8 @@ public class CameraUtils {
 
             for (int cx = minCX; cx <= maxCX; ++cx) {
                 for (int cz = chunkZ - viewDistance; cz <= chunkZ + viewDistance; ++cz) {
-                    if (isClientChunkLoaded(mc.world, cx, cz)) {
-                        markChunkForReRender(mc.worldRenderer, cx, cz);
+                    if (isClientChunkLoaded(mc.level, cx, cz)) {
+                        markChunkForReRender(mc.levelRenderer, cx, cz);
                     }
                 }
             }
@@ -125,8 +125,8 @@ public class CameraUtils {
 
             for (int cz = minCZ; cz <= maxCZ; ++cz) {
                 for (int cx = chunkX - viewDistance; cx <= chunkX + viewDistance; ++cx) {
-                    if (isClientChunkLoaded(mc.world, cx, cz)) {
-                        markChunkForReRender(mc.worldRenderer, cx, cz);
+                    if (isClientChunkLoaded(mc.level, cx, cz)) {
+                        markChunkForReRender(mc.levelRenderer, cx, cz);
                     }
                 }
             }
@@ -139,16 +139,16 @@ public class CameraUtils {
      * @param lastChunkZ last camera chunk Z
      */
     public static void markChunksForRebuildOnDeactivation(int lastChunkX, int lastChunkZ) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        final int viewDistance = mc.options.getViewDistance().getValue();
+        Minecraft mc = Minecraft.getInstance();
+        final int viewDistance = mc.options.renderDistance().get();
         Entity entity = mc.getCameraEntity();
 
-        if (mc.world == null || entity == null) {
+        if (mc.level == null || entity == null) {
             return;
         }
 
-        final int chunkX = MathHelper.floor(entity.getX() / 16.0) >> 4;
-        final int chunkZ = MathHelper.floor(entity.getZ() / 16.0) >> 4;
+        final int chunkX = Mth.floor(entity.getX() / 16.0) >> 4;
+        final int chunkZ = Mth.floor(entity.getZ() / 16.0) >> 4;
 
         final int minCameraCX = lastChunkX - viewDistance;
         final int maxCameraCX = lastChunkX + viewDistance;
@@ -163,8 +163,8 @@ public class CameraUtils {
             for (int cx = minCX; cx <= maxCX; ++cx) {
                 // Mark all chunks that were not in free camera range
                 if ((cx < minCameraCX || cx > maxCameraCX || cz < minCameraCZ || cz > maxCameraCZ) &&
-                    isClientChunkLoaded(mc.world, cx, cz)) {
-                    markChunkForReRender(mc.worldRenderer, cx, cz);
+                    isClientChunkLoaded(mc.level, cx, cz)) {
+                    markChunkForReRender(mc.levelRenderer, cx, cz);
                 }
             }
         }
@@ -176,9 +176,9 @@ public class CameraUtils {
      * @param chunkX chunk X coordinate
      * @param chunkZ chunk Z coordinate
      */
-    public static void markChunkForReRender(WorldRenderer renderer, int chunkX, int chunkZ) {
+    public static void markChunkForReRender(LevelRenderer renderer, int chunkX, int chunkZ) {
         for (int cy = 0; cy < 16; ++cy) {
-            renderer.scheduleChunkRender(chunkX, cy, chunkZ);
+            renderer.setSectionDirty(chunkX, cy, chunkZ);
         }
     }
 
@@ -189,7 +189,7 @@ public class CameraUtils {
      * @param chunkZ chunk Z coordinate
      * @return true if the chunk is loaded
      */
-    public static boolean isClientChunkLoaded(ClientWorld world, int chunkX, int chunkZ) {
-        return world.getChunkManager().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) != null;
+    public static boolean isClientChunkLoaded(ClientLevel world, int chunkX, int chunkZ) {
+        return world.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) != null;
     }
 }

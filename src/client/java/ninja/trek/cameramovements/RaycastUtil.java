@@ -1,25 +1,25 @@
 package ninja.trek.cameramovements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 public class RaycastUtil {
     private static final double CAMERA_OFFSET = 0.5;
     private static final double STEP_SIZE = 0.5;
     private static final double FINE_STEP_SIZE = 0.1;
 
-    public static Vec3d adjustForCollision(Vec3d playerPos, Vec3d targetPos, RaycastType raycastType) {
+    public static Vec3 adjustForCollision(Vec3 playerPos, Vec3 targetPos, RaycastType raycastType) {
         // Handle null inputs safely
         if (playerPos == null || targetPos == null) {
             return targetPos;
         }
         
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null || raycastType == null || raycastType == RaycastType.NONE) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null || raycastType == null || raycastType == RaycastType.NONE) {
             return targetPos;
         }
 
@@ -33,31 +33,31 @@ public class RaycastUtil {
         }
     }
 
-    private static Vec3d handleNearRaycast(MinecraftClient client, Vec3d playerPos, Vec3d targetPos) {
-        BlockHitResult hit = client.world.raycast(new RaycastContext(
+    private static Vec3 handleNearRaycast(Minecraft client, Vec3 playerPos, Vec3 targetPos) {
+        BlockHitResult hit = client.level.clip(new ClipContext(
                 playerPos,
                 targetPos,
-                RaycastContext.ShapeType.VISUAL,
-                RaycastContext.FluidHandling.NONE,
+                ClipContext.Block.VISUAL,
+                ClipContext.Fluid.NONE,
                 client.player
         ));
 
         if (hit.getType() == HitResult.Type.BLOCK) {
-            Vec3d hitPos = hit.getPos();
-            Vec3d directionVector = hitPos.subtract(playerPos).normalize();
-            Vec3d adjusted = hitPos.subtract(directionVector.multiply(CAMERA_OFFSET));
+            Vec3 hitPos = hit.getLocation();
+            Vec3 directionVector = hitPos.subtract(playerPos).normalize();
+            Vec3 adjusted = hitPos.subtract(directionVector.scale(CAMERA_OFFSET));
             // No logging here to reduce noise
             return adjusted;
         }
         return targetPos;
     }
 
-    private static Vec3d handleFarRaycast(MinecraftClient client, Vec3d playerPos, Vec3d targetPos) {
-        Vec3d direction = targetPos.subtract(playerPos).normalize();
+    private static Vec3 handleFarRaycast(Minecraft client, Vec3 playerPos, Vec3 targetPos) {
+        Vec3 direction = targetPos.subtract(playerPos).normalize();
         double totalDistance = targetPos.distanceTo(playerPos);
 
         // Start from target position
-        Vec3d currentPos = targetPos;
+        Vec3 currentPos = targetPos;
 
         if (isPositionInAir(client, currentPos)) {
             return refinePosition(client, currentPos, direction);
@@ -65,43 +65,43 @@ public class RaycastUtil {
 
         // Coarse search
         for (double distance = STEP_SIZE; distance < totalDistance; distance += STEP_SIZE) {
-            Vec3d checkPos = targetPos.subtract(direction.multiply(distance));
+            Vec3 checkPos = targetPos.subtract(direction.scale(distance));
 
             if (isPositionInAir(client, checkPos)) {
-                return refinePosition(client, checkPos, direction.multiply(-1));
+                return refinePosition(client, checkPos, direction.scale(-1));
             }
         }
 
         return playerPos;
     }
 
-    private static Vec3d refinePosition(MinecraftClient client, Vec3d startPos, Vec3d direction) {
+    private static Vec3 refinePosition(Minecraft client, Vec3 startPos, Vec3 direction) {
         // Raycast forward until we hit something
-        BlockHitResult hit = client.world.raycast(new RaycastContext(
+        BlockHitResult hit = client.level.clip(new ClipContext(
                 startPos,
-                startPos.add(direction.multiply(2.0)), // Look 2 blocks ahead
-                RaycastContext.ShapeType.VISUAL,
-                RaycastContext.FluidHandling.NONE,
+                startPos.add(direction.scale(2.0)), // Look 2 blocks ahead
+                ClipContext.Block.VISUAL,
+                ClipContext.Fluid.NONE,
                 client.player
         ));
 
         if (hit.getType() == HitResult.Type.BLOCK) {
-            Vec3d hitPos = hit.getPos();
-            return hitPos.subtract(direction.multiply(CAMERA_OFFSET));
+            Vec3 hitPos = hit.getLocation();
+            return hitPos.subtract(direction.scale(CAMERA_OFFSET));
         }
 
         return startPos;
     }
 
-    private static boolean isPositionInAir(MinecraftClient client, Vec3d pos) {
+    private static boolean isPositionInAir(Minecraft client, Vec3 pos) {
         // Perform null checks
-        if (client == null || client.world == null || pos == null) {
+        if (client == null || client.level == null || pos == null) {
             return true; // Assume air if we can't check
         }
         
         try {
-            BlockPos blockPos = BlockPos.ofFloored(pos);
-            return client.world.getBlockState(blockPos).isAir();
+            BlockPos blockPos = BlockPos.containing(pos);
+            return client.level.getBlockState(blockPos).isAir();
         } catch (Exception e) {
             // Fallback in case of any error
             return true; // Assume air in case of error

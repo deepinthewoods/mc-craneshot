@@ -1,10 +1,9 @@
 package ninja.trek.nodes.model;
 
-import net.minecraft.util.math.Vec3d;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Top-level area entry persisted alongside nodes.
@@ -72,7 +71,7 @@ public class AreaInstance extends Area {
         return inst;
     }
 
-    public Vec3d getCenter() {
+    public Vec3 getCenter() {
         return center;
     }
 }

@@ -1,40 +1,40 @@
 package ninja.trek.nodes.network.payload;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
 import ninja.trek.Craneshot;
 import ninja.trek.nodes.model.CameraNodeDTO;
 
 import java.util.UUID;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
 
 public record EditRequestPayload(
         EditOperation operation,
-        RegistryKey<World> dimension,
+        ResourceKey<Level> dimension,
         CameraNodeDTO nodeData,
         UUID nodeIdForDelete
-) implements CustomPayload {
-    public static final Id<EditRequestPayload> ID = new Id<>(Identifier.of(Craneshot.MOD_ID, "edit_request"));
+) implements CustomPacketPayload {
+    public static final Type<EditRequestPayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "edit_request"));
 
-    public static final PacketCodec<RegistryByteBuf, EditRequestPayload> CODEC = PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, EditRequestPayload> CODEC = StreamCodec.ofMember(
             EditRequestPayload::write,
             EditRequestPayload::read
     );
 
-    private EditRequestPayload(RegistryByteBuf buf) {
+    private EditRequestPayload(RegistryFriendlyByteBuf buf) {
         this(
-                buf.readEnumConstant(EditOperation.class),
-                RegistryKey.of(RegistryKeys.WORLD, buf.readIdentifier()),
+                buf.readEnum(EditOperation.class),
+                ResourceKey.create(Registries.DIMENSION, buf.readIdentifier()),
                 readNodeData(buf),
                 readNodeId(buf)
         );
     }
 
-    private static CameraNodeDTO readNodeData(RegistryByteBuf buf) {
+    private static CameraNodeDTO readNodeData(RegistryFriendlyByteBuf buf) {
         // For CREATE and UPDATE operations
         if (buf.readBoolean()) {
             return CameraNodeDTO.read(buf);
@@ -42,21 +42,21 @@ public record EditRequestPayload(
         return null;
     }
 
-    private static UUID readNodeId(RegistryByteBuf buf) {
+    private static UUID readNodeId(RegistryFriendlyByteBuf buf) {
         // For DELETE operation
         if (buf.readBoolean()) {
-            return buf.readUuid();
+            return buf.readUUID();
         }
         return null;
     }
 
-    private static EditRequestPayload read(RegistryByteBuf buf) {
+    private static EditRequestPayload read(RegistryFriendlyByteBuf buf) {
         return new EditRequestPayload(buf);
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeEnumConstant(operation);
-        buf.writeIdentifier(dimension.getValue());
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeEnum(operation);
+        buf.writeIdentifier(dimension.identifier());
         boolean hasNodeData = nodeData != null;
         buf.writeBoolean(hasNodeData);
         if (hasNodeData) {
@@ -65,12 +65,12 @@ public record EditRequestPayload(
         boolean hasNodeId = nodeIdForDelete != null;
         buf.writeBoolean(hasNodeId);
         if (hasNodeId) {
-            buf.writeUuid(nodeIdForDelete);
+            buf.writeUUID(nodeIdForDelete);
         }
     }
 
     @Override
-    public Id<EditRequestPayload> getId() {
+    public Type<EditRequestPayload> type() {
         return ID;
     }
 
@@ -79,15 +79,15 @@ public record EditRequestPayload(
     }
 
     // Factory methods for convenience
-    public static EditRequestPayload create(RegistryKey<World> dimension, CameraNodeDTO nodeData) {
+    public static EditRequestPayload create(ResourceKey<Level> dimension, CameraNodeDTO nodeData) {
         return new EditRequestPayload(EditOperation.CREATE, dimension, nodeData, null);
     }
 
-    public static EditRequestPayload update(RegistryKey<World> dimension, CameraNodeDTO nodeData) {
+    public static EditRequestPayload update(ResourceKey<Level> dimension, CameraNodeDTO nodeData) {
         return new EditRequestPayload(EditOperation.UPDATE, dimension, nodeData, null);
     }
 
-    public static EditRequestPayload delete(RegistryKey<World> dimension, UUID nodeId) {
+    public static EditRequestPayload delete(ResourceKey<Level> dimension, UUID nodeId) {
         return new EditRequestPayload(EditOperation.DELETE, dimension, null, nodeId);
     }
 }

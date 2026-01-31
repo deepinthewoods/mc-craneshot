@@ -1,22 +1,21 @@
 package ninja.trek.nodes.ui;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
-
 import java.util.function.Consumer;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public class NodeRenameModal extends Screen {
     private final String initialName;
     private final Consumer<String> onComplete;
-    private TextFieldWidget nameField;
+    private EditBox nameField;
     private static final int MODAL_WIDTH = 220;
     private static final int MODAL_HEIGHT = 110;
 
     public NodeRenameModal(String initialName, Consumer<String> onComplete) {
-        super(Text.literal("Rename Node"));
+        super(Component.literal("Rename Node"));
         this.initialName = initialName != null ? initialName : "Node";
         this.onComplete = onComplete;
     }
@@ -28,33 +27,33 @@ public class NodeRenameModal extends Screen {
         int modalLeft = centerX - MODAL_WIDTH / 2;
         int modalTop = centerY - MODAL_HEIGHT / 2;
 
-        nameField = new TextFieldWidget(
-                textRenderer,
+        nameField = new EditBox(
+                font,
                 modalLeft + 10,
                 modalTop + 30,
                 MODAL_WIDTH - 20,
                 20,
-                Text.literal("Name")
+                Component.literal("Name")
         );
-        nameField.setText(initialName);
+        nameField.setValue(initialName);
         nameField.setMaxLength(64);
-        addSelectableChild(nameField);
+        addWidget(nameField);
         setInitialFocus(nameField);
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Save"), btn -> {
-                    if (onComplete != null) onComplete.accept(nameField.getText());
-                    close();
+        addRenderableWidget(Button.builder(Component.literal("Save"), btn -> {
+                    if (onComplete != null) onComplete.accept(nameField.getValue());
+                    onClose();
                 })
-                .dimensions(modalLeft + 10, modalTop + MODAL_HEIGHT - 30, 90, 20)
+                .bounds(modalLeft + 10, modalTop + MODAL_HEIGHT - 30, 90, 20)
                 .build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn -> close())
-                .dimensions(modalLeft + MODAL_WIDTH - 100, modalTop + MODAL_HEIGHT - 30, 90, 20)
+        addRenderableWidget(Button.builder(Component.literal("Cancel"), btn -> onClose())
+                .bounds(modalLeft + MODAL_WIDTH - 100, modalTop + MODAL_HEIGHT - 30, 90, 20)
                 .build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         int centerX = width / 2;
         int centerY = height / 2;
@@ -62,16 +61,16 @@ public class NodeRenameModal extends Screen {
         int modalTop = centerY - MODAL_HEIGHT / 2;
         context.fill(modalLeft, modalTop, modalLeft + MODAL_WIDTH, modalTop + MODAL_HEIGHT, 0xB0000000);
         context.fill(modalLeft + 1, modalTop + 1, modalLeft + MODAL_WIDTH - 1, modalTop + MODAL_HEIGHT - 1, 0xFF333333);
-        context.drawCenteredTextWithShadow(textRenderer, "Rename Node", centerX, modalTop + 10, 0xFFFFFF);
+        context.drawCenteredString(font, "Rename Node", centerX, modalTop + 10, 0xFFFFFF);
         nameField.render(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void close() {
-        if (client != null) client.setScreen(null);
+    public void onClose() {
+        if (minecraft != null) minecraft.setScreen(null);
     }
 
     @Override
-    public boolean shouldPause() { return false; }
+    public boolean isPauseScreen() { return false; }
 }
 

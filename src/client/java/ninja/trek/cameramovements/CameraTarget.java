@@ -1,18 +1,18 @@
 package ninja.trek.cameramovements;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.mixin.client.FovAccessor;
 
 public class CameraTarget {
-    private Vec3d position;
+    private Vec3 position;
     private float yaw;
     private float pitch;
     private float fovMultiplier;  // 1.0 = normal FOV, >1 = wider, <1 = narrower
 
-    public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier) {
+    public CameraTarget(Vec3 position, float yaw, float pitch, float fovMultiplier) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
@@ -21,39 +21,39 @@ public class CameraTarget {
     }
     
     // Legacy signature retained; orthographic factor is ignored
-    public CameraTarget(Vec3d position, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
+    public CameraTarget(Vec3 position, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
         this.position = position;
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = Math.max(0.1f, fovMultiplier);
     }
 
-    public CameraTarget(Vec3d position, float yaw, float pitch) {
+    public CameraTarget(Vec3 position, float yaw, float pitch) {
         this(position, yaw, pitch, 1.0f); // Default to normal FOV
     }
 
     public CameraTarget() {
-        position = new Vec3d(0, 0, 0);
+        position = new Vec3(0, 0, 0);
         yaw = 0;
         pitch = 0;
         fovMultiplier = 1.0f; // Default to normal FOV
     }
 
     public static CameraTarget fromCamera(Camera camera) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         float currentFovMultiplier = 1.0f;
         if (client.gameRenderer instanceof FovAccessor) {
             currentFovMultiplier = ((FovAccessor) client.gameRenderer).getFovModifier();
             if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
         }
-        CameraTarget target = new CameraTarget(camera.getPos(), camera.getYaw(), camera.getPitch(), currentFovMultiplier);
+        CameraTarget target = new CameraTarget(camera.position(), camera.yRot(), camera.xRot(), currentFovMultiplier);
         // logging removed
         return target;
     }
 
 
 
-    public Vec3d getPosition() {
+    public Vec3 getPosition() {
         return position;
     }
 
@@ -77,30 +77,30 @@ public class CameraTarget {
         this.fovMultiplier = Math.max(0.1f, multiplier); // Ensure we never have a zero or negative multiplier
     }
 
-    public CameraTarget withAdjustedPosition(PlayerEntity player, RaycastType raycastType) {
+    public CameraTarget withAdjustedPosition(Player player, RaycastType raycastType) {
         // Handle null raycastType safely
         if (raycastType == null) {
             raycastType = RaycastType.NONE;
         }
         
-        Vec3d adjustedPos = RaycastUtil.adjustForCollision(player.getEyePos(), this.position, raycastType);
+        Vec3 adjustedPos = RaycastUtil.adjustForCollision(player.getEyePosition(), this.position, raycastType);
         CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier);
         // logging removed
         return adjusted;
     }
 
-    public void set(Vec3d v, float yaw, float pitch) {
+    public void set(Vec3 v, float yaw, float pitch) {
         set(v, yaw, pitch, this.fovMultiplier);
     }
 
-    public void set(Vec3d v, float yaw, float pitch, float fovMultiplier) {
+    public void set(Vec3 v, float yaw, float pitch, float fovMultiplier) {
         position = v;
         this.yaw = yaw;
         this.pitch = pitch;
         this.fovMultiplier = fovMultiplier != 0 ? fovMultiplier : 1.0f;
     }
     
-    public void set(Vec3d v, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
+    public void set(Vec3 v, float yaw, float pitch, float fovMultiplier, float orthoFactor) {
         position = v;
         this.yaw = yaw;
         this.pitch = pitch;
@@ -115,7 +115,7 @@ public class CameraTarget {
     }
 
     public CameraTarget lerp(CameraTarget other, float t) {
-        Vec3d lerpedPos = this.position.lerp(other.position, t);
+        Vec3 lerpedPos = this.position.lerp(other.position, t);
         float lerpedYaw = lerpAngle(this.yaw, other.yaw, t);
         float lerpedPitch = lerpAngle(this.pitch, other.pitch, t);
 
