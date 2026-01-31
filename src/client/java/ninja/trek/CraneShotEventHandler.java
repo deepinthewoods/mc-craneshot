@@ -24,6 +24,8 @@ public class CraneShotEventHandler {
     private static final Map<Integer, Boolean> keyStates = new HashMap<>();
     private static Integer lastActiveSlot = null;
     private static boolean followWasPressed = false;
+    private static long lastFollowPressTimeMs = 0;
+    private static final long DOUBLE_TAP_THRESHOLD_MS = 400;
     private static boolean zoomWasPressed = false;
     private static boolean lastAlive = true;
     private static boolean lastSleeping = false;
@@ -61,6 +63,15 @@ public class CraneShotEventHandler {
             boolean followPressed = CraneshotClient.followMovementKey != null && CraneshotClient.followMovementKey.isDown();
             if (followPressed != followWasPressed) {
                 if (followPressed) {
+                    // Detect double-tap for elytra takeoff
+                    long now = System.currentTimeMillis();
+                    FollowMovement followForTap = GeneralMenuSettings.getFollowMovement();
+                    if (followForTap != null && followForTap.isAutoRunAndJump()
+                            && (now - lastFollowPressTimeMs) <= DOUBLE_TAP_THRESHOLD_MS) {
+                        followForTap.triggerElytraTakeoff(client);
+                    }
+                    lastFollowPressTimeMs = now;
+
                     CraneshotClient.MOVEMENT_MANAGER.startFollowMovement(client, camera);
                 } else {
                     CraneshotClient.MOVEMENT_MANAGER.stopFollowMovement(client, camera);

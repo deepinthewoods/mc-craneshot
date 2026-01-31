@@ -5,7 +5,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -91,6 +93,10 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     private long lastAutoJumpLogTimeMs = 0L;
     private long lastAutoAssistStatusLogTimeMs = 0L;
 
+    // Elytra takeoff: triggered by double-tapping the follow key.
+    private static final int ELYTRA_SECOND_JUMP_DELAY_TICKS = 7;
+    private int elytraTakeoffTicksRemaining = 0;
+
     private CameraTarget current = new CameraTarget();
     private float lastStickYaw = 0.0f;
     private Vec3 startPlayerPosXZ = null;
@@ -156,6 +162,15 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         forceMoveKeys(client);
         tickJumpTimers(client);
 
+        // --- Elytra takeoff: delayed second jump to activate gliding ---
+        if (elytraTakeoffTicksRemaining > 0) {
+            elytraTakeoffTicksRemaining--;
+            if (elytraTakeoffTicksRemaining == 0) {
+                triggerJump(client);
+                Craneshot.LOGGER.info("Follow elytra takeoff: second jump fired");
+            }
+        }
+
         // --- Swimming assist: hold space when underwater, jump out at water edge ---
         if (player.isInWater()) {
             handleSwimmingAssist(client, player);
@@ -211,12 +226,36 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         }
     }
 
+    /**
+     * Initiates elytra takeoff: jumps immediately and schedules a second jump
+     * after a short delay to activate gliding. Only works if the player has
+     * an elytra equipped and is not already flying.
+     */
+    public void triggerElytraTakeoff(Minecraft client) {
+        if (client == null || client.player == null) return;
+        Player player = client.player;
+
+        // Must have elytra equipped in chest slot
+        if (!player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) return;
+
+        // Already gliding — nothing to do
+        if (player.isFallFlying()) return;
+
+        // First jump to leave the ground
+        triggerJump(client);
+        // Schedule the second jump to activate elytra
+        elytraTakeoffTicksRemaining = ELYTRA_SECOND_JUMP_DELAY_TICKS;
+
+        Craneshot.LOGGER.info("Follow elytra takeoff: initiated");
+    }
+
     public void stopAutoRunAndJump(Minecraft client) {
         stopForcedKeys(client);
         restoreVanillaAutoJump(client);
         jumpPressTicksRemaining = 0;
         jumpCooldownTicksRemaining = 0;
         forcedJump = false;
+        elytraTakeoffTicksRemaining = 0;
         lastAutoJumpLogTimeMs = 0L;
         lastAutoAssistStatusLogTimeMs = 0L;
     }
