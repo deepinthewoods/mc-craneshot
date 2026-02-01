@@ -952,6 +952,30 @@ public class MenuOverlayScreen extends Screen {
             }).bounds(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
             controlX += 25;
 
+            // Copy button (only if movement assigned)
+            if (entry.getMovement() != null) {
+                final ICameraMovement movementToCopy = entry.getMovement();
+                this.addRenderableWidget(Button.builder(Component.literal("Copy"), button -> {
+                    SlotSettingsIO.copyMovementToClipboard(movementToCopy);
+                }).bounds(controlX, baseY + yOffset, 40, BUTTON_HEIGHT).build());
+                controlX += 45;
+            }
+
+            // Paste button (always visible)
+            this.addRenderableWidget(Button.builder(Component.literal("Paste"), button -> {
+                try {
+                    ICameraMovement newMovement = SlotSettingsIO.createMovementFromClipboard();
+                    if (newMovement != null) {
+                        entry.setMovement(newMovement);
+                        FollowerSettingsIO.saveFollowers(followerConfig);
+                        reinitialize();
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }).bounds(controlX, baseY + yOffset, 40, BUTTON_HEIGHT).build());
+            controlX += 45;
+
             yOffset += spacing;
 
             // Movement settings
