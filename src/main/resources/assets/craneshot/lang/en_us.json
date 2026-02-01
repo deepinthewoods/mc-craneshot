@@ -1,4 +1,5 @@
 {
+  "modmenu.nameTranslation.craneshot": "CraneShot",
   "category.craneshot.camera": "CraneShot Camera",
   "category.craneshot.ui": "CraneShot UI",
   "key.craneshot.toggle_menu": "Toggle Menu",
