@@ -1,7 +1,7 @@
 {
   "modmenu.nameTranslation.craneshot": "CraneShot",
-  "category.craneshot.camera": "CraneShot Camera",
-  "category.craneshot.ui": "CraneShot UI",
+  "key.category.craneshot.camera": "CraneShot Camera",
+  "key.category.craneshot.ui": "CraneShot UI",
   "key.craneshot.toggle_menu": "Toggle Menu",
   "key.craneshot.select_movement": "Select Movement Type",
   "key.craneshot.follow_movement": "Follow Movement",
