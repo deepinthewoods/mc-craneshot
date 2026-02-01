@@ -1,6 +1,7 @@
 package ninja.trek.camera;
 
 import net.minecraft.client.Camera;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -55,12 +56,17 @@ public class CameraSystem {
     private boolean disableChunkCulling = false;
     private Entity originalCameraEntity = null;
     private boolean originalChunkCulling = true;
+    private CameraType originalCameraType = null;
 
     // Interpolated player position (updated once per frame for consistent rendering decisions)
     private Vec3 interpolatedPlayerPosition = null;
 
     // Hysteresis state for player model visibility
     private boolean isPlayerModelCurrentlyVisible = true;
+
+    // Suppress player model rendering for N more frames after deactivation
+    // Prevents one-frame flash when transitioning back to first-person
+    private int suppressRenderFrames = 0;
 
     // Rotation easing state
     private float targetYaw = 0f;      // Where mouse wants us to look
@@ -109,6 +115,7 @@ public class CameraSystem {
             // Store original state
             originalCameraEntity = mc.getCameraEntity();
             originalChunkCulling = mc.smartCull;
+            originalCameraType = mc.options.getCameraType();
             
             // Initialize camera position and rotation from either current camera (if available)
             // or from the player position
@@ -146,7 +153,12 @@ public class CameraSystem {
             }
             
             cameraActive = true;
-            
+            suppressRenderFrames = 0;
+
+            // Always use THIRD_PERSON_BACK so isDetached()=true and the player enters the render list.
+            // The mixin controls actual visibility based on distance.
+            mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+
             // Explicitly apply position/rotation only if not using the dedicated camera entity
             if (currentCamera != null && mode != CameraMode.FREE_CAMERA) {
                 ((CameraAccessor) currentCamera).invokesetPos(cameraPosition);
@@ -188,6 +200,15 @@ public class CameraSystem {
             }
         }
 
+        // Restore original CameraType (perspective) before resetting state
+        if (originalCameraType != null) {
+            Minecraft.getInstance().options.setCameraType(originalCameraType);
+        }
+
+        // Suppress player model for a couple frames to avoid one-frame flash
+        // while the render pipeline catches up with the CameraType change
+        suppressRenderFrames = 2;
+
         // Reset all camera state
         cameraActive = false;
         cameraVelocity = Vec3.ZERO;
@@ -195,6 +216,7 @@ public class CameraSystem {
         shouldRenderPlayerModel = true;
         disableChunkCulling = false;
         originalCameraEntity = null;
+        originalCameraType = null;
         interpolatedPlayerPosition = null;
         isPlayerModelCurrentlyVisible = true;
     }
@@ -398,6 +420,19 @@ public class CameraSystem {
     public float getCameraYaw() { return cameraYaw; }
     public float getCameraPitch() { return cameraPitch; }
     public boolean isCameraActive() { return cameraActive; }
+
+    /**
+     * Checks if player model rendering should be suppressed after deactivation.
+     * Consumes one suppress frame each call. Used by the mixin to prevent
+     * one-frame flash when transitioning back to first-person.
+     */
+    public boolean shouldSuppressPlayerRender() {
+        if (suppressRenderFrames > 0) {
+            suppressRenderFrames--;
+            return true;
+        }
+        return false;
+    }
 
     public void resetVelocity() {
         this.cameraVelocity = Vec3.ZERO;

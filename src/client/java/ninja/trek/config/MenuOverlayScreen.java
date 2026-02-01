@@ -495,7 +495,7 @@ public class MenuOverlayScreen extends Screen {
                     BUTTON_HEIGHT,
                     Component.literal("Acceleration"),
                     0.01f,
-                    0.5f,
+                    0.1f,
                     currentAcceleration,
                     "acceleration",
                     new AbstractMovementSettings() {

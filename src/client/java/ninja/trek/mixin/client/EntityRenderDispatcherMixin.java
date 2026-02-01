@@ -35,6 +35,13 @@ public class EntityRenderDispatcherMixin {
         if (playerState.id != client.player.getId()) return;
 
         CameraSystem cameraSystem = CameraSystem.getInstance();
+
+        // Suppress for a couple frames after deactivation to prevent one-frame flash
+        if (cameraSystem.shouldSuppressPlayerRender()) {
+            ci.cancel();
+            return;
+        }
+
         if (cameraSystem.isCameraActive() && !cameraSystem.shouldRenderPlayerModel()) {
             ci.cancel();
         }

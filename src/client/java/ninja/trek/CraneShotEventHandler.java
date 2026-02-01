@@ -196,11 +196,13 @@ public class CraneShotEventHandler {
                 cameraSystem.resetVelocity();
             }
 
-            // Restore the previous perspective to avoid getting stuck in third-person after the snap.
-            CameraType restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
-            if (restorePerspective != null) {
-                client.options.setCameraType(restorePerspective);
-                CraneshotClient.MOVEMENT_MANAGER.syncPerspectiveState(restorePerspective);
+            // Restore the previous perspective only if camera is not active
+            // (activateCamera already sets THIRD_PERSON_BACK when camera is active)
+            if (!wasCameraActive) {
+                CameraType restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
+                if (restorePerspective != null) {
+                    client.options.setCameraType(restorePerspective);
+                }
             }
         }
 
