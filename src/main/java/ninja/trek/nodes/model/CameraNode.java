@@ -20,4 +20,6 @@ public class CameraNode {
     public float timelapseYaw = 0f;
     public float timelapsePitch = 0f;
     public float timelapseFovMultiplier = 1.0f;
+    public int timelapseIndex = 0;
+    public boolean timelapseEnabled = true;
 }

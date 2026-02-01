@@ -94,6 +94,8 @@ public class NodeEditorScreen extends Screen {
                     added.timelapseYaw = sel.timelapseYaw;
                     added.timelapsePitch = sel.timelapsePitch;
                     added.timelapseFovMultiplier = sel.timelapseFovMultiplier;
+                    added.timelapseIndex = sel.timelapseIndex;
+                    added.timelapseEnabled = sel.timelapseEnabled;
                     NodeManager.get().save();
                 }
                 this.init(this.width, this.height);
@@ -221,6 +223,64 @@ public class NodeEditorScreen extends Screen {
                     this.init(this.width, this.height);
                 }).bounds(rightX + (w/2) + 2, y, (w/2)-2, h).build());
                 y += h + sp;
+
+                // Timelapse Index cycling button
+                addRenderableWidget(Button.builder(Component.literal("Index: " + selType.timelapseIndex), b-> {
+                    // Collect available indices from follower configs
+                    java.util.Set<Integer> indices = new java.util.TreeSet<>();
+                    indices.add(0);
+                    try {
+                        ninja.trek.config.FollowerConfig fc = ninja.trek.config.FollowerSettingsIO.loadFollowers();
+                        for (ninja.trek.config.FollowerConfig.FollowerEntry entry : fc.getFollowers()) {
+                            if (entry.getMovement() instanceof ninja.trek.cameramovements.movements.TimelapseMovement tm) {
+                                indices.add(tm.getTimelapseIndex());
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                    // Cycle to next index
+                    java.util.List<Integer> indexList = new java.util.ArrayList<>(indices);
+                    int cur = indexList.indexOf(selType.timelapseIndex);
+                    int next = (cur + 1) % indexList.size();
+                    int newIndex = indexList.get(next);
+
+                    // Check for conflict: if the target index's TimelapseMovement has followPlayer==false
+                    boolean isNonFollow = false;
+                    try {
+                        ninja.trek.config.FollowerConfig fc2 = ninja.trek.config.FollowerSettingsIO.loadFollowers();
+                        for (ninja.trek.config.FollowerConfig.FollowerEntry entry : fc2.getFollowers()) {
+                            if (entry.getMovement() instanceof ninja.trek.cameramovements.movements.TimelapseMovement tm) {
+                                if (tm.getTimelapseIndex() == newIndex && !tm.isFollowPlayer()) {
+                                    isNonFollow = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+
+                    if (isNonFollow) {
+                        CameraNode conflict = NodeManager.get().findEnabledTimelapseNodeWithIndex(newIndex, selType.id);
+                        if (conflict != null) {
+                            final int idx = newIndex;
+                            minecraft.setScreen(new TimelapseIndexConflictModal(idx, conflict, selType, () -> {
+                                minecraft.setScreen(this);
+                                this.init(this.width, this.height);
+                            }));
+                            return;
+                        }
+                    }
+                    selType.timelapseIndex = newIndex;
+                    NodeManager.get().save();
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, w, h).build());
+                y += h + sp;
+
+                // Timelapse Enabled toggle
+                addRenderableWidget(Button.builder(Component.literal(selType.timelapseEnabled ? "Enabled" : "Disabled"), b-> {
+                    selType.timelapseEnabled = !selType.timelapseEnabled;
+                    NodeManager.get().save();
+                    this.init(this.width, this.height);
+                }).bounds(rightX, y, w, h).build());
+                y += h + sp;
             }
 
             if (selType.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
@@ -342,6 +402,8 @@ public class NodeEditorScreen extends Screen {
                 context.drawString(font, Component.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
                 context.drawString(font, Component.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
                 context.drawString(font, Component.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal("Index: " + selNode.timelapseIndex), rightX, y, 0xFFFFFF, true); y+=12;
+                context.drawString(font, Component.literal(selNode.timelapseEnabled ? "Enabled" : "Disabled"), rightX, y, selNode.timelapseEnabled ? 0x88FF88 : 0xFF8888, true); y+=12;
             }
         } else {
             context.drawString(font, Component.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;

@@ -539,8 +539,10 @@ public class CameraController {
         CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
 
         // Skip node influence when:
+        // - Zones are disabled in settings
         // - In freecam/edit modes (manual camera control)
-        boolean skipNodeInfluence = ninja.trek.nodes.NodeManager.get().isEditing()
+        boolean skipNodeInfluence = !GeneralMenuSettings.isZonesEnabled()
+                || ninja.trek.nodes.NodeManager.get().isEditing()
                 || currentKeyMoveMode != POST_MOVE_KEYS.NONE
                 || currentMouseMoveMode != POST_MOVE_MOUSE.NONE
                 ;

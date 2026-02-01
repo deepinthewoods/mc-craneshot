@@ -7,27 +7,22 @@ import java.util.List;
 
 public class FollowerConfig {
 
-    public enum FollowerMode {
-        MOVEMENT,
-        ZONES
-    }
-
     public static class FollowerEntry {
-        private FollowerMode mode;
-        private ICameraMovement movement; // nullable, only used when mode=MOVEMENT
+        private boolean useZones;
+        private ICameraMovement movement;
 
         public FollowerEntry() {
-            this.mode = FollowerMode.MOVEMENT;
+            this.useZones = true;
             this.movement = null;
         }
 
-        public FollowerEntry(FollowerMode mode, ICameraMovement movement) {
-            this.mode = mode;
+        public FollowerEntry(ICameraMovement movement, boolean useZones) {
             this.movement = movement;
+            this.useZones = useZones;
         }
 
-        public FollowerMode getMode() { return mode; }
-        public void setMode(FollowerMode mode) { this.mode = mode; }
+        public boolean isUseZones() { return useZones; }
+        public void setUseZones(boolean useZones) { this.useZones = useZones; }
 
         public ICameraMovement getMovement() { return movement; }
         public void setMovement(ICameraMovement movement) { this.movement = movement; }

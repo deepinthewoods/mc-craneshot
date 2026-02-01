@@ -278,6 +278,11 @@ public class CameraMovementManager {
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
 
+        // Ensure camera system is active for distance-based model switching
+        if (!ninja.trek.camera.CameraSystem.getInstance().isCameraActive()) {
+            ninja.trek.camera.CameraSystem.getInstance().activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
+        }
+
         // Immediately disable player movement if post-move keys will use camera movement modes
         AbstractMovementSettings startSettings = (AbstractMovementSettings) movement;
         if (startSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
@@ -314,6 +319,11 @@ public class CameraMovementManager {
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         follow.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates(follow);
+
+        // Ensure camera system is active for distance-based model switching
+        if (!ninja.trek.camera.CameraSystem.getInstance().isCameraActive()) {
+            ninja.trek.camera.CameraSystem.getInstance().activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
+        }
 
         // Immediately disable player movement if post-move keys will use camera movement modes
         if (follow.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||

@@ -23,7 +23,12 @@ public class Craneshot implements ModInitializer {
         // Register server networking handlers
         ServerNodeNetworking.register();
 
-        LOGGER.info("Craneshot mod initialized!");
+        String followerProp = System.getProperty("craneshot.follower");
+        if (followerProp != null) {
+            LOGGER.info("Craneshot mod initialized! Follower mode enabled, index={}", followerProp);
+        } else {
+            LOGGER.info("Craneshot mod initialized! Follower mode disabled");
+        }
     }
 
     private void registerPayloads() {

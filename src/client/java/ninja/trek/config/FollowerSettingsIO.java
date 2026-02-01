@@ -31,9 +31,9 @@ public class FollowerSettingsIO {
             JsonArray followersArray = new JsonArray();
             for (FollowerConfig.FollowerEntry entry : config.getFollowers()) {
                 JsonObject entryObj = new JsonObject();
-                entryObj.addProperty("mode", entry.getMode().name());
+                entryObj.addProperty("useZones", entry.isUseZones());
 
-                if (entry.getMode() == FollowerConfig.FollowerMode.MOVEMENT && entry.getMovement() != null) {
+                if (entry.getMovement() != null) {
                     entryObj.add("movement", SlotSettingsIO.movementToJson(entry.getMovement()));
                 } else {
                     entryObj.add("movement", JsonNull.INSTANCE);
@@ -75,11 +75,14 @@ public class FollowerSettingsIO {
                 for (JsonElement element : followersArray) {
                     JsonObject entryObj = element.getAsJsonObject();
 
-                    FollowerConfig.FollowerMode mode = FollowerConfig.FollowerMode.MOVEMENT;
-                    if (entryObj.has("mode")) {
-                        try {
-                            mode = FollowerConfig.FollowerMode.valueOf(entryObj.get("mode").getAsString());
-                        } catch (IllegalArgumentException ignored) {}
+                    boolean useZones = true;
+                    if (entryObj.has("useZones")) {
+                        // New format
+                        useZones = entryObj.get("useZones").getAsBoolean();
+                    } else if (entryObj.has("mode")) {
+                        // Backward compat: old format with mode enum
+                        String modeStr = entryObj.get("mode").getAsString();
+                        useZones = "ZONES".equals(modeStr);
                     }
 
                     ICameraMovement movement = null;
@@ -87,7 +90,7 @@ public class FollowerSettingsIO {
                         movement = SlotSettingsIO.jsonToMovement(entryObj.getAsJsonObject("movement"));
                     }
 
-                    config.addFollower(new FollowerConfig.FollowerEntry(mode, movement));
+                    config.addFollower(new FollowerConfig.FollowerEntry(movement, useZones));
                 }
             }
 

@@ -3,6 +3,7 @@ package ninja.trek.cameramovements.movements;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
+import ninja.trek.config.MovementSettingType;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.CameraNode;
 import ninja.trek.nodes.model.NodeType;
@@ -28,6 +29,12 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
 
     @MovementSetting(label = "Distance (chunks)", min = 1, max = 32)
     private int distanceChunks = 5;
+
+    @MovementSetting(label = "Timelapse Index", min = 0, max = 99)
+    private int timelapseIndex = 0;
+
+    @MovementSetting(label = "Follow Player", type = MovementSettingType.BOOLEAN)
+    private boolean followPlayer = true;
 
     private enum State {
         IDLE,
@@ -109,13 +116,16 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         inRangeNodes.clear();
         for (CameraNode node : NodeManager.get().getNodes()) {
             if (node.type != NodeType.TIMELAPSE) continue;
-            int nodeChunkX = (int) Math.floor(node.position.x / 16.0);
-            int nodeChunkZ = (int) Math.floor(node.position.z / 16.0);
-            int dx = Math.abs(playerChunkX - nodeChunkX);
-            int dz = Math.abs(playerChunkZ - nodeChunkZ);
-            if (dx <= distanceChunks && dz <= distanceChunks) {
-                inRangeNodes.add(node);
+            if (node.timelapseIndex != this.timelapseIndex) continue;
+            if (!node.timelapseEnabled) continue;
+            if (followPlayer) {
+                int nodeChunkX = (int) Math.floor(node.position.x / 16.0);
+                int nodeChunkZ = (int) Math.floor(node.position.z / 16.0);
+                int dx = Math.abs(playerChunkX - nodeChunkX);
+                int dz = Math.abs(playerChunkZ - nodeChunkZ);
+                if (dx > distanceChunks || dz > distanceChunks) continue;
             }
+            inRangeNodes.add(node);
         }
 
         if (!inRangeNodes.isEmpty()) {
@@ -224,6 +234,9 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
     public RaycastType getRaycastType() {
         return RaycastType.NONE;
     }
+
+    public int getTimelapseIndex() { return timelapseIndex; }
+    public boolean isFollowPlayer() { return followPlayer; }
 
     private static String sanitizeName(String name) {
         if (name == null || name.isBlank()) return "unnamed";

@@ -23,81 +23,102 @@ public class MovementToastRenderer {
     private static Integer currentToastSlot = null;
     private static boolean shouldRender = false;
 
+    // Simple text toast
+    private static String textToastMessage = null;
+    private static Long textToastStartTime = null;
+    private static boolean textToastShouldRender = false;
+
     public static void showToast(int slotIndex) {
         currentToastSlot = slotIndex;
         startTime = System.currentTimeMillis();
         shouldRender = true;
     }
 
+    public static void showTextToast(String message) {
+        textToastMessage = message;
+        textToastStartTime = System.currentTimeMillis();
+        textToastShouldRender = true;
+    }
+
     public static void register() {
         HudRenderCallback.EVENT.register((GuiGraphics context, DeltaTracker tickDelta) -> {
-            // Early exit if we shouldn't render
-            if (!shouldRender || startTime == null || currentToastSlot == null) {
-                return;
-            }
-
             Minecraft client = Minecraft.getInstance();
             if (client.player == null) return;
 
             long currentTime = System.currentTimeMillis();
-            float timeSinceStart = (currentTime - startTime) / 1000f;
 
-            // Check if we should stop rendering entirely
-            if (timeSinceStart >= HOLD_DURATION + FADE_DURATION) {
-                shouldRender = false;
-                startTime = null;
-                currentToastSlot = null;
-                return;
-            }
+            // Render movement slot toast
+            if (shouldRender && startTime != null && currentToastSlot != null) {
+                float timeSinceStart = (currentTime - startTime) / 1000f;
 
-            float opacity = 1.0f;
-            if (timeSinceStart > HOLD_DURATION) {
-                opacity = 1.0f - ((timeSinceStart - HOLD_DURATION) / FADE_DURATION);
-                opacity = Math.max(0.0f, opacity);
-                if (opacity <= 0) {
+                if (timeSinceStart >= HOLD_DURATION + FADE_DURATION) {
                     shouldRender = false;
                     startTime = null;
                     currentToastSlot = null;
-                    return;
+                } else {
+                    float opacity = 1.0f;
+                    if (timeSinceStart > HOLD_DURATION) {
+                        opacity = 1.0f - ((timeSinceStart - HOLD_DURATION) / FADE_DURATION);
+                        opacity = Math.max(0.0f, opacity);
+                    }
+
+                    if (opacity > 0) {
+                        List<ICameraMovement> movements = CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(currentToastSlot);
+                        if (!movements.isEmpty()) {
+                            int selectedIndex = CraneshotClient.MOVEMENT_MANAGER.getCurrentTypeForSlot(currentToastSlot);
+
+                            Font textRenderer = client.font;
+                            int maxWidth = 0;
+                            for (ICameraMovement movement : movements) {
+                                maxWidth = Math.max(maxWidth, textRenderer.width(movement.getName()));
+                            }
+
+                            int totalHeight = movements.size() * LINE_HEIGHT;
+                            int screenHeight = client.getWindow().getGuiScaledHeight();
+                            int x = MARGIN_LEFT;
+                            int y = screenHeight - MARGIN_BOTTOM - totalHeight;
+
+                            for (int i = 0; i < movements.size(); i++) {
+                                ICameraMovement movement = movements.get(i);
+                                int textY = y + (i * LINE_HEIGHT);
+
+                                int baseColor = (i == selectedIndex) ? WHITE_COLOR : GRAY_COLOR;
+                                int color = applyOpacity(baseColor, opacity);
+
+                                context.drawString(
+                                        textRenderer,
+                                        Component.literal(movement.getName()),
+                                        x + PADDING,
+                                        textY + (LINE_HEIGHT - textRenderer.lineHeight) / 2,
+                                        color
+                                );
+                            }
+                        }
+                    }
                 }
             }
 
-            // Get movements for the current slot
-            List<ICameraMovement> movements = CraneshotClient.MOVEMENT_MANAGER.getAvailableMovementsForSlot(currentToastSlot);
-            if (movements.isEmpty()) return;
-
-            int selectedIndex = CraneshotClient.MOVEMENT_MANAGER.getCurrentTypeForSlot(currentToastSlot);
-
-            // Calculate dimensions
-            Font textRenderer = client.font;
-            int maxWidth = 0;
-            for (ICameraMovement movement : movements) {
-                maxWidth = Math.max(maxWidth, textRenderer.width(movement.getName()));
-            }
-
-            int totalHeight = movements.size() * LINE_HEIGHT;
-            int width = maxWidth + (PADDING * 2);
-
-            // Calculate position
-            int screenHeight = client.getWindow().getGuiScaledHeight();
-            int x = MARGIN_LEFT;
-            int y = screenHeight - MARGIN_BOTTOM - totalHeight;
-
-            // Draw movement names
-            for (int i = 0; i < movements.size(); i++) {
-                ICameraMovement movement = movements.get(i);
-                int textY = y + (i * LINE_HEIGHT);
-
-                int baseColor = (i == selectedIndex) ? WHITE_COLOR : GRAY_COLOR;
-                int color = applyOpacity(baseColor, opacity);
-
-                context.drawString(
-                        textRenderer,
-                        Component.literal(movement.getName()),
-                        x + PADDING,
-                        textY + (LINE_HEIGHT - textRenderer.lineHeight) / 2,
-                        color
-                );
+            // Render simple text toast
+            if (textToastShouldRender && textToastStartTime != null && textToastMessage != null) {
+                float textTimeSinceStart = (currentTime - textToastStartTime) / 1000f;
+                if (textTimeSinceStart >= HOLD_DURATION + FADE_DURATION) {
+                    textToastShouldRender = false;
+                    textToastStartTime = null;
+                    textToastMessage = null;
+                } else {
+                    float textOpacity = 1.0f;
+                    if (textTimeSinceStart > HOLD_DURATION) {
+                        textOpacity = 1.0f - ((textTimeSinceStart - HOLD_DURATION) / FADE_DURATION);
+                        textOpacity = Math.max(0.0f, textOpacity);
+                    }
+                    if (textOpacity > 0) {
+                        Font font = client.font;
+                        int textColor = applyOpacity(WHITE_COLOR, textOpacity);
+                        int textX = MARGIN_LEFT + PADDING;
+                        int textYPos = client.getWindow().getGuiScaledHeight() - MARGIN_BOTTOM;
+                        context.drawString(font, Component.literal(textToastMessage), textX, textYPos, textColor);
+                    }
+                }
             }
         });
     }

@@ -18,7 +18,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import ninja.trek.config.FollowerConfig.FollowerEntry;
-import ninja.trek.config.FollowerConfig.FollowerMode;
+
 
 public class MenuOverlayScreen extends Screen {
     private static final Map<Integer, Set<Integer>> expandedMovements = new HashMap<>();
@@ -293,6 +293,18 @@ public class MenuOverlayScreen extends Screen {
                 .selected(GeneralMenuSettings.isShowNodesOutsideEdit())
                 .onValueChange((checkbox, checked) -> {
                     GeneralMenuSettings.setShowNodesOutsideEdit(checked);
+                    GeneralSettingsIO.saveSettings();
+                })
+                .build());
+
+        yOffset += spacing;
+
+        // Enable/Disable Zones
+        this.addRenderableWidget(Checkbox.builder(Component.literal("Zones Enabled"), Minecraft.getInstance().font)
+                .pos(buttonX, baseY + yOffset)
+                .selected(GeneralMenuSettings.isZonesEnabled())
+                .onValueChange((checkbox, checked) -> {
+                    GeneralMenuSettings.setZonesEnabled(checked);
                     GeneralSettingsIO.saveSettings();
                 })
                 .build());
@@ -920,18 +932,16 @@ public class MenuOverlayScreen extends Screen {
                     .build());
             controlX += 85;
 
-            // Mode toggle button
-            String modeLabel = entry.getMode() == FollowerMode.MOVEMENT ? "Mode: MOVEMENT" : "Mode: ZONES";
-            this.addRenderableWidget(Button.builder(Component.literal(modeLabel), button -> {
-                if (entry.getMode() == FollowerMode.MOVEMENT) {
-                    entry.setMode(FollowerMode.ZONES);
-                } else {
-                    entry.setMode(FollowerMode.MOVEMENT);
-                }
-                FollowerSettingsIO.saveFollowers(followerConfig);
-                reinitialize();
-            }).bounds(controlX, baseY + yOffset, 120, BUTTON_HEIGHT).build());
-            controlX += 125;
+            // Zones checkbox
+            this.addRenderableWidget(Checkbox.builder(Component.literal("Zones"), Minecraft.getInstance().font)
+                    .pos(controlX, baseY + yOffset)
+                    .selected(entry.isUseZones())
+                    .onValueChange((checkbox, checked) -> {
+                        entry.setUseZones(checked);
+                        FollowerSettingsIO.saveFollowers(followerConfig);
+                    })
+                    .build());
+            controlX += 80;
 
             // Remove button
             this.addRenderableWidget(Button.builder(Component.literal("×"), button -> {
@@ -944,8 +954,8 @@ public class MenuOverlayScreen extends Screen {
 
             yOffset += spacing;
 
-            // Movement settings (only shown when mode=MOVEMENT)
-            if (entry.getMode() == FollowerMode.MOVEMENT) {
+            // Movement settings
+            {
                 // Movement type selector
                 String movementTypeName = "None";
                 if (entry.getMovement() != null) {

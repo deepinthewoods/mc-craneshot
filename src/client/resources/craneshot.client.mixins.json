@@ -14,7 +14,8 @@
 		"EntityRenderDispatcherMixin",
 		"WorldRendererMixin",
 		"InGameHudMixin",
-		"KeyBindingAccessor"
+		"KeyBindingAccessor",
+		"WindowTitleMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

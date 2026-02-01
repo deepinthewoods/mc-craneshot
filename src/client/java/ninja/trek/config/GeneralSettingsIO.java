@@ -136,6 +136,9 @@ public class GeneralSettingsIO {
                 settingsObj.addProperty("spectatorFollowEnabled", GeneralMenuSettings.isSpectatorFollowEnabled());
                 settingsObj.addProperty("targetPlayerName", GeneralMenuSettings.getTargetPlayerName());
 
+                // Save zones enabled
+                settingsObj.addProperty("zonesEnabled", GeneralMenuSettings.isZonesEnabled());
+
                 // Save minimum speed enforcement settings
                 settingsObj.addProperty("enforceMinimumSpeed", GeneralMenuSettings.isEnforceMinimumSpeed());
                 settingsObj.addProperty("minimumSpeedMultiplier", GeneralMenuSettings.getMinimumSpeedMultiplier());
@@ -361,6 +364,13 @@ public class GeneralSettingsIO {
                     GeneralMenuSettings.setTargetPlayerName(
                         settingsObj.get("targetPlayerName").getAsString()
                     );
+                } catch (Exception ignored) {}
+            }
+
+            // Load zones enabled
+            if (settingsObj.has("zonesEnabled")) {
+                try {
+                    GeneralMenuSettings.setZonesEnabled(settingsObj.get("zonesEnabled").getAsBoolean());
                 } catch (Exception ignored) {}
             }
 

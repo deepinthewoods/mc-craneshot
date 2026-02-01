@@ -32,6 +32,9 @@ public class GeneralMenuSettings {
     private static String targetPlayerName = "";  // Empty = use local player
     private static boolean spectatorFollowEnabled = true;  // Master toggle
 
+    // Zone influence toggle
+    private static boolean zonesEnabled = true;
+
     // Minimum speed enforcement settings
     private static boolean enforceMinimumSpeed = false;
     private static double minimumSpeedMultiplier = 1.5;  // Default: 1.5x player speed
@@ -112,6 +115,10 @@ public class GeneralMenuSettings {
     public static void setSpectatorFollowEnabled(boolean enabled) {
         spectatorFollowEnabled = enabled;
     }
+
+    // Zone influence toggle
+    public static boolean isZonesEnabled() { return zonesEnabled; }
+    public static void setZonesEnabled(boolean value) { zonesEnabled = value; }
 
     // Minimum speed enforcement settings
     public static boolean isEnforceMinimumSpeed() { return enforceMinimumSpeed; }

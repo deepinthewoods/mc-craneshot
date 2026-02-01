@@ -30,8 +30,8 @@ import org.jetbrains.annotations.Nullable;
  *    - Used for ALL rendering and visual decisions
  *    - REQUIRED for camera calculations and distance checks
  *
- * RULE: If a value is used for rendering decisions (like shouldRenderPlayerModel),
- *       it MUST use interpolated positions to match what's visually on screen.
+ * RULE: All rendering decisions (e.g. player model visibility)
+ *       MUST use interpolated positions to match what's visually on screen.
  *
  * Mixing raw and interpolated positions causes visual glitches during fast
  * movement (falling, sprinting, elytra flight).
@@ -39,20 +39,15 @@ import org.jetbrains.annotations.Nullable;
 public class CameraSystem {
     private static CameraSystem instance;
 
-    // Rendering threshold constants with hysteresis to prevent flickering
-    // Hysteresis: Use different thresholds for showing vs hiding to create a buffer zone
-    private static final float DISTANCE_SHOW_PLAYER_MODEL = 1.2f;  // Switch from first-person to third-person
-    private static final float DISTANCE_HIDE_PLAYER_MODEL = 0.8f;  // Switch from third-person to first-person
-    // Legacy threshold (kept for reference, but hysteresis values are used in logic)
-    public static final float PLAYER_RENDER_THRESHOLD = 1.0f;
+    // Distance hysteresis thresholds to prevent flickering between hand/body rendering
+    private static final float DISTANCE_SHOW_PLAYER_MODEL = 1.2f;
+    private static final float DISTANCE_HIDE_PLAYER_MODEL = 0.8f;
 
     // Camera state
     private boolean cameraActive = false;
     private Vec3 cameraPosition = Vec3.ZERO;
     private float cameraYaw = 0f;
     private float cameraPitch = 0f;
-    private boolean shouldRenderHands = true;
-    private boolean shouldRenderPlayerModel = true;
     private boolean disableChunkCulling = false;
     private Entity originalCameraEntity = null;
     private boolean originalChunkCulling = true;
@@ -135,28 +130,24 @@ public class CameraSystem {
                 targetPitch = cameraPitch;   // Initialize target to current
             }
             
-            // Set camera flags based on mode
-            shouldRenderHands = !mode.hideHands;
-            shouldRenderPlayerModel = mode.showPlayerModel;
             disableChunkCulling = mode.disableChunkCulling;
             
             // Apply chunk culling setting
             mc.smartCull = !disableChunkCulling;
 
-            // Use a dedicated camera entity for free camera, otherwise detach
+            // Use a dedicated camera entity for free camera, otherwise keep player as camera entity
+            // (setting camera entity to null crashes mods like Entity Culling that assume it's non-null)
             if (mode == CameraMode.FREE_CAMERA) {
                 ninja.trek.util.CameraEntity.setCameraState(true);
                 // Immediately sync the ghost to our position
                 syncCameraEntity();
-            } else {
-                mc.setCameraEntity(null);
             }
             
             cameraActive = true;
             suppressRenderFrames = 0;
 
-            // Always use THIRD_PERSON_BACK so isDetached()=true and the player enters the render list.
-            // The mixin controls actual visibility based on distance.
+            // Use THIRD_PERSON_BACK as the base CameraType. Our CameraMixin overrides
+            // isDetached() based on distance to control hand/body switching.
             mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 
             // Explicitly apply position/rotation only if not using the dedicated camera entity
@@ -166,9 +157,6 @@ public class CameraSystem {
             }
         } else {
             // Update settings if camera is already active
-            shouldRenderHands = !mode.hideHands;
-            shouldRenderPlayerModel = mode.showPlayerModel;
-            
             if (disableChunkCulling != mode.disableChunkCulling) {
                 disableChunkCulling = mode.disableChunkCulling;
                 mc.smartCull = !disableChunkCulling;
@@ -212,8 +200,6 @@ public class CameraSystem {
         // Reset all camera state
         cameraActive = false;
         cameraVelocity = Vec3.ZERO;
-        shouldRenderHands = true;
-        shouldRenderPlayerModel = true;
         disableChunkCulling = false;
         originalCameraEntity = null;
         originalCameraType = null;
@@ -230,10 +216,12 @@ public class CameraSystem {
             return;
         }
 
-        // Always apply our state to the Camera object
-        // CameraEntity is just a ghost for chunk rendering
+        // Apply our state to the Camera object
         ((CameraAccessor) camera).invokesetPos(cameraPosition);
         ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
+
+        // Update hand/body visibility state now that camera position is final
+        updateVisibilityState();
     }
 
     /**
@@ -422,16 +410,10 @@ public class CameraSystem {
     public boolean isCameraActive() { return cameraActive; }
 
     /**
-     * Checks if player model rendering should be suppressed after deactivation.
-     * Consumes one suppress frame each call. Used by the mixin to prevent
-     * one-frame flash when transitioning back to first-person.
+     * Whether player model rendering should be suppressed (after deactivation).
      */
     public boolean shouldSuppressPlayerRender() {
-        if (suppressRenderFrames > 0) {
-            suppressRenderFrames--;
-            return true;
-        }
-        return false;
+        return suppressRenderFrames > 0;
     }
 
     public void resetVelocity() {
@@ -444,8 +426,15 @@ public class CameraSystem {
      *
      * @param position The player's interpolated eye position from getCameraPosVec(tickDelta)
      */
+    /**
+     * Caches the interpolated player position for this frame.
+     * Must be called once per frame BEFORE rendering.
+     */
     public void updateInterpolatedPlayerPosition(Vec3 position) {
         this.interpolatedPlayerPosition = position;
+        if (suppressRenderFrames > 0) {
+            suppressRenderFrames--;
+        }
     }
 
     /**
@@ -479,68 +468,49 @@ public class CameraSystem {
         return cameraPosition.distanceTo(playerPos);
     }
 
-    public boolean shouldRenderHands() {
-        if (!shouldRenderHands) return false;
-        if (!cameraActive) return shouldRenderHands;
-
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            // Hands and player model are mutually exclusive states:
-            // - First person (close): Show hands, hide player model
-            // - Third person (far): Hide hands, show player model
-            // Use the OPPOSITE of player model visibility for consistency with hysteresis
-            return !isPlayerModelCurrentlyVisible;
+    /**
+     * Updates the distance-based hysteresis state for hand/body switching.
+     * Called once per frame from updateCamera() after camera position is finalized.
+     */
+    private void updateVisibilityState() {
+        if (!cameraActive || Minecraft.getInstance().player == null) return;
+        double distance = getVisualDistanceToPlayer();
+        if (isPlayerModelCurrentlyVisible) {
+            if (distance < DISTANCE_HIDE_PLAYER_MODEL) {
+                isPlayerModelCurrentlyVisible = false;
+            }
+        } else {
+            if (distance >= DISTANCE_SHOW_PLAYER_MODEL) {
+                isPlayerModelCurrentlyVisible = true;
+            }
         }
-        return shouldRenderHands;
+    }
+
+    /**
+     * Whether the camera is "detached" from the player (third-person perspective).
+     * When camera is active, this is driven by distance: far = detached (body visible,
+     * hands hidden), close = not detached (hands visible, body not in render list).
+     */
+    public boolean isEffectivelyDetached() {
+        if (!cameraActive) return false;
+        return isPlayerModelCurrentlyVisible;
     }
 
     public boolean shouldRenderPlayerModel() {
-        if (!shouldRenderPlayerModel) return false;
-        if (!cameraActive) return shouldRenderPlayerModel;
-
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null) {
-            // Use interpolated position for consistent rendering
-            double distance = getVisualDistanceToPlayer();
-
-            // Hysteresis: Use different thresholds depending on current state
-            // This prevents flickering when distance oscillates around the threshold
-            if (isPlayerModelCurrentlyVisible) {
-                // Currently showing model - only hide if we get very close
-                if (distance < DISTANCE_HIDE_PLAYER_MODEL) {
-                    isPlayerModelCurrentlyVisible = false;
-                }
-            } else {
-                // Currently hiding model - only show if we get far enough away
-                if (distance >= DISTANCE_SHOW_PLAYER_MODEL) {
-                    isPlayerModelCurrentlyVisible = true;
-                }
-            }
-
-            return isPlayerModelCurrentlyVisible;
-        }
-        return shouldRenderPlayerModel;
+        if (!cameraActive) return true;
+        return isPlayerModelCurrentlyVisible;
     }
 
-    public void setShouldRenderHands(boolean renderHands) {
-        this.shouldRenderHands = renderHands;
-    }
 
-    
 
     public static class CameraMode {
-        public final boolean hideHands;
-        public final boolean showPlayerModel;
         public final boolean disableChunkCulling;
-        public CameraMode(boolean hideHands, boolean showPlayerModel, boolean disableChunkCulling) {
-            this.hideHands = hideHands;
-            this.showPlayerModel = showPlayerModel;
+        public CameraMode(boolean disableChunkCulling) {
             this.disableChunkCulling = disableChunkCulling;
         }
-        public static final CameraMode THIRD_PERSON = new CameraMode(true, true, true);
-        public static final CameraMode FREE_CAMERA = new CameraMode(true, true, true);
-        public static final CameraMode FIRST_PERSON = new CameraMode(false, false, false);
-        public static final CameraMode NODE_DRIVEN = new CameraMode(true, true, true);
+        public static final CameraMode THIRD_PERSON = new CameraMode(true);
+        public static final CameraMode FREE_CAMERA = new CameraMode(true);
+        public static final CameraMode NODE_DRIVEN = new CameraMode(true);
     }
 
 }

@@ -270,6 +270,17 @@ public class NodeManager {
         return null;
     }
 
+    public CameraNode findEnabledTimelapseNodeWithIndex(int index, UUID excludeId) {
+        for (var node : nodes) {
+            if (node.type != NodeType.TIMELAPSE) continue;
+            if (node.timelapseIndex != index) continue;
+            if (!node.timelapseEnabled) continue;
+            if (excludeId != null && node.id.equals(excludeId)) continue;
+            return node;
+        }
+        return null;
+    }
+
     public void replaceAll(List<CameraNode> newNodes, List<AreaInstance> newAreas) {
         nodes.clear();
         areas.clear();
