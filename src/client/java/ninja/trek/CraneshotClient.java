@@ -2,6 +2,7 @@ package ninja.trek;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -98,8 +99,11 @@ public class CraneshotClient implements ClientModInitializer {
         // Draw active node area influences
         NodeAreaHudRenderer.register();
 
-        // When in follower mode, auto-switch to spectator on server join
+        // When in follower mode, set window title and auto-switch to spectator on server join
         if (FollowerMode.isFollower()) {
+            ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
+                client.getWindow().setTitle("MC Follower " + FollowerMode.getFollowerIndex());
+            });
             ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
                 // Send the command on the next tick so the connection is fully ready
                 client.execute(() -> {
