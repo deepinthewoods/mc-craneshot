@@ -14,6 +14,7 @@ import ninja.trek.mixin.client.FovAccessor;
 import java.util.*;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 public class CameraMovementManager {
@@ -157,9 +158,10 @@ public class CameraMovementManager {
     private void snapCameraIfFarFromPlayer(Minecraft client, Camera camera) {
         if (client == null || client.player == null) return;
 
-        Vec3 playerPos = client.player.getEyePosition();
-        float playerYaw = client.player.getYRot();
-        float playerPitch = client.player.getXRot();
+        Player tracked = CameraController.getTrackedPlayer(client);
+        Vec3 playerPos = tracked.getEyePosition();
+        float playerYaw = tracked.getYRot();
+        float playerPitch = tracked.getXRot();
 
         CameraSystem cameraSystem = CameraSystem.getInstance();
         Vec3 cameraPos = null;

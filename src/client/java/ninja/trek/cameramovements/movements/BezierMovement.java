@@ -3,6 +3,7 @@ package ninja.trek.cameramovements.movements;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.player.Player;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -137,9 +138,10 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         
         // When returning, continuously update the target to follow the player's head position and rotation
         if (resetting && client.player != null) {
-            Vec3 playerPos = client.player.getEyePosition();
-            float playerYaw = client.player.getYRot();
-            float playerPitch = client.player.getXRot() + pitchOffset;
+            Player tracked = CameraController.getTrackedPlayer(client);
+            Vec3 playerPos = tracked.getEyePosition();
+            float playerYaw = tracked.getYRot();
+            float playerPitch = tracked.getXRot() + pitchOffset;
 
             // Update return target to always be the player's current head position and rotation
             // Update the return target
@@ -245,7 +247,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (!resetting) {
             boolean fullyOut = linearMode || progress >= 0.999;
             if (fullyOut && client.player != null) {
-                Vec3 eye = client.player.getEyePosition();
+                Player tracked = CameraController.getTrackedPlayer(client);
+                Vec3 eye = tracked.getEyePosition();
                 double playerMove = 0.0;
                 if (lastPlayerEyePos != null) {
                     playerMove = eye.distanceTo(lastPlayerEyePos);
@@ -441,11 +444,12 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             progress = 0.0;
 
             // Always target the player head position/rotation during return phase
-            if (client.player != null) {
+            Player tracked = CameraController.getTrackedPlayer(client);
+            if (tracked != null) {
                 // Always return to player's head rotation regardless of END_TARGET
-                float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot() + pitchOffset;
-                Vec3 playerPos = client.player.getEyePosition();
+                float playerYaw = tracked.getYRot();
+                float playerPitch = tracked.getXRot() + pitchOffset;
+                Vec3 playerPos = tracked.getEyePosition();
 
                 // Set the target position to player head with proper rotation for return
                 // When returning to player view, we'll gradually transition back to perspective mode
@@ -475,8 +479,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             
             // Generate a control point for the return path
             // We're always returning to player position now
-            if (client.player != null) {
-                controlPoint = generateControlPoint(current.getPosition(), client.player.getEyePosition());
+            if (tracked != null) {
+                controlPoint = generateControlPoint(current.getPosition(), tracked.getEyePosition());
                 // logging removed
             }
             

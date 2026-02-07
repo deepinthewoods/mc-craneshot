@@ -3,6 +3,7 @@ package ninja.trek.cameramovements.movements;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.player.Player;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -106,9 +107,10 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // During return, track the player head position and rotation continuously
         if (resetting) {
-            Vec3 playerPos = client.player.getEyePosition();
-            float playerYaw = client.player.getYRot();
-            float playerPitch = client.player.getXRot() + pitchOffset;
+            Player tracked = CameraController.getTrackedPlayer(client);
+            Vec3 playerPos = tracked.getEyePosition();
+            float playerYaw = tracked.getYRot();
+            float playerPitch = tracked.getXRot() + pitchOffset;
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
@@ -165,7 +167,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         // Jitter suppression when fully out (near target) while player moves
         if (!resetting && client.player != null) {
-            Vec3 eye = client.player.getEyePosition();
+            Player tracked = CameraController.getTrackedPlayer(client);
+            Vec3 eye = tracked.getEyePosition();
             double playerMove = lastPlayerEyePos == null ? 0.0 : eye.distanceTo(lastPlayerEyePos);
             final float ANGLE_EPS = 0.7f;
             final float TARGET_EPS = 0.7f;
@@ -247,10 +250,11 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             resetReturnTargetTracking();
             current = CameraTarget.fromCamera(camera);
 
-            if (client.player != null) {
-                float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot() + pitchOffset;
-                Vec3 playerPos = client.player.getEyePosition();
+            Player tracked = CameraController.getTrackedPlayer(client);
+            if (tracked != null) {
+                float playerYaw = tracked.getYRot();
+                float playerPitch = tracked.getXRot() + pitchOffset;
+                Vec3 playerPos = tracked.getEyePosition();
 
                 // Target player view with normal FOV on return
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);

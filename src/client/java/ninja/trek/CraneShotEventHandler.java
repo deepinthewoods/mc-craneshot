@@ -297,13 +297,18 @@ public class CraneShotEventHandler {
             return;
         }
 
-        // Periodically ensure we're in spectator mode
+        // Periodically ensure we're in spectator mode and near the target player
         long now = System.currentTimeMillis();
         if (now - lastSpectatorCheckTime > SPECTATOR_CHECK_INTERVAL_MS) {
             lastSpectatorCheckTime = now;
             if (!client.player.isSpectator() && client.player.connection != null) {
                 client.player.connection.sendCommand("gamemode spectator");
                 Craneshot.LOGGER.info("Follower mode: re-requesting spectator gamemode");
+            }
+            // Teleport spectator to the target player so their entity stays loaded
+            String tpTarget = GeneralMenuSettings.getTargetPlayerName();
+            if (tpTarget != null && !tpTarget.isEmpty() && client.player.connection != null) {
+                client.player.connection.sendCommand("tp " + tpTarget);
             }
         }
 

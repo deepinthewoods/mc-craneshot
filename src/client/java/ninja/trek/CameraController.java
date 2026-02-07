@@ -114,6 +114,22 @@ public class CameraController {
     }
 
     /**
+     * Returns the player entity that camera movements should track.
+     * In spectator mode with a configured target, returns the target player.
+     * Otherwise returns the local player.
+     */
+    public static Player getTrackedPlayer(Minecraft client) {
+        if (client == null || client.player == null) return null;
+        if (shouldUseTargetPlayer(client)) {
+            Player target = resolveTargetPlayer(client);
+            if (target != null) {
+                return target;
+            }
+        }
+        return client.player;
+    }
+
+    /**
      * Checks if target player following is currently active.
      * Only active when: enabled, in spectator mode, and target player is found.
      */

@@ -3,6 +3,7 @@ package ninja.trek.cameramovements.movements;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.player.Player;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
@@ -229,9 +230,10 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         if (client.player == null) return new MovementState(current, true);
 
         // Calculate player velocity for return modes
-        Vec3 playerPos = client.player.getEyePosition();
-        float playerYaw = client.player.getYRot();
-        float playerPitch = client.player.getXRot();
+        Player tracked = CameraController.getTrackedPlayer(client);
+        Vec3 playerPos = tracked.getEyePosition();
+        float playerYaw = tracked.getYRot();
+        float playerPitch = tracked.getXRot();
 
         Vec3 playerVelocity = Vec3.ZERO;
         float playerYawVelocity = 0f;
@@ -384,11 +386,12 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
             // Reset overshoot detection
             lastDistanceToPlayer = Double.MAX_VALUE;
 
-            if (client.player != null) {
-                float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot() + pitchOffset;
-                Vec3 playerPos = client.player.getEyePosition();
-                end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+            Player tracked = CameraController.getTrackedPlayer(client);
+            if (tracked != null) {
+                float pYaw = tracked.getYRot();
+                float pPitch = tracked.getXRot() + pitchOffset;
+                Vec3 pPos = tracked.getEyePosition();
+                end = new CameraTarget(pPos, pYaw, pPitch, 1.0f);
             }
         }
     }
