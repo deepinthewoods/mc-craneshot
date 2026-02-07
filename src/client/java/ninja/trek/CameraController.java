@@ -51,10 +51,10 @@ public class CameraController {
     private String currentMessage = "";
     private long messageTimer = 0;
     private static final long MESSAGE_DURATION = 2000;
-    public static final double FIRST_PERSON_THRESHOLD_MIN = 2.0;
-    public static final double FIRST_PERSON_THRESHOLD_MAX = 5.0;
+
 
     public static AbstractMovementSettings.END_TARGET currentEndTarget = AbstractMovementSettings.END_TARGET.HEAD_BACK;
+    public static float currentYawOffset = 0f;
     private Vec3 lastPlayerPos = Vec3.ZERO;
     private Vec3 cumulativeMovement = Vec3.ZERO;
     private float targetYaw = 0f;
@@ -176,22 +176,31 @@ public class CameraController {
     }
 
     private float calculateTargetYaw(float playerYaw) {
+        float baseYaw;
         switch (currentEndTarget) {
             case HEAD_BACK:
-                return playerYaw;
+                baseYaw = playerYaw;
+                break;
             case HEAD_FRONT:
-                return (playerYaw + 180);
+                baseYaw = (playerYaw + 180);
+                break;
             case VELOCITY_BACK:
-                return 360-targetYaw;
+                baseYaw = 360-targetYaw;
+                break;
             case VELOCITY_FRONT:
-                return (360-targetYaw + 180)%360;
+                baseYaw = (360-targetYaw + 180)%360;
+                break;
             case FIXED_BACK:
-                return playerYaw;
+                baseYaw = playerYaw;
+                break;
             case FIXED_FRONT:
-                return (playerYaw + 180);
+                baseYaw = (playerYaw + 180);
+                break;
             default:
-                return playerYaw;
+                baseYaw = playerYaw;
+                break;
         }
+        return baseYaw + currentYawOffset;
     }
 
     private float calculateTargetPitch(float playerPitch) {
@@ -249,6 +258,7 @@ public class CameraController {
 
     public void setPreMoveStates(AbstractMovementSettings m){
         currentEndTarget = m.getEndTarget();
+        currentYawOffset = m.getYawOffset();
         // Reset any FOV modifications when starting a new movement
         Minecraft client = Minecraft.getInstance();
         if (client.gameRenderer instanceof FovAccessor) {
@@ -262,9 +272,10 @@ public class CameraController {
             // Reset state when movement ends
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
             currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
+            currentYawOffset = 0f;
             MouseInterceptor.setIntercepting(false);
             clearPlayerHeadLock();
-            
+
             // Reset tracking variables
             lastPlayerPos = Vec3.ZERO;
             cumulativeMovement = Vec3.ZERO;
@@ -807,6 +818,7 @@ public class CameraController {
         // Reset all movement modes completely
         currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
         currentKeyMoveMode = POST_MOVE_KEYS.NONE;
+        currentYawOffset = 0f;
         clearPlayerHeadLock();
 
         // Reset the keyboard movement tracking flag

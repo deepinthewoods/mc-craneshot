@@ -57,7 +57,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(), fovMultiplier);
+                CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
 
         resetting = false;
         distanceChanged = false;
@@ -75,7 +75,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
     private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
-        double pitch = Math.toRadians(stick.getPitch());
+        double pitch = Math.toRadians(stick.getPitch() + pitchOffset);
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
         double yOffset = Math.sin(pitch) * targetDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
@@ -90,7 +90,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 start.getFovMultiplier()
         );
 
@@ -98,7 +98,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (!resetting) {
             Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
             end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                    CameraController.controlStick.getPitch(), end.getFovMultiplier());
+                    CameraController.controlStick.getPitch() + pitchOffset, end.getFovMultiplier());
         }
 
         CameraTarget a = resetting ? end : start;
@@ -108,7 +108,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         if (resetting) {
             Vec3 playerPos = client.player.getEyePosition();
             float playerYaw = client.player.getYRot();
-            float playerPitch = client.player.getXRot();
+            float playerPitch = client.player.getXRot() + pitchOffset;
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
@@ -249,7 +249,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
 
             if (client.player != null) {
                 float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot();
+                float playerPitch = client.player.getXRot() + pitchOffset;
                 Vec3 playerPos = client.player.getEyePosition();
 
                 // Target player view with normal FOV on return
@@ -288,7 +288,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 stickPos,
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 start.getFovMultiplier()
         );
 
@@ -296,7 +296,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         end = new CameraTarget(
                 targetPos,
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 fovMultiplier
         );
 

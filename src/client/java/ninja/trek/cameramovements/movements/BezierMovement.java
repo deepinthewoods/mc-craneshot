@@ -77,7 +77,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(), fovMultiplier);
+                CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
                 
         // Orthographic handling removed
 
@@ -101,7 +101,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
-        double pitch = Math.toRadians(stick.getPitch());
+        double pitch = Math.toRadians(stick.getPitch() + pitchOffset);
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
         double yOffset = Math.sin(pitch) * targetDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
@@ -116,14 +116,14 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 CameraController.controlStick.getPosition(),
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 start.getFovMultiplier()
         );
 
         // Update end target based on controlStick and target distance
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(), 
+                CameraController.controlStick.getPitch() + pitchOffset,
                 end.getFovMultiplier(),
                 end.getOrthoFactor()); // Preserve ortho factor
 
@@ -139,8 +139,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         if (resetting && client.player != null) {
             Vec3 playerPos = client.player.getEyePosition();
             float playerYaw = client.player.getYRot();
-            float playerPitch = client.player.getXRot();
-            
+            float playerPitch = client.player.getXRot() + pitchOffset;
+
             // Update return target to always be the player's current head position and rotation
             // Update the return target
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
@@ -444,9 +444,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             if (client.player != null) {
                 // Always return to player's head rotation regardless of END_TARGET
                 float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot();
+                float playerPitch = client.player.getXRot() + pitchOffset;
                 Vec3 playerPos = client.player.getEyePosition();
-                
+
                 // Set the target position to player head with proper rotation for return
                 // When returning to player view, we'll gradually transition back to perspective mode
                 // but we need to ensure a smooth transition by starting from the current ortho state
@@ -502,7 +502,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         start = new CameraTarget(
                 stickPos,
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 start.getFovMultiplier()
         );
 
@@ -510,7 +510,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         end = new CameraTarget(
                 targetPos,
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 fovMultiplier
         );
 

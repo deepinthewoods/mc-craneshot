@@ -146,9 +146,17 @@ public class CameraSystem {
             cameraActive = true;
             suppressRenderFrames = 0;
 
-            // Use THIRD_PERSON_BACK as the base CameraType. Our CameraMixin overrides
-            // isDetached() based on distance to control hand/body switching.
-            mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            // Initialize visibility state and camera type based on actual distance.
+            // updateVisibilityState() sets both isPlayerModelCurrentlyVisible AND the
+            // CameraType (FIRST_PERSON for close / THIRD_PERSON_BACK for far).
+            updateVisibilityState();
+            // If updateVisibilityState didn't trigger a state change (initial true stayed true),
+            // ensure camera type is set correctly for the current state.
+            if (isPlayerModelCurrentlyVisible) {
+                mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            } else {
+                mc.options.setCameraType(CameraType.FIRST_PERSON);
+            }
 
             // Explicitly apply position/rotation only if not using the dedicated camera entity
             if (currentCamera != null && mode != CameraMode.FREE_CAMERA) {
@@ -470,11 +478,14 @@ public class CameraSystem {
 
     /**
      * Updates the distance-based hysteresis state for hand/body switching.
-     * Called once per frame from updateCamera() after camera position is finalized.
+     * Also switches CameraType between FIRST_PERSON and THIRD_PERSON_BACK because
+     * Minecraft uses options.getCameraType().isFirstPerson() (not camera.isDetached())
+     * to decide whether to render the first-person hand model.
      */
     private void updateVisibilityState() {
         if (!cameraActive || Minecraft.getInstance().player == null) return;
         double distance = getVisualDistanceToPlayer();
+        boolean wasVisible = isPlayerModelCurrentlyVisible;
         if (isPlayerModelCurrentlyVisible) {
             if (distance < DISTANCE_HIDE_PLAYER_MODEL) {
                 isPlayerModelCurrentlyVisible = false;
@@ -484,20 +495,35 @@ public class CameraSystem {
                 isPlayerModelCurrentlyVisible = true;
             }
         }
+        // Sync camera type so MC's hand renderer sees the right perspective.
+        // FIRST_PERSON → hands render; THIRD_PERSON_BACK → body renders, hands hidden.
+        if (wasVisible != isPlayerModelCurrentlyVisible) {
+            Minecraft mc = Minecraft.getInstance();
+            if (isPlayerModelCurrentlyVisible) {
+                mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            } else {
+                mc.options.setCameraType(CameraType.FIRST_PERSON);
+            }
+        }
     }
 
     /**
      * Whether the camera is "detached" from the player (third-person perspective).
      * When camera is active, this is driven by distance: far = detached (body visible,
      * hands hidden), close = not detached (hands visible, body not in render list).
+     *
+     * Recomputes visibility state on demand so callers always see fresh distance-based results,
+     * regardless of when in the frame this is queried.
      */
     public boolean isEffectivelyDetached() {
         if (!cameraActive) return false;
+        updateVisibilityState();
         return isPlayerModelCurrentlyVisible;
     }
 
     public boolean shouldRenderPlayerModel() {
         if (!cameraActive) return true;
+        updateVisibilityState();
         return isPlayerModelCurrentlyVisible;
     }
 

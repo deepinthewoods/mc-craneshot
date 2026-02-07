@@ -53,7 +53,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
 
         // Get player position and rotation (follow player)
         float playerYaw = client.player.getYRot();
-        float playerPitch = client.player.getXRot();
+        float playerPitch = client.player.getXRot() + pitchOffset;
 
         // Target FOV depends on whether we're resetting
         float targetFov = resetting ? 1.0f : targetZoomFov;

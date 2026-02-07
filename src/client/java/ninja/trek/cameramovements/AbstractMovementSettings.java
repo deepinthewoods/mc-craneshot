@@ -13,6 +13,9 @@ import net.minecraft.world.phys.Vec3;
 
 public abstract class AbstractMovementSettings {
     private String customName = null;
+    @MovementSetting(label = "Yaw Offset", min = -180, max = 180)
+    protected float yawOffset = 0.0f;
+
     @MovementSetting(label = "Pitch offset", min = -180, max = 180)
     protected float pitchOffset = 0.0f;
 
@@ -26,6 +29,10 @@ public abstract class AbstractMovementSettings {
 
     public END_TARGET getEndTarget() {
         return endTarget;
+    }
+
+    public float getYawOffset() {
+        return yawOffset;
     }
 
     public enum START_TARGET {PLAYER};

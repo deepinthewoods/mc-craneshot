@@ -6,6 +6,7 @@ import net.minecraft.world.phys.Vec3;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
+import ninja.trek.config.MovementSettingType;
 import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
@@ -54,7 +55,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         PREDICTIVE        // Spring that targets predicted future position
     }
 
-    @MovementSetting(label = "Return Mode", description = "How to handle returning to a moving player")
+    @MovementSetting(label = "Return Mode", description = "How to handle returning to a moving player", type = MovementSettingType.ENUM)
     private ReturnMode returnMode = ReturnMode.VELOCITY_MATCH;
 
     @MovementSetting(label = "Velocity Influence", min = 0.0, max = 2.0, description = "How strongly to match player velocity (Velocity Match mode)")
@@ -97,7 +98,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(), fovMultiplier);
+                CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
 
         curveStart = start.getPosition();
         curveEnd = targetPos;
@@ -123,7 +124,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
     private Vec3 calculateTargetPosition(CameraTarget stick) {
         double yaw = Math.toRadians(stick.getYaw());
-        double pitch = Math.toRadians(stick.getPitch());
+        double pitch = Math.toRadians(stick.getPitch() + pitchOffset);
         double xOffset = Math.sin(yaw) * Math.cos(pitch) * targetDistance;
         double yOffset = Math.sin(pitch) * targetDistance;
         double zOffset = -Math.cos(yaw) * Math.cos(pitch) * targetDistance;
@@ -310,11 +311,11 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             if (returnMode == ReturnMode.PREDICTIVE) {
                 targetPos = playerPos.add(playerVelocity.scale(predictionTime));
                 targetYaw = playerYaw + playerYawVelocity * (float)predictionTime;
-                targetPitch = playerPitch + playerPitchVelocity * (float)predictionTime;
+                targetPitch = playerPitch + playerPitchVelocity * (float)predictionTime + pitchOffset;
             } else {
                 targetPos = playerPos;
                 targetYaw = playerYaw;
-                targetPitch = playerPitch;
+                targetPitch = playerPitch + pitchOffset;
             }
 
             if (returnMode == ReturnMode.VELOCITY_MATCH) {
@@ -338,7 +339,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
             targetPos = quadraticBezier(curveStart, controlPoint, curveEnd, curveProgress);
             targetYaw = CameraController.controlStick.getYaw();
-            targetPitch = CameraController.controlStick.getPitch();
+            targetPitch = CameraController.controlStick.getPitch() + pitchOffset;
             targetFov = fovMultiplier;
 
             end = new CameraTarget(curveEnd, targetYaw, targetPitch, targetFov);
@@ -434,7 +435,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
             if (client.player != null) {
                 float playerYaw = client.player.getYRot();
-                float playerPitch = client.player.getXRot();
+                float playerPitch = client.player.getXRot() + pitchOffset;
                 Vec3 playerPos = client.player.getEyePosition();
                 end = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
 
@@ -469,7 +470,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         end = new CameraTarget(
                 curveEnd,
                 CameraController.controlStick.getYaw(),
-                CameraController.controlStick.getPitch(),
+                CameraController.controlStick.getPitch() + pitchOffset,
                 fovMultiplier
         );
 

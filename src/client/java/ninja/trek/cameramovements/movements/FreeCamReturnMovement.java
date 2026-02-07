@@ -163,7 +163,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private CameraTarget resolveReturnTarget(Minecraft client) {
         Vec3 targetPos = CameraController.controlStick.getPosition();
         float targetYaw = CameraController.controlStick.getYaw();
-        float targetPitch = CameraController.controlStick.getPitch();
+        float targetPitch = CameraController.controlStick.getPitch() + pitchOffset;
 
         if (client == null || client.player == null) {
             return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
@@ -172,7 +172,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         Vec3 playerEye = client.player.getEyePosition();
         double distance = targetPos.distanceTo(playerEye);
         if (Double.isNaN(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
-            return new CameraTarget(playerEye, client.player.getYRot(), client.player.getXRot(), 1.0f);
+            return new CameraTarget(playerEye, client.player.getYRot(), client.player.getXRot() + pitchOffset, 1.0f);
         }
 
         return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
