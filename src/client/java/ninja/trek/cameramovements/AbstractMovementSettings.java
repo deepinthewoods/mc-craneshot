@@ -1,4 +1,7 @@
 package ninja.trek.cameramovements;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
 import ninja.trek.config.GeneralMenuSettings;
@@ -181,6 +184,87 @@ public abstract class AbstractMovementSettings {
         return headLockedToCamera;
     }
 
+    @MovementSetting(
+            label = "Remember Free Cam Pose",
+            type = MovementSettingType.BOOLEAN,
+            description = "Remember the free cam position and rotation per-dimension so returning to free cam resumes where you left off"
+    )
+    protected boolean saveFreeCamPose = false;
+
+    public boolean isSaveFreeCamPose() {
+        return saveFreeCamPose;
+    }
+
+    protected final Map<String, SavedPose> savedPoses = new HashMap<>();
+
+    public SavedPose getSavedPose(String dimensionKey) {
+        return savedPoses.get(dimensionKey);
+    }
+
+    public void putSavedPose(String dimensionKey, SavedPose pose) {
+        if (dimensionKey == null || pose == null) return;
+        savedPoses.put(dimensionKey, pose);
+    }
+
+    public static final class SavedPose {
+        public final Vec3 position;
+        public final float yaw;
+        public final float pitch;
+
+        public SavedPose(Vec3 position, float yaw, float pitch) {
+            this.position = position;
+            this.yaw = yaw;
+            this.pitch = pitch;
+        }
+    }
+
+    /**
+     * Writes non-reflective extra settings (structured state) into the persisted settings object.
+     * Called by SlotSettingsIO after the reflection-based settings pass.
+     */
+    public void writeExtraSettings(JsonObject settingsObj) {
+        if (savedPoses.isEmpty()) return;
+        JsonObject poses = new JsonObject();
+        for (Map.Entry<String, SavedPose> entry : savedPoses.entrySet()) {
+            SavedPose p = entry.getValue();
+            if (p == null || p.position == null) continue;
+            JsonObject poseObj = new JsonObject();
+            JsonArray pos = new JsonArray();
+            pos.add(p.position.x);
+            pos.add(p.position.y);
+            pos.add(p.position.z);
+            poseObj.add("pos", pos);
+            poseObj.addProperty("yaw", p.yaw);
+            poseObj.addProperty("pitch", p.pitch);
+            poses.add(entry.getKey(), poseObj);
+        }
+        settingsObj.add("savedPoses", poses);
+    }
+
+    /**
+     * Reads non-reflective extra settings back out of the persisted settings object.
+     * Called by SlotSettingsIO after the reflection-based settings pass.
+     */
+    public void readExtraSettings(JsonObject settingsObj) {
+        savedPoses.clear();
+        if (settingsObj == null || !settingsObj.has("savedPoses")) return;
+        JsonElement raw = settingsObj.get("savedPoses");
+        if (!raw.isJsonObject()) return;
+        JsonObject poses = raw.getAsJsonObject();
+        for (Map.Entry<String, JsonElement> entry : poses.entrySet()) {
+            try {
+                JsonObject poseObj = entry.getValue().getAsJsonObject();
+                JsonArray pos = poseObj.getAsJsonArray("pos");
+                Vec3 p = new Vec3(pos.get(0).getAsDouble(), pos.get(1).getAsDouble(), pos.get(2).getAsDouble());
+                float yaw = poseObj.get("yaw").getAsFloat();
+                float pitch = poseObj.get("pitch").getAsFloat();
+                savedPoses.put(entry.getKey(), new SavedPose(p, yaw, pitch));
+            } catch (Exception ignored) {
+                // skip malformed entry
+            }
+        }
+    }
+
     protected Vec3 lastReturnTargetPos = null;
 
     protected void resetReturnTargetTracking() {
@@ -278,6 +362,16 @@ public abstract class AbstractMovementSettings {
                         throw new IllegalArgumentException("Cannot convert " + value + " to integer");
                     }
                     field.setInt(this, intValue);
+                } else if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                    boolean boolValue;
+                    if (value instanceof Boolean) {
+                        boolValue = (Boolean) value;
+                    } else if (value instanceof String) {
+                        boolValue = Boolean.parseBoolean((String) value);
+                    } else {
+                        throw new IllegalArgumentException("Cannot convert " + value + " to boolean");
+                    }
+                    field.setBoolean(this, boolValue);
                 } else {
                     // Default fallback for other types
                     field.set(this, value);

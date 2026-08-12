@@ -5,6 +5,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -146,8 +147,13 @@ public class CraneShotEventHandler {
     }
 
     private static void handleDimensionChange(Minecraft client, Camera camera) {
-        if (client == null || client.level == null || client.player == null) {
+        if (client == null || client.level == null) {
             lastDimension = null;
+            return;
+        }
+        // If player is null (e.g. during portal entity recreation), don't clear lastDimension.
+        // Keeping the old value ensures the dimension change is detected once the player reappears.
+        if (client.player == null) {
             return;
         }
 
@@ -155,8 +161,10 @@ public class CraneShotEventHandler {
         CameraType currentPerspective = client.options.getCameraType();
 
         if (lastDimension != null && !lastDimension.equals(currentDimension)) {
-            // Dimension changed - snap camera to player's new position
-            // This prevents the camera from having to travel massive distances
+            // Dimension changed - snap camera to player's new position.
+            // Don't cancel movements - the LinearMovement snap check will handle
+            // correcting its internal position on the next render frame. Cancelling
+            // movements is too destructive (deactivates camera, resets perspective/modes).
             Vec3 playerEyePos = client.player.getEyePosition();
             float playerYaw = client.player.getYRot();
             float playerPitch = client.player.getXRot();
@@ -169,41 +177,17 @@ public class CraneShotEventHandler {
                 cameraEntity.setXRot(playerPitch);
             }
 
-            // Snap CameraSystem position if active (BEFORE canceling movements)
+            // Snap CameraSystem position if active
             ninja.trek.camera.CameraSystem cameraSystem = ninja.trek.camera.CameraSystem.getInstance();
-            boolean wasCameraActive = cameraSystem.isCameraActive();
-            Vec3 snappedCameraPos = null;
-            float snappedYaw = 0;
-            float snappedPitch = 0;
-
-            if (wasCameraActive) {
+            if (cameraSystem.isCameraActive()) {
                 cameraSystem.setCameraPosition(playerEyePos);
                 cameraSystem.setCameraRotation(playerYaw, playerPitch);
                 cameraSystem.resetVelocity();
-                snappedCameraPos = playerEyePos;
-                snappedYaw = playerYaw;
-                snappedPitch = playerPitch;
             }
 
-            // Cancel movements to clear old world references
-            CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
-
-            // If camera was active, reactivate it at the snapped position
-            if (wasCameraActive && snappedCameraPos != null) {
-                cameraSystem.activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
-                cameraSystem.setCameraPosition(snappedCameraPos);
-                cameraSystem.setCameraRotation(snappedYaw, snappedPitch);
-                cameraSystem.resetVelocity();
-            }
-
-            // Restore the previous perspective only if camera is not active
-            // (activateCamera already sets THIRD_PERSON_BACK when camera is active)
-            if (!wasCameraActive) {
-                CameraType restorePerspective = lastPerspective != null ? lastPerspective : currentPerspective;
-                if (restorePerspective != null) {
-                    client.options.setCameraType(restorePerspective);
-                }
-            }
+            // Reset base target and lastPlayerPos to prevent stale cross-dimension data
+            CraneshotClient.MOVEMENT_MANAGER.resetBaseTarget();
+            lastPlayerPos = null;
         }
 
         lastDimension = currentDimension;
@@ -211,8 +195,13 @@ public class CraneShotEventHandler {
     }
 
     private static void handleLargePositionJumps(Minecraft client, Camera camera) {
-        if (client == null || client.player == null) {
+        if (client == null) {
             lastPlayerPos = null;
+            return;
+        }
+        // If player is null (e.g. during portal entity recreation), don't clear lastPlayerPos.
+        // Keeping the old value ensures the large jump is detected once the player reappears.
+        if (client.player == null) {
             return;
         }
 
@@ -223,7 +212,9 @@ public class CraneShotEventHandler {
             double distanceMoved = currentPlayerPos.distanceTo(lastPlayerPos);
 
             if (distanceMoved > LARGE_POSITION_JUMP_THRESHOLD) {
-                // Player jumped a large distance - snap camera to prevent long travel
+                // Player jumped a large distance - snap camera to prevent long travel.
+                // Don't cancel movements - the LinearMovement snap check will handle
+                // correcting its internal position on the next render frame.
                 Vec3 playerEyePos = client.player.getEyePosition();
                 float playerYaw = client.player.getYRot();
                 float playerPitch = client.player.getXRot();
@@ -244,7 +235,7 @@ public class CraneShotEventHandler {
                     cameraSystem.resetVelocity();
                 }
 
-                // Reset base target
+                // Reset base target so movement recalculates from current state
                 CraneshotClient.MOVEMENT_MANAGER.resetBaseTarget();
             }
         }
@@ -305,10 +296,21 @@ public class CraneShotEventHandler {
                 client.player.connection.sendCommand("gamemode spectator");
                 Craneshot.LOGGER.info("Follower mode: re-requesting spectator gamemode");
             }
-            // Teleport spectator to the target player so their entity stays loaded
+            // Only teleport when necessary: target not loaded, different dimension, or very far away
             String tpTarget = GeneralMenuSettings.getTargetPlayerName();
             if (tpTarget != null && !tpTarget.isEmpty() && client.player.connection != null) {
-                client.player.connection.sendCommand("tp " + tpTarget);
+                boolean shouldTeleport = true;
+                Player targetPlayer = CameraController.getTrackedPlayer(client);
+                if (targetPlayer != null && targetPlayer != client.player) {
+                    // Target is loaded and in the same dimension - check distance
+                    double distance = client.player.distanceTo(targetPlayer);
+                    if (distance < 100.0) {
+                        shouldTeleport = false;
+                    }
+                }
+                if (shouldTeleport) {
+                    client.player.connection.sendCommand("tp " + tpTarget);
+                }
             }
         }
 

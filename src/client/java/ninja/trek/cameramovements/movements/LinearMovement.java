@@ -114,6 +114,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
+        // Snap camera if current position is extremely far from target (portal/teleport/dimension change).
+        // This prevents the camera from slowly easing across hundreds of blocks.
+        double distToTarget = current.getPosition().distanceTo(b.getPosition());
+        if (distToTarget > 100.0) {
+            current = new CameraTarget(b.getPosition(), b.getYaw(), b.getPitch(), b.getFovMultiplier());
+            return new MovementState(current, resetting);
+        }
+
         // Straight-line eased movement towards target with speed cap
         Vec3 delta = b.getPosition().subtract(current.getPosition());
         double deltaLength = delta.length();

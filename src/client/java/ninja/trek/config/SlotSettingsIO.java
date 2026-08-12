@@ -36,6 +36,7 @@ public class SlotSettingsIO {
                     settingsObj.addProperty(entry.getKey(), entry.getValue().toString());
                 }
             }
+            settings.writeExtraSettings(settingsObj);
             movementObj.add("settings", settingsObj);
         }
 
@@ -94,9 +95,14 @@ public class SlotSettingsIO {
                     movementObj.has("settings")) {
                 JsonObject settingsObj = movementObj.getAsJsonObject("settings");
                 for (Map.Entry<String, JsonElement> entry : settingsObj.entrySet()) {
-                    String value = entry.getValue().getAsString();
+                    JsonElement element = entry.getValue();
+                    if (!element.isJsonPrimitive()) {
+                        continue;
+                    }
+                    String value = element.getAsString();
                     settings.updateSetting(entry.getKey(), value);
                 }
+                settings.readExtraSettings(settingsObj);
             }
 
             return movement;

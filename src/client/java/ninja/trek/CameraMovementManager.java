@@ -8,6 +8,7 @@ import ninja.trek.cameramovements.movements.BezierMovement;
 import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
+import ninja.trek.config.SlotSettingsIO;
 import ninja.trek.mixin.client.CameraAccessor;
 import ninja.trek.mixin.client.FovAccessor;
 
@@ -412,6 +413,8 @@ public class CameraMovementManager {
                     }
                 } catch (Throwable ignore) { }
 
+                persistSavedPoseIfEnabled(originalMovement, client);
+
                 // Clear post-move settings to disable free camera mode
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
 
@@ -440,6 +443,7 @@ public class CameraMovementManager {
             // This will trigger return to the player's head position and rotation
             // Ensure we exit free camera modes so the movement can drive the return
             if (inFreeCameraMode) {
+                persistSavedPoseIfEnabled(activeMovement, client);
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             }
 
@@ -455,6 +459,24 @@ public class CameraMovementManager {
             
             // Reset the keyboard movement flag
             CraneshotClient.CAMERA_CONTROLLER.hasMovedWithKeyboard = false;
+        }
+    }
+
+    private void persistSavedPoseIfEnabled(ICameraMovement movement, Minecraft client) {
+        if (!(movement instanceof AbstractMovementSettings ams)) return;
+        if (!ams.isSaveFreeCamPose()) return;
+        if (client == null || client.level == null) return;
+        String dimKey = client.level.dimension().location().toString();
+        AbstractMovementSettings.SavedPose pose = new AbstractMovementSettings.SavedPose(
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPosition,
+                CraneshotClient.CAMERA_CONTROLLER.freeCamYaw,
+                CraneshotClient.CAMERA_CONTROLLER.freeCamPitch
+        );
+        ams.putSavedPose(dimKey, pose);
+        try {
+            SlotSettingsIO.saveSlots(slots);
+        } catch (Exception ignored) {
+            // persistence failure is non-fatal; pose stays in memory for this session
         }
     }
 

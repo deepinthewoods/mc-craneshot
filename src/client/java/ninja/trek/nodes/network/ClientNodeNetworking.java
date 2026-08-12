@@ -16,6 +16,10 @@ import ninja.trek.nodes.network.payload.NodesDeltaPayload;
 import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
+import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.config.FollowerConfig;
+import ninja.trek.config.FollowerMode;
+import ninja.trek.config.FollowerSettingsIO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +35,7 @@ public final class ClientNodeNetworking {
         ClientPlayNetworking.registerGlobalReceiver(NodesDeltaPayload.ID, ClientNodeNetworking::handleNodesDeltaPayload);
         ClientPlayNetworking.registerGlobalReceiver(AreasSnapshotPayload.ID, ClientNodeNetworking::handleAreasSnapshotPayload);
         ClientPlayNetworking.registerGlobalReceiver(AreasDeltaPayload.ID, ClientNodeNetworking::handleAreasDeltaPayload);
+        ClientPlayNetworking.registerGlobalReceiver(FollowerConfigPayload.ID, ClientNodeNetworking::handleFollowerConfigPayload);
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> NodeManager.get().onDisconnected());
         ClientChunkEvents.CHUNK_UNLOAD.register(ClientNodeNetworking::onChunkUnload);
@@ -111,6 +116,17 @@ public final class ClientNodeNetworking {
             }
         }
         context.client().execute(() -> tasks.forEach(Runnable::run));
+    }
+
+    private static void handleFollowerConfigPayload(FollowerConfigPayload payload, ClientPlayNetworking.Context context) {
+        if (!FollowerMode.isFollower()) return;
+        String json = payload.configJson();
+        context.client().execute(() -> {
+            FollowerConfig config = FollowerSettingsIO.parseFollowerConfigJson(json);
+            if (config != null) {
+                FollowerMode.applyNetworkConfig(config);
+            }
+        });
     }
 
     private static void onChunkUnload(ClientLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {

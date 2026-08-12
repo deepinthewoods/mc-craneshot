@@ -40,9 +40,11 @@ public abstract class KeyboardInputMixin extends ClientInput implements IKeyboar
             this.moveVector = Vec2.ZERO;
             ci.cancel();
         } else if (savedInput != null) {
-            // Restore saved state when not disabled
+            // Restore saved state once when re-enabled, then clear so normal tick takes over
             this.keyPresses = this.savedInput;
             this.moveVector = this.savedMovementVector;
+            this.savedInput = null;
+            this.savedMovementVector = null;
         }
     }
 }

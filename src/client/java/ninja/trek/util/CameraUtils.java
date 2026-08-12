@@ -6,6 +6,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Utility class for camera-related functions.
@@ -191,5 +192,20 @@ public class CameraUtils {
      */
     public static boolean isClientChunkLoaded(ClientLevel world, int chunkX, int chunkZ) {
         return world.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) != null;
+    }
+
+    /**
+     * Checks whether a world-space position lies within the client's render distance
+     * of the local player and its chunk is fully loaded.
+     */
+    public static boolean isPoseWithinRenderDistance(Minecraft mc, Vec3 pos) {
+        if (mc == null || mc.level == null || mc.player == null || pos == null) return false;
+        int cx = Mth.floor(pos.x) >> 4;
+        int cz = Mth.floor(pos.z) >> 4;
+        int pcx = Mth.floor(mc.player.getX()) >> 4;
+        int pcz = Mth.floor(mc.player.getZ()) >> 4;
+        int r = mc.options.renderDistance().get();
+        if (Math.abs(cx - pcx) > r || Math.abs(cz - pcz) > r) return false;
+        return isClientChunkLoaded(mc.level, cx, cz);
     }
 }

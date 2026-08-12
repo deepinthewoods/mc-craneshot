@@ -25,12 +25,15 @@ import ninja.trek.nodes.network.payload.NodesDeltaPayload;
 import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
+import ninja.trek.nodes.network.payload.FollowerConfigPayload;
 import ninja.trek.nodes.server.ServerNodeManager;
 
 import java.util.*;
 
 public final class ServerNodeNetworking {
     private ServerNodeNetworking() {}
+
+    private static volatile String latestFollowerConfigJson = null;
 
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register(ServerNodeNetworking::onPlayerJoin);
@@ -40,6 +43,7 @@ public final class ServerNodeNetworking {
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayload.ID, ServerNodeNetworking::handleHandshakePayload);
         ServerPlayNetworking.registerGlobalReceiver(EditRequestPayload.ID, ServerNodeNetworking::handleEditRequestPayload);
         ServerPlayNetworking.registerGlobalReceiver(AreaEditRequestPayload.ID, ServerNodeNetworking::handleAreaEditRequestPayload);
+        ServerPlayNetworking.registerGlobalReceiver(FollowerConfigPayload.ID, ServerNodeNetworking::handleFollowerConfigPayload);
 
         ServerChunkEvents.CHUNK_LOAD.register(ServerNodeNetworking::onChunkLoad);
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -58,6 +62,12 @@ public final class ServerNodeNetworking {
         boolean canEdit = ServerNodeManager.get().canEditOnServer(player);
         sendHandshakeOffer(player, canEdit);
         ServerNodeManager.get().markHandshakeSent(player, canEdit);
+
+        // Send stored follower config to joining player so late-connecting followers get it immediately
+        String storedConfig = latestFollowerConfigJson;
+        if (storedConfig != null) {
+            ServerPlayNetworking.send(player, new FollowerConfigPayload(storedConfig));
+        }
     }
 
     private static void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
@@ -207,6 +217,17 @@ public final class ServerNodeNetworking {
             NodeDelta delta = NodeDelta.remove(world.dimension(), chunk, nodeId);
             broadcastDeltas(world, List.of(delta));
             Craneshot.LOGGER.info("Player {} removed node {}", player.getName().getString(), nodeId);
+        }
+    }
+
+    private static void handleFollowerConfigPayload(FollowerConfigPayload payload, ServerPlayNetworking.Context context) {
+        latestFollowerConfigJson = payload.configJson();
+        ServerPlayer sender = context.player();
+        // Broadcast to all other connected players
+        for (ServerPlayer player : PlayerLookup.all(context.server())) {
+            if (player != sender) {
+                ServerPlayNetworking.send(player, payload);
+            }
         }
     }
 

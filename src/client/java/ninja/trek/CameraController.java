@@ -36,6 +36,9 @@ public class CameraController {
     // Track whether the camera has been moved with keyboard input
     public static boolean hasMovedWithKeyboard = false;
 
+    // Save sneak key state before entering free movement to restore on exit
+    private static boolean savedSneakKeyState = false;
+
     /**
      * Check if a key is physically held down, ignoring toggle/hold settings.
      */
@@ -301,6 +304,10 @@ public class CameraController {
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 ((IKeyboardInputMixin) client.player.input).setDisabled(false);
             }
+            // Restore sneak key state to what it was before entering free movement.
+            // During free movement, shift key presses for camera movement can toggle
+            // the sneak key binding state, causing the player to sneak on return.
+            client.options.keyShift.setDown(savedSneakKeyState);
             // Close node editor if open
             net.minecraft.client.Minecraft _mc = net.minecraft.client.Minecraft.getInstance();
             if (_mc != null && _mc.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
@@ -329,6 +336,12 @@ public class CameraController {
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 boolean shouldDisable = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                         currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
+                if (shouldDisable) {
+                    // Save sneak key state before disabling input, so we can restore it
+                    // when exiting free movement (prevents shift presses for camera-down
+                    // from toggling sneak on return)
+                    savedSneakKeyState = client.options.keyShift.isDown();
+                }
                 ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
             }
 
@@ -379,6 +392,18 @@ public class CameraController {
             // Activate the appropriate camera mode
             CameraSystem cameraSystem = CameraSystem.getInstance();
             if (isFreeCamMode) {
+                // If this movement remembers its free-cam pose, try to restore it for the
+                // current dimension before we hand the pose to the camera system.
+                if (m.isSaveFreeCamPose() && client.level != null) {
+                    String dimKey = client.level.dimension().location().toString();
+                    AbstractMovementSettings.SavedPose saved = m.getSavedPose(dimKey);
+                    if (saved != null && ninja.trek.util.CameraUtils.isPoseWithinRenderDistance(client, saved.position)) {
+                        freeCamPosition = saved.position;
+                        freeCamYaw = saved.yaw;
+                        freeCamPitch = saved.pitch;
+                    }
+                }
+
                 // Set the position first, so it's available during activation
                 cameraSystem.setCameraPosition(freeCamPosition);
                 cameraSystem.setCameraRotation(freeCamYaw, freeCamPitch);

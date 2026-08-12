@@ -9,6 +9,7 @@ public class FollowerMode {
     private static FollowerConfig cachedConfig = null;
     private static boolean configLoaded = false;
     private static boolean followerMovementStarted = false;
+    private static volatile boolean configChanged = false;
     private static long lastConfigModified = 0;
     private static long lastConfigCheckTime = 0;
     private static final long CONFIG_CHECK_INTERVAL_MS = 2000; // check every 2 seconds
@@ -92,11 +93,30 @@ public class FollowerMode {
     }
 
     /**
-     * Checks if the config file has been modified since last load.
-     * Only checks the filesystem every CONFIG_CHECK_INTERVAL_MS to avoid overhead.
-     * @return true if config was reloaded due to file change
+     * Called from the network handler when a follower config packet arrives.
+     * Stores the config and sets the configChanged flag for the next tick check.
+     */
+    public static void applyNetworkConfig(FollowerConfig config) {
+        cachedConfig = config;
+        configLoaded = true;
+        configChanged = true;
+        Craneshot.LOGGER.info("Follower config received via network");
+    }
+
+    /**
+     * Checks if the config has changed (via network or file).
+     * Network config changes are detected immediately via the configChanged flag.
+     * File-based polling is kept as a fallback.
+     * @return true if config was reloaded due to change
      */
     public static boolean checkForConfigChange() {
+        // Check network-delivered config first (immediate)
+        if (configChanged) {
+            configChanged = false;
+            return true;
+        }
+
+        // Fallback: file-based polling
         long now = System.currentTimeMillis();
         if (now - lastConfigCheckTime < CONFIG_CHECK_INTERVAL_MS) {
             return false;
