@@ -27,7 +27,7 @@ public class MouseMixin implements IMouseMixin {
         Minecraft client = Minecraft.getInstance();
 
         // Always allow scrolling if any screen is open (game menu, mod menu, etc)
-        if (client.screen != null) {
+        if (client.gui.screen() != null) {
             return;
         }
 
@@ -64,7 +64,7 @@ public class MouseMixin implements IMouseMixin {
         Minecraft client = Minecraft.getInstance();
 
         // Adjust mouse sensitivity based on zoom level BEFORE any other processing
-        if (client.screen == null && !MouseInterceptor.isIntercepting()) {
+        if (client.gui.screen() == null && !MouseInterceptor.isIntercepting()) {
             if (CraneshotClient.MOVEMENT_MANAGER != null) {
                 ninja.trek.cameramovements.movements.ZoomMovement zoomMovement =
                     CraneshotClient.MOVEMENT_MANAGER.getActiveZoomOverlay();
@@ -82,7 +82,7 @@ public class MouseMixin implements IMouseMixin {
         }
 
         // Handle mouse interception for camera control
-        if (MouseInterceptor.isIntercepting() && client.screen == null) {
+        if (MouseInterceptor.isIntercepting() && client.gui.screen() == null) {
             capturedDeltaX = accumulatedDX;
             capturedDeltaY = accumulatedDY;
             accumulatedDX = 0;
@@ -94,7 +94,7 @@ public class MouseMixin implements IMouseMixin {
     @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void onMouseButton(long window, net.minecraft.client.input.MouseButtonInfo input, int action, CallbackInfo ci) {
         Minecraft client = Minecraft.getInstance();
-        if (MouseInterceptor.isIntercepting() && client.screen == null) {
+        if (MouseInterceptor.isIntercepting() && client.gui.screen() == null) {
             ci.cancel();
         }
     }

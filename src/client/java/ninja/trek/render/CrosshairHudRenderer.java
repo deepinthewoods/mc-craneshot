@@ -1,9 +1,11 @@
 package ninja.trek.render;
 
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -19,10 +21,13 @@ public class CrosshairHudRenderer {
     private static double smoothedSy = Double.NaN;
     private static final double SMOOTH_ALPHA = 1; // 0..1, higher = snappier
     public static void register() {
-        HudRenderCallback.EVENT.register(CrosshairHudRenderer::onHudRender);
+        HudElementRegistry.attachElementAfter(
+                VanillaHudElements.CROSSHAIR,
+                Identifier.fromNamespaceAndPath("craneshot", "camera_crosshair"),
+                CrosshairHudRenderer::onHudRender);
     }
 
-    private static void onHudRender(GuiGraphics ctx, DeltaTracker tickCounter) {
+    private static void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.level == null) return;
         Player player = client.player;
@@ -51,7 +56,7 @@ public class CrosshairHudRenderer {
         if (hit == null || hit.getType() == HitResult.Type.MISS) return;
 
         // Project 3D point to screen space using camera basis/FOV
-        var camera = client.gameRenderer.getMainCamera();
+        var camera = client.gameRenderer.mainCamera();
         Vec3 camPos = camera.position();
         Vec3 world = hit.getLocation();
         Vec3 v = world.subtract(camPos);

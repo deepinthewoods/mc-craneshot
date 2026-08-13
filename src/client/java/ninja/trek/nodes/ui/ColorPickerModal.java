@@ -1,7 +1,7 @@
 package ninja.trek.nodes.ui;
 
 import java.util.function.Consumer;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -28,24 +28,24 @@ public class ColorPickerModal extends Screen {
         y+=hgt+sp;
         addRenderableWidget(Button.builder(Component.literal("OK"), b-> {
             if (onPick != null) onPick.accept(hsvToArgb(h,s,v));
-            if (minecraft!=null) minecraft.setScreen(null);
+            if (minecraft!=null) minecraft.gui.setScreen(null);
         }).bounds(x,y,w*2+sp,hgt).build());
     }
 
-    @Override public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    @Override public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // No background/blur – keep game view crisp while editing
         int col = hsvToArgb(h,s,v);
         context.fill(10, 10, 10+16, 10+16, col);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void renderTransparentBackground(GuiGraphics context) {
+    public void extractTransparentBackground(GuiGraphicsExtractor context) {
         // Disable translucent gradient/blur
     }
 
     @Override
-    protected void renderBlurredBackground(GuiGraphics context) {
+    protected void extractBlurredBackground(GuiGraphicsExtractor context) {
         // no-op
     }
 

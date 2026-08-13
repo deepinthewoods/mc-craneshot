@@ -1,11 +1,13 @@
 package ninja.trek;
 
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import ninja.trek.cameramovements.ICameraMovement;
 import java.util.List;
 
@@ -41,7 +43,10 @@ public class MovementToastRenderer {
     }
 
     public static void register() {
-        HudRenderCallback.EVENT.register((GuiGraphics context, DeltaTracker tickDelta) -> {
+        HudElementRegistry.attachElementAfter(
+                VanillaHudElements.OVERLAY_MESSAGE,
+                Identifier.fromNamespaceAndPath("craneshot", "movement_toast"),
+                (GuiGraphicsExtractor context, DeltaTracker tickDelta) -> {
             Minecraft client = Minecraft.getInstance();
             if (client.player == null) return;
 
@@ -85,7 +90,7 @@ public class MovementToastRenderer {
                                 int baseColor = (i == selectedIndex) ? WHITE_COLOR : GRAY_COLOR;
                                 int color = applyOpacity(baseColor, opacity);
 
-                                context.drawString(
+                                context.text(
                                         textRenderer,
                                         Component.literal(movement.getName()),
                                         x + PADDING,
@@ -116,7 +121,7 @@ public class MovementToastRenderer {
                         int textColor = applyOpacity(WHITE_COLOR, textOpacity);
                         int textX = MARGIN_LEFT + PADDING;
                         int textYPos = client.getWindow().getGuiScaledHeight() - MARGIN_BOTTOM;
-                        context.drawString(font, Component.literal(textToastMessage), textX, textYPos, textColor);
+                        context.text(font, Component.literal(textToastMessage), textX, textYPos, textColor);
                     }
                 }
             }

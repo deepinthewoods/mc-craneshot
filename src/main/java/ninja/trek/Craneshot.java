@@ -34,17 +34,17 @@ public class Craneshot implements ModInitializer {
 
     private void registerPayloads() {
         // Server-to-Client payloads
-        PayloadTypeRegistry.playS2C().register(ChunkNodesPayload.ID, ChunkNodesPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(NodesDeltaPayload.ID, NodesDeltaPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(HandshakePayload.ID, HandshakePayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(AreasSnapshotPayload.ID, AreasSnapshotPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(AreasDeltaPayload.ID, AreasDeltaPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ChunkNodesPayload.ID, ChunkNodesPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(NodesDeltaPayload.ID, NodesDeltaPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(HandshakePayload.ID, HandshakePayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(AreasSnapshotPayload.ID, AreasSnapshotPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(AreasDeltaPayload.ID, AreasDeltaPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
 
         // Client-to-Server payloads
-        PayloadTypeRegistry.playC2S().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(HandshakePayload.ID, HandshakePayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(AreaEditRequestPayload.ID, AreaEditRequestPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(HandshakePayload.ID, HandshakePayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(AreaEditRequestPayload.ID, AreaEditRequestPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
     }
 }

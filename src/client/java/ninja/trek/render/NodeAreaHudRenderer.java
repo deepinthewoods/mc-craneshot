@@ -1,11 +1,13 @@
 package ninja.trek.render;
 
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import ninja.trek.nodes.NodeManager;
@@ -23,10 +25,13 @@ public class NodeAreaHudRenderer {
     private static final int LINE_HEIGHT = 12;
 
     public static void register() {
-        HudRenderCallback.EVENT.register(NodeAreaHudRenderer::onHudRender);
+        HudElementRegistry.attachElementAfter(
+                VanillaHudElements.OVERLAY_MESSAGE,
+                Identifier.fromNamespaceAndPath("craneshot", "node_area_status"),
+                NodeAreaHudRenderer::onHudRender);
     }
 
-    private static void onHudRender(GuiGraphics ctx, DeltaTracker tickCounter) {
+    private static void onHudRender(GuiGraphicsExtractor ctx, DeltaTracker tickCounter) {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.level == null || client.player == null) return;
 
@@ -64,7 +69,7 @@ public class NodeAreaHudRenderer {
 
             int color = info.selected ? 0xFF66FFAA : 0xFF4CB3FF;
 
-            ctx.drawString(
+            ctx.text(
                 textRenderer,
                 Component.literal(text),
                 MARGIN_LEFT,

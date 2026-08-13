@@ -274,7 +274,7 @@ public class ServerNodeManager {
         }
 
         private boolean markChunkStreamed(ResourceKey<Level> dimension, ChunkPos pos) {
-            return streamedChunks.computeIfAbsent(dimension, k -> new HashSet<>()).add(pos.toLong());
+            return streamedChunks.computeIfAbsent(dimension, k -> new HashSet<>()).add(pos.pack());
         }
 
         private void retainStreamed(ResourceKey<Level> dimension, Set<Long> keep) {

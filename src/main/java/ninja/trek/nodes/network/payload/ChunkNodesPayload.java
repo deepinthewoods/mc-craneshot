@@ -51,8 +51,8 @@ public record ChunkNodesPayload(ResourceKey<Level> dimension, ChunkPos chunk, Li
 
     private void write(RegistryFriendlyByteBuf buf) {
         buf.writeIdentifier(dimension.identifier());
-        buf.writeInt(chunk.x);
-        buf.writeInt(chunk.z);
+        buf.writeInt(chunk.x());
+        buf.writeInt(chunk.z());
         buf.writeVarInt(nodes.size());
         for (CameraNodeDTO dto : nodes) {
             dto.write(buf);

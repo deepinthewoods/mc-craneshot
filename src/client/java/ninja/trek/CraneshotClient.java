@@ -1,7 +1,7 @@
 package ninja.trek;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -36,35 +36,35 @@ public class CraneshotClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
 
-        toggleMenuKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        toggleMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.toggle_menu",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_Z,
                 KB_CAT_UI
         ));
 
-        selectMovementType = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        selectMovementType = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.select_movement",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_X,
                 KB_CAT_CAMERA
         ));
 
-        followMovementKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        followMovementKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.follow_movement",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_G,
                 KB_CAT_CAMERA
         ));
 
-        zoomKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.zoom",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_H,
                 KB_CAT_CAMERA
         ));
 
-        toggleZonesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        toggleZonesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.toggle_zones",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN,
@@ -83,7 +83,7 @@ public class CraneshotClient implements ClientModInitializer {
 
         for (int i = 0; i < cameraKeyBinds.length; i++) {
             int keyCode = i < defaultKeyCodes.length ? defaultKeyCodes[i] : GLFW.GLFW_KEY_UNKNOWN;
-            cameraKeyBinds[i] = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+            cameraKeyBinds[i] = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                     "key.craneshot.camera" + (i + 1),
                     InputConstants.Type.KEYSYM,
                     keyCode,

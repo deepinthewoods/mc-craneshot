@@ -49,7 +49,7 @@ public class CraneShotEventHandler {
             handleScrollInput(client);
             CraneshotClient.checkKeybinds();
 
-            Camera camera = client.gameRenderer.getMainCamera();
+            Camera camera = client.gameRenderer.mainCamera();
             handleRespawnAndWakeReset(client, camera);
             handleDimensionChange(client, camera);
             handleLargePositionJumps(client, camera);
@@ -284,7 +284,7 @@ public class CraneShotEventHandler {
         // Auto-respawn if dead (e.g. died while not in spectator mode)
         if (client.player.isDeadOrDying()) {
             client.player.respawn();
-            client.setScreen(null);
+            client.gui.setScreen(null);
             return;
         }
 

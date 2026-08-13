@@ -1,7 +1,7 @@
 package ninja.trek.nodes.ui;
 
 import java.util.function.Consumer;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -37,7 +37,7 @@ public class NodeRenameModal extends Screen {
         );
         nameField.setValue(initialName);
         nameField.setMaxLength(64);
-        addWidget(nameField);
+        addRenderableWidget(nameField);
         setInitialFocus(nameField);
 
         addRenderableWidget(Button.builder(Component.literal("Save"), btn -> {
@@ -53,24 +53,22 @@ public class NodeRenameModal extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
         int centerX = width / 2;
         int centerY = height / 2;
         int modalLeft = centerX - MODAL_WIDTH / 2;
         int modalTop = centerY - MODAL_HEIGHT / 2;
         context.fill(modalLeft, modalTop, modalLeft + MODAL_WIDTH, modalTop + MODAL_HEIGHT, 0xB0000000);
         context.fill(modalLeft + 1, modalTop + 1, modalLeft + MODAL_WIDTH - 1, modalTop + MODAL_HEIGHT - 1, 0xFF333333);
-        context.drawCenteredString(font, "Rename Node", centerX, modalTop + 10, 0xFFFFFF);
-        nameField.render(context, mouseX, mouseY, delta);
+        context.centeredText(font, "Rename Node", centerX, modalTop + 10, 0xFFFFFF);
     }
 
     @Override
     public void onClose() {
-        if (minecraft != null) minecraft.setScreen(null);
+        if (minecraft != null) minecraft.gui.setScreen(null);
     }
 
     @Override
     public boolean isPauseScreen() { return false; }
 }
-

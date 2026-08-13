@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.state.LevelRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.world.phys.Vec3;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.nodes.NodeManager;
@@ -24,7 +24,7 @@ public class NodeRenderer {
         if (!manager.isEditing() && !showOutsideEdit) return;
         if (manager.getNodes().isEmpty() && manager.getAreas().isEmpty()) return;
 
-        Vec3 camPos = Minecraft.getInstance().gameRenderer.getMainCamera().position();
+        Vec3 camPos = Minecraft.getInstance().gameRenderer.mainCamera().position();
         int viewDist = Math.max(2, Minecraft.getInstance().options.renderDistance().get());
         int camCX = (int)Math.floor(camPos.x) >> 4;
         int camCZ = (int)Math.floor(camPos.z) >> 4;
@@ -100,7 +100,7 @@ public class NodeRenderer {
                                    double ax, double ay, double az, double bx, double by, double bz) {
         RenderType layer = RenderTypes.lines();
         var bq = queue.order(1000);
-        var cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+        var cam = Minecraft.getInstance().gameRenderer.mainCamera();
         var rot = cam.rotation();
         Vector3f forward = new Vector3f(0f, 0f, -1f).rotate(rot);
         final float nx = forward.x, ny = forward.y, nz = forward.z;
@@ -113,7 +113,7 @@ public class NodeRenderer {
 
     private static void drawBillboardQuad(SubmitNodeCollector queue, PoseStack matrices, Vec3 c,
                                           float size, float r, float g, float b, float a, int light) {
-        var cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+        var cam = Minecraft.getInstance().gameRenderer.mainCamera();
         var rot = cam.rotation();
         Vector3f rv = new Vector3f(1, 0, 0).rotate(rot);
         Vector3f uv = new Vector3f(0, 1, 0).rotate(rot);
@@ -133,7 +133,7 @@ public class NodeRenderer {
 
     private static void drawBillboardOutline(SubmitNodeCollector queue, PoseStack matrices, Vec3 c,
                                              float size, float r, float g, float b, float a, int light) {
-        var cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+        var cam = Minecraft.getInstance().gameRenderer.mainCamera();
         var rot = cam.rotation();
         Vector3f rv = new Vector3f(1, 0, 0).rotate(rot);
         Vector3f uv = new Vector3f(0, 1, 0).rotate(rot);

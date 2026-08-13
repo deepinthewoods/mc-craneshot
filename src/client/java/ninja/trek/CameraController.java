@@ -172,7 +172,7 @@ public class CameraController {
                 // If target is null, falls back to client.player
             }
 
-            Camera camera = client.gameRenderer.getMainCamera();
+            Camera camera = client.gameRenderer.mainCamera();
             if (camera != null) {
                 Vec3 eyePos = trackedPlayer.getEyePosition(tickDelta);
                 float yaw = trackedPlayer.getViewYRot(tickDelta);
@@ -310,8 +310,8 @@ public class CameraController {
             client.options.keyShift.setDown(savedSneakKeyState);
             // Close node editor if open
             net.minecraft.client.Minecraft _mc = net.minecraft.client.Minecraft.getInstance();
-            if (_mc != null && _mc.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
-                _mc.setScreen(null);
+            if (_mc != null && _mc.gui.screen() instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                _mc.gui.setScreen(null);
             }
             ninja.trek.nodes.NodeManager.get().setEditing(false);
             CameraSystem cs = CameraSystem.getInstance();
@@ -323,7 +323,7 @@ public class CameraController {
             currentKeyMoveMode = m.getPostMoveKeys();
 
             Minecraft client = Minecraft.getInstance();
-            Camera camera = client.gameRenderer.getMainCamera();
+            Camera camera = client.gameRenderer.mainCamera();
             
             // Reset the keyboard movement tracking flag when entering a new camera mode
             hasMovedWithKeyboard = false;
@@ -358,8 +358,8 @@ public class CameraController {
                 boolean keysOk = (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT || currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE);
                 if (keysOk) {
                     ninja.trek.nodes.NodeManager.get().setEditing(true);
-                    if (!(client.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen)) {
-                        client.setScreen(new ninja.trek.nodes.ui.NodeEditorScreen());
+                    if (!(client.gui.screen() instanceof ninja.trek.nodes.ui.NodeEditorScreen)) {
+                        client.gui.setScreen(new ninja.trek.nodes.ui.NodeEditorScreen());
                     }
                     // Do NOT intercept mouse globally while screen is open; screen handles drag
                     MouseInterceptor.setIntercepting(false);
@@ -369,8 +369,8 @@ public class CameraController {
                 }
             } else {
                 // Ensure editor closed if not in node edit mode
-                if (client.screen instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
-                    client.setScreen(null);
+                if (client.gui.screen() instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
+                    client.gui.setScreen(null);
                 }
                 ninja.trek.nodes.NodeManager.get().setEditing(false);
             }
@@ -395,7 +395,7 @@ public class CameraController {
                 // If this movement remembers its free-cam pose, try to restore it for the
                 // current dimension before we hand the pose to the camera system.
                 if (m.isSaveFreeCamPose() && client.level != null) {
-                    String dimKey = client.level.dimension().location().toString();
+                    String dimKey = client.level.dimension().identifier().toString();
                     AbstractMovementSettings.SavedPose saved = m.getSavedPose(dimKey);
                     if (saved != null && ninja.trek.util.CameraUtils.isPoseWithinRenderDistance(client, saved.position)) {
                         freeCamPosition = saved.position;
@@ -894,7 +894,7 @@ public class CameraController {
             freeCamYaw = yaw;
             freeCamPitch = pitch;
 
-            Camera camera = client.gameRenderer.getMainCamera();
+            Camera camera = client.gameRenderer.mainCamera();
             if (camera != null) {
                 ((CameraAccessor) camera).invokesetPos(eyePos);
                 ((CameraAccessor) camera).invokeSetRotation(yaw, pitch);

@@ -103,7 +103,7 @@ public final class ServerNodeNetworking {
             return;
         }
         if (!ServerNodeManager.get().consumeRequest(player)) {
-            player.displayClientMessage(Component.literal("[Craneshot] Too many edit requests; slow down."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Too many edit requests; slow down."));
             return;
         }
 
@@ -127,7 +127,7 @@ public final class ServerNodeNetworking {
             return;
         }
         if (!ServerNodeManager.get().consumeRequest(player)) {
-            player.displayClientMessage(Component.literal("[Craneshot] Too many edit requests; slow down."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Too many edit requests; slow down."));
             return;
         }
 
@@ -146,12 +146,12 @@ public final class ServerNodeNetworking {
 
     private static void handleCreate(ServerPlayer player, ServerLevel world, CameraNodeDTO incoming) {
         if (!ServerNodeManager.get().hasCreatePermission(player)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to create nodes on this server."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to create nodes on this server."));
             return;
         }
         String error = ServerNodeManager.get().validateNodePayload(incoming);
         if (error != null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Invalid node: " + error), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Invalid node: " + error));
             return;
         }
 
@@ -168,23 +168,23 @@ public final class ServerNodeNetworking {
 
         NodeDelta delta = NodeDelta.add(world.dimension(), chunk, packetDto);
         broadcastDeltas(world, List.of(delta));
-        Craneshot.LOGGER.info("Player {} created node {} in chunk {} {}", player.getName().getString(), incoming.uuid, chunk.x, chunk.z);
+        Craneshot.LOGGER.info("Player {} created node {} in chunk {} {}", player.getName().getString(), incoming.uuid, chunk.x(), chunk.z());
     }
 
     private static void handleUpdate(ServerPlayer player, ServerLevel world, CameraNodeDTO incoming) {
         CameraNodeDTO existing = ServerNodeManager.get().getNode(world, incoming.uuid);
         if (existing == null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Node was not found on the server."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Node was not found on the server."));
             return;
         }
         if (!ServerNodeManager.get().hasEditPermission(player, existing)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to edit this node."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to edit this node."));
             return;
         }
         incoming.owner = existing.owner;
         String error = ServerNodeManager.get().validateNodePayload(incoming);
         if (error != null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Invalid update: " + error), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Invalid update: " + error));
             return;
         }
 
@@ -209,7 +209,7 @@ public final class ServerNodeNetworking {
         CameraNodeDTO existing = ServerNodeManager.get().getNode(world, nodeId);
         if (existing == null) return;
         if (!ServerNodeManager.get().hasEditPermission(player, existing)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to delete this node."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to delete this node."));
             return;
         }
         ChunkPos chunk = ServerNodeManager.chunkPosFromNode(existing);
@@ -234,12 +234,12 @@ public final class ServerNodeNetworking {
     private static void handleAreaCreate(ServerPlayer player, ServerLevel world, AreaInstanceDTO incoming) {
         if (incoming == null) return;
         if (!ServerNodeManager.get().hasCreatePermission(player)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to create areas on this server."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to create areas on this server."));
             return;
         }
         String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
         if (error != null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Invalid area: " + error), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Invalid area: " + error));
             return;
         }
 
@@ -262,17 +262,17 @@ public final class ServerNodeNetworking {
         if (incoming == null) return;
         AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, incoming.uuid);
         if (existing == null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Area was not found on the server."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Area was not found on the server."));
             return;
         }
         if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to edit this area."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to edit this area."));
             return;
         }
         incoming.owner = existing.owner;
         String error = ServerNodeManager.get().validateAreaPayload(world, incoming);
         if (error != null) {
-            player.displayClientMessage(Component.literal("[Craneshot] Invalid area update: " + error), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] Invalid area update: " + error));
             return;
         }
         incoming.clientRequestId = null;
@@ -288,7 +288,7 @@ public final class ServerNodeNetworking {
         AreaInstanceDTO existing = ServerNodeManager.get().getArea(world, areaId);
         if (existing == null) return;
         if (!ServerNodeManager.get().hasAreaEditPermission(player, existing)) {
-            player.displayClientMessage(Component.literal("[Craneshot] You do not have permission to delete this area."), false);
+            player.sendSystemMessage(Component.literal("[Craneshot] You do not have permission to delete this area."));
             return;
         }
         if (ServerNodeManager.get().removeArea(world, areaId)) {
@@ -298,7 +298,7 @@ public final class ServerNodeNetworking {
         }
     }
 
-    private static void onChunkLoad(ServerLevel world, LevelChunk chunk) {
+    private static void onChunkLoad(ServerLevel world, LevelChunk chunk, boolean alreadyLoaded) {
         ChunkPos pos = chunk.getPos();
         Iterable<ServerPlayer> players = PlayerLookup.tracking(world, pos);
         for (ServerPlayer player : players) {
@@ -335,11 +335,11 @@ public final class ServerNodeNetworking {
         Set<Long> keep = new HashSet<>();
         for (int dx = -viewDistance; dx <= viewDistance; dx++) {
             for (int dz = -viewDistance; dz <= viewDistance; dz++) {
-                int cx = center.x + dx;
-                int cz = center.z + dz;
+                int cx = center.x() + dx;
+                int cz = center.z() + dz;
                 if (world.getChunkSource().hasChunk(cx, cz)) {
                     ChunkPos pos = new ChunkPos(cx, cz);
-                    long key = pos.toLong();
+                    long key = pos.pack();
                     keep.add(key);
                     if (ServerNodeManager.get().markChunkStreamed(player, dimension, pos)) {
                         sendChunkSnapshot(player, world, pos);
@@ -447,7 +447,7 @@ public final class ServerNodeNetworking {
         }
 
         AreasDeltaPayload payload = new AreasDeltaPayload(world.dimension(), operations);
-        for (ServerPlayer player : PlayerLookup.world(world)) {
+        for (ServerPlayer player : PlayerLookup.level(world)) {
             if (!ServerNodeManager.get().isHandshakeComplete(player)) continue;
             ServerPlayNetworking.send(player, payload);
         }

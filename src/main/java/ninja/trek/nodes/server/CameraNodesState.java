@@ -26,7 +26,7 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public class CameraNodesState extends SavedData {
-    public static final String STORAGE_KEY = "craneshot_nodes";
+    public static final Identifier STORAGE_KEY = Identifier.fromNamespaceAndPath("craneshot", "nodes");
     private static final int FORMAT_VERSION = 1;
 
     private final Map<ResourceKey<net.minecraft.world.level.Level>, Map<Long, LinkedHashMap<UUID, CameraNodeDTO>>> nodesByDimension = new HashMap<>();
@@ -51,7 +51,7 @@ public class CameraNodesState extends SavedData {
     public List<CameraNodeDTO> getChunkNodes(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = nodesByDimension.get(dimension);
         if (dimMap == null) return List.of();
-        Map<UUID, CameraNodeDTO> chunk = dimMap.get(pos.toLong());
+        Map<UUID, CameraNodeDTO> chunk = dimMap.get(pos.pack());
         if (chunk == null) return List.of();
         return new ArrayList<>(chunk.values());
     }
@@ -59,7 +59,7 @@ public class CameraNodesState extends SavedData {
     public void replaceChunk(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos, List<CameraNodeDTO> nodes) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         Map<UUID, Long> index = getIndexMap(dimension);
-        long key = pos.toLong();
+        long key = pos.pack();
         Map<UUID, CameraNodeDTO> existing = dimMap.remove(key);
         if (existing != null) {
             for (UUID id : existing.keySet()) {
@@ -80,7 +80,7 @@ public class CameraNodesState extends SavedData {
     public void upsertNode(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos, CameraNodeDTO dto) {
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         Map<UUID, Long> index = getIndexMap(dimension);
-        long key = pos.toLong();
+        long key = pos.pack();
         LinkedHashMap<UUID, CameraNodeDTO> chunk = dimMap.computeIfAbsent(key, k -> new LinkedHashMap<>());
         chunk.put(dto.uuid, dto);
         index.put(dto.uuid, key);
@@ -121,7 +121,7 @@ public class CameraNodesState extends SavedData {
         Map<UUID, Long> index = getIndexMap(dimension);
         Long key = index.get(nodeId);
         if (key == null) return null;
-        return new ChunkPos(key);
+        return ChunkPos.unpack(key);
     }
 
     public List<AreaInstanceDTO> getAreas(ResourceKey<net.minecraft.world.level.Level> dimension) {
@@ -269,7 +269,7 @@ public class CameraNodesState extends SavedData {
     }
 
     private Map<UUID, CameraNodeDTO> getChunkMap(ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos) {
-        long key = pos.toLong();
+        long key = pos.pack();
         Map<Long, LinkedHashMap<UUID, CameraNodeDTO>> dimMap = getDimensionMap(dimension);
         return dimMap.computeIfAbsent(key, k -> new LinkedHashMap<>());
     }

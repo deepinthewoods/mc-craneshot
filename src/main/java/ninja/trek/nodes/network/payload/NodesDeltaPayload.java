@@ -50,8 +50,8 @@ public record NodesDeltaPayload(
 
     private void write(RegistryFriendlyByteBuf buf) {
         buf.writeIdentifier(dimension.identifier());
-        buf.writeInt(chunk.x);
-        buf.writeInt(chunk.z);
+        buf.writeInt(chunk.x());
+        buf.writeInt(chunk.z());
         buf.writeVarInt(operations.size());
         for (NodeOperation op : operations) {
             op.write(buf);

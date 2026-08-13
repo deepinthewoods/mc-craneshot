@@ -1,6 +1,6 @@
 package ninja.trek.config;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -40,7 +40,7 @@ public class RenameModal extends Screen {
         );
         nameField.setValue(movement.getDisplayName());
         nameField.setMaxLength(32);
-        addWidget(nameField);
+        addRenderableWidget(nameField);
         setInitialFocus(nameField);
 
         // Create buttons
@@ -58,11 +58,11 @@ public class RenameModal extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (parent != null) {
            // parent.render(context, mouseX, mouseY, delta);
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
 
         int centerX = width / 2;
         int centerY = height / 2;
@@ -74,16 +74,14 @@ public class RenameModal extends Screen {
         context.fill(modalLeft + 1, modalTop + 1, modalLeft + MODAL_WIDTH - 1, modalTop + MODAL_HEIGHT - 1, 0xFF444444);
 
         // Draw title
-        context.drawCenteredString(font, "Rename Movement", centerX, modalTop + 10, 0xFFFFFF);
-
-        nameField.render(context, mouseX, mouseY, delta);
+        context.centeredText(font, "Rename Movement", centerX, modalTop + 10, 0xFFFFFF);
 
     }
 
     @Override
     public void onClose() {
         if (this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            this.minecraft.gui.setScreen(parent);
         }
     }
 

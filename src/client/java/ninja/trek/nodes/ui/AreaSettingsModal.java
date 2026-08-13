@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.screens.Screen;
@@ -161,7 +161,7 @@ public class AreaSettingsModal extends Screen {
         addRenderableWidget(Button.builder(Component.literal("OK"), b -> {
             NodeManager.get().markAreaDirty(area.id);
             if (onDone != null) onDone.accept(area);
-            if (minecraft != null) minecraft.setScreen(null);
+            if (minecraft != null) minecraft.gui.setScreen(null);
         }).bounds(x, y, w*2, h).build());
     }
 
@@ -261,12 +261,12 @@ public class AreaSettingsModal extends Screen {
         super.removed();
     }
 
-    @Override public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
+    @Override public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(context, mouseX, mouseY, delta);
         int left = 20, top = 20 + 20*6; // below some buttons
         int y = top;
         // Draw center position labels with click-to-increment
-        context.drawString(font, Component.literal("Position:"), left, y, 0xFFFFFF, true); y+=12;
+        context.text(font, Component.literal("Position:"), left, y, 0xFFFFFF, true); y+=12;
         posXRowY = y;
         y = drawLabeledVec3(context, left, y, "X", ()-> area.center.x, d-> area.center = new net.minecraft.world.phys.Vec3(d, area.center.y, area.center.z));
         posYRowY = y;
@@ -278,7 +278,7 @@ public class AreaSettingsModal extends Screen {
             // per-axis radii for inside/outside
             if (area.insideRadii == null) area.insideRadii = new net.minecraft.world.phys.Vec3(area.insideRadius, area.insideRadius, area.insideRadius);
             if (area.outsideRadii == null) area.outsideRadii = new net.minecraft.world.phys.Vec3(area.outsideRadius, area.outsideRadius, area.outsideRadius);
-            context.drawString(font, Component.literal("Inside Radii:"), left, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Inside Radii:"), left, y, 0xFFFFFF, true); y+=12;
             insideXRowY = y;
             y = drawLabeledVec3(context, left, y, "X", ()-> area.insideRadii.x, d-> area.insideRadii = new net.minecraft.world.phys.Vec3(Math.max(0,d), area.insideRadii.y, area.insideRadii.z));
             insideYRowY = y;
@@ -286,7 +286,7 @@ public class AreaSettingsModal extends Screen {
             insideZRowY = y;
             y = drawLabeledVec3(context, left, y, "Z", ()-> area.insideRadii.z, d-> area.insideRadii = new net.minecraft.world.phys.Vec3(area.insideRadii.x, area.insideRadii.y, Math.max(0,d)));
             y += 6;
-            context.drawString(font, Component.literal("Outside Radii:"), left, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Outside Radii:"), left, y, 0xFFFFFF, true); y+=12;
             outsideXRowY = y;
             y = drawLabeledVec3(context, left, y, "X", ()-> area.outsideRadii.x, d-> area.outsideRadii = new net.minecraft.world.phys.Vec3(Math.max(area.insideRadii!=null?area.insideRadii.x:0,d), area.outsideRadii.y, area.outsideRadii.z));
             outsideYRowY = y;
@@ -297,29 +297,29 @@ public class AreaSettingsModal extends Screen {
 
         y += 8;
         if (area.movements.isEmpty()) {
-            context.drawString(font, Component.literal("Movements: none"), left, y, 0xAAAAAA, true);
+            context.text(font, Component.literal("Movements: none"), left, y, 0xAAAAAA, true);
         } else {
-            context.drawString(font, Component.literal("Movements:"), left, y, 0xFFFFFF, true);
+            context.text(font, Component.literal("Movements:"), left, y, 0xFFFFFF, true);
             y += 12;
             int idx = 1;
             for (AreaMovementConfig config : area.movements) {
                 String typeLabel = config.movementType != null ? config.movementType : "unknown";
-                context.drawString(font, Component.literal(idx + ") " + typeLabel), left + 10, y, 0xFFFFFF, true);
+                context.text(font, Component.literal(idx + ") " + typeLabel), left + 10, y, 0xFFFFFF, true);
                 y += 12;
 
                 UUID posId = parseUuid(config.settings.get("positionNodeId"));
                 CameraNode posNode = posId != null ? NodeManager.get().getNode(posId) : null;
                 String posName = posNode != null ? posNode.name : "None";
-                context.drawString(font, Component.literal("Pos: " + posName), left + 20, y, 0xDDDDDD, true);
+                context.text(font, Component.literal("Pos: " + posName), left + 20, y, 0xDDDDDD, true);
                 y += 12;
 
                 UUID lookId = parseUuid(config.settings.get("lookNodeId"));
                 CameraNode lookNode = lookId != null ? NodeManager.get().getNode(lookId) : null;
                 String lookName = lookNode != null ? lookNode.name : "None";
-                context.drawString(font, Component.literal("Look: " + lookName), left + 20, y, 0xDDDDDD, true);
+                context.text(font, Component.literal("Look: " + lookName), left + 20, y, 0xDDDDDD, true);
                 y += 12;
 
-                context.drawString(font, Component.literal(String.format("Weight: %.2f", config.weight)), left + 20, y, 0xDDDDDD, true);
+                context.text(font, Component.literal(String.format("Weight: %.2f", config.weight)), left + 20, y, 0xDDDDDD, true);
                 y += 16;
                 idx++;
             }
@@ -327,19 +327,19 @@ public class AreaSettingsModal extends Screen {
     }
 
     @Override
-    public void renderTransparentBackground(GuiGraphics context) {
+    public void extractTransparentBackground(GuiGraphicsExtractor context) {
         // Disable translucent gradient/blur
     }
 
     @Override
-    protected void renderBlurredBackground(GuiGraphics context) {
+    protected void extractBlurredBackground(GuiGraphicsExtractor context) {
         // no-op
     }
 
     private interface DoubleSetter { void set(double v); }
-    private int drawLabeledVec3(GuiGraphics ctx, int left, int y, String axis, java.util.function.Supplier<Double> getter, DoubleSetter setter) {
+    private int drawLabeledVec3(GuiGraphicsExtractor ctx, int left, int y, String axis, java.util.function.Supplier<Double> getter, DoubleSetter setter) {
         String text = axis+": "+String.format("%.2f", getter.get());
-        ctx.drawString(font, Component.literal(text+"   (+/- 1,10,100 with Ctrl/Shift & RMB)"), left+10, y, 0xDDDDDD, true);
+        ctx.text(font, Component.literal(text+"   (+/- 1,10,100 with Ctrl/Shift & RMB)"), left+10, y, 0xDDDDDD, true);
         // Note: actual increment handling is in mouseClicked
         return y + 12;
     }

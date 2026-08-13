@@ -37,7 +37,8 @@ public class CameraEntity extends LocalPlayer {
     private CameraEntity(Minecraft mc, ClientLevel world,
                          ClientPacketListener netHandler, StatsCounter stats,
                          ClientRecipeBook recipeBook) {
-        super(mc, world, netHandler, stats, recipeBook, Input.EMPTY, false);
+        super(mc, world, netHandler, stats, recipeBook, Input.EMPTY, false,
+                net.minecraft.client.multiplayer.chat.ChatAbilities.NO_RESTRICTIONS);
     }
 
     @Override
@@ -241,7 +242,7 @@ public class CameraEntity extends LocalPlayer {
         Vec3 entityPos;
         float yaw;
         float pitch;
-        net.minecraft.client.Camera current = mc.gameRenderer != null ? mc.gameRenderer.getMainCamera() : null;
+        net.minecraft.client.Camera current = mc.gameRenderer != null ? mc.gameRenderer.mainCamera() : null;
         if (current != null) {
             entityPos = current.position();
             yaw = current.yRot();

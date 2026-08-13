@@ -160,7 +160,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         CameraNode node = inRangeNodes.get(currentNodeIndex);
 
         try {
-            var framebuffer = client.getMainRenderTarget();
+            var framebuffer = client.gameRenderer.mainRenderTarget();
             if (framebuffer != null) {
                 String sanitizedName = sanitizeName(node.name);
                 File timelapseDir = new File(client.gameDirectory, "screenshots/timelapse/" + sanitizedName);

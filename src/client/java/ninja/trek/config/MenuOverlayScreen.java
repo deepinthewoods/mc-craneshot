@@ -9,7 +9,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
@@ -173,7 +173,7 @@ public class MenuOverlayScreen extends Screen {
         if (movement instanceof AbstractMovementSettings settings) {
             addRenderableWidget(Button.builder(Component.literal("r"), button -> {
                         if (minecraft != null) {
-                            minecraft.setScreen(new RenameModal(this, settings, this::reinitialize));
+                            minecraft.gui.setScreen(new RenameModal(this, settings, this::reinitialize));
                         }
                     })
                     .bounds(controlX, rowY, 20, BUTTON_HEIGHT)
@@ -1294,7 +1294,7 @@ public class MenuOverlayScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0x80000000);
         context.fill(
                 centerX,
@@ -1303,10 +1303,10 @@ public class MenuOverlayScreen extends Screen {
                 centerY + guiHeight,
                 0xC0000000
         );
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         if (maxScroll > 0) {
             if (scrollOffset > 0) {
-                context.drawCenteredString(
+                context.centeredText(
                         Minecraft.getInstance().font,
                         Component.literal("▲"),
                         centerX + guiWidth - 15,
@@ -1315,7 +1315,7 @@ public class MenuOverlayScreen extends Screen {
                 );
             }
             if (scrollOffset < maxScroll) {
-                context.drawCenteredString(
+                context.centeredText(
                         Minecraft.getInstance().font,
                         Component.literal("▼"),
                         centerX + guiWidth - 15,
@@ -1412,7 +1412,7 @@ public class MenuOverlayScreen extends Screen {
         if (isMenuOpen) {
             onClose();
         } else {
-            client.setScreen(this);
+            client.gui.setScreen(this);
             isMenuOpen = true;
         }
     }
@@ -1431,7 +1431,7 @@ public class MenuOverlayScreen extends Screen {
         }
 
         if (this.minecraft != null) {
-            this.minecraft.setScreen(null);
+            this.minecraft.gui.setScreen(null);
         }
         isMenuOpen = false;
     }

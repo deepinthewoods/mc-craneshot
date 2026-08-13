@@ -114,7 +114,7 @@ public class CameraUtils {
             for (int cx = minCX; cx <= maxCX; ++cx) {
                 for (int cz = chunkZ - viewDistance; cz <= chunkZ + viewDistance; ++cz) {
                     if (isClientChunkLoaded(mc.level, cx, cz)) {
-                        markChunkForReRender(mc.levelRenderer, cx, cz);
+                        markChunkForReRender(mc.level, cx, cz);
                     }
                 }
             }
@@ -127,7 +127,7 @@ public class CameraUtils {
             for (int cz = minCZ; cz <= maxCZ; ++cz) {
                 for (int cx = chunkX - viewDistance; cx <= chunkX + viewDistance; ++cx) {
                     if (isClientChunkLoaded(mc.level, cx, cz)) {
-                        markChunkForReRender(mc.levelRenderer, cx, cz);
+                        markChunkForReRender(mc.level, cx, cz);
                     }
                 }
             }
@@ -165,7 +165,7 @@ public class CameraUtils {
                 // Mark all chunks that were not in free camera range
                 if ((cx < minCameraCX || cx > maxCameraCX || cz < minCameraCZ || cz > maxCameraCZ) &&
                     isClientChunkLoaded(mc.level, cx, cz)) {
-                    markChunkForReRender(mc.levelRenderer, cx, cz);
+                    markChunkForReRender(mc.level, cx, cz);
                 }
             }
         }
@@ -173,13 +173,13 @@ public class CameraUtils {
 
     /**
      * Marks a chunk for re-rendering.
-     * @param renderer the world renderer
+     * @param world the client world
      * @param chunkX chunk X coordinate
      * @param chunkZ chunk Z coordinate
      */
-    public static void markChunkForReRender(LevelRenderer renderer, int chunkX, int chunkZ) {
+    public static void markChunkForReRender(ClientLevel world, int chunkX, int chunkZ) {
         for (int cy = 0; cy < 16; ++cy) {
-            renderer.setSectionDirty(chunkX, cy, chunkZ);
+            world.setSectionDirtyWithNeighbors(chunkX, cy, chunkZ);
         }
     }
 

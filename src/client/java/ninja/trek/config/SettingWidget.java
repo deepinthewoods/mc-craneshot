@@ -112,7 +112,7 @@ public class SettingWidget {
 
                             // If this is either the postMoveMouse or postMoveKeys field, force a menu refresh to update warnings
                             if (fieldName.equals("postMoveMouse") || fieldName.equals("postMoveKeys")) {
-                                if (Minecraft.getInstance().screen instanceof MenuOverlayScreen menuScreen) {
+                                if (Minecraft.getInstance().gui.screen() instanceof MenuOverlayScreen menuScreen) {
                                     menuScreen.reinitialize();
                                 }
                             }

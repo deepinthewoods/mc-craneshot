@@ -9,7 +9,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.Locale;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -48,13 +48,13 @@ public class NodeEditorScreen extends Screen {
         int w = 110, h = 20, sp=4;
 
         // Initialize edit rotation to current camera orientation
-        net.minecraft.client.Camera cam0 = Minecraft.getInstance().gameRenderer.getMainCamera();
+        net.minecraft.client.Camera cam0 = Minecraft.getInstance().gameRenderer.mainCamera();
         if (cam0 != null) {
             ninja.trek.nodes.NodeManager.get().setEditRotation(cam0.yRot(), cam0.xRot());
         }
 
         addRenderableWidget(Button.builder(Component.literal("Color"), b-> {
-            minecraft.setScreen(new ColorPickerModal(col -> {
+            minecraft.gui.setScreen(new ColorPickerModal(col -> {
                 CameraNode sel = NodeManager.get().getSelected();
                 if (sel != null) { sel.colorARGB = col; NodeManager.get().save(); }
             }));
@@ -64,10 +64,10 @@ public class NodeEditorScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Rename"), b-> {
             CameraNode sel = NodeManager.get().getSelected();
             if (sel != null) {
-                minecraft.setScreen(new ninja.trek.nodes.ui.NodeRenameModal(sel.name, newName -> {
+                minecraft.gui.setScreen(new ninja.trek.nodes.ui.NodeRenameModal(sel.name, newName -> {
                     sel.name = newName;
                     NodeManager.get().save();
-                    minecraft.setScreen(this);
+                    minecraft.gui.setScreen(this);
                 }));
             }
         }).bounds(rightX,y,w,h).build()); y+=h+sp;
@@ -122,7 +122,7 @@ public class NodeEditorScreen extends Screen {
         }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
         addRenderableWidget(Button.builder(Component.literal("Add Node"), b-> {
-            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+            Camera cam = Minecraft.getInstance().gameRenderer.mainCamera();
             if (cam != null) {
                 CameraNode n = NodeManager.get().addNode(cam.position());
                 NodeManager.get().setSelected(n.id);
@@ -130,7 +130,7 @@ public class NodeEditorScreen extends Screen {
         }).bounds(rightX,y,w,h).build()); y+=h+sp;
 
         addRenderableWidget(Button.builder(Component.literal("Add Timelapse"), b-> {
-            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+            Camera cam = Minecraft.getInstance().gameRenderer.mainCamera();
             if (cam != null) {
                 float fovMul = 1.0f;
                 try {
@@ -147,7 +147,7 @@ public class NodeEditorScreen extends Screen {
                 .bounds(rightX,y,w,h).build()); y+=h+sp;
 
         addRenderableWidget(Button.builder(Component.literal("Add Area"), b-> {
-            Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+            Camera cam = Minecraft.getInstance().gameRenderer.mainCamera();
             Vec3 pos = cam != null ? cam.position() : Vec3.ZERO;
             var area = NodeManager.get().addArea(pos);
             NodeManager.get().setSelectedArea(area.id);
@@ -170,7 +170,7 @@ public class NodeEditorScreen extends Screen {
             if (selType.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
                 // Update Camera button: re-capture current camera state into this timelapse node
                 addRenderableWidget(Button.builder(Component.literal("Update Camera"), b-> {
-                    Camera cam2 = Minecraft.getInstance().gameRenderer.getMainCamera();
+                    Camera cam2 = Minecraft.getInstance().gameRenderer.mainCamera();
                     if (cam2 != null) {
                         selType.position = cam2.position();
                         selType.timelapseYaw = cam2.yRot();
@@ -261,8 +261,8 @@ public class NodeEditorScreen extends Screen {
                         CameraNode conflict = NodeManager.get().findEnabledTimelapseNodeWithIndex(newIndex, selType.id);
                         if (conflict != null) {
                             final int idx = newIndex;
-                            minecraft.setScreen(new TimelapseIndexConflictModal(idx, conflict, selType, () -> {
-                                minecraft.setScreen(this);
+                            minecraft.gui.setScreen(new TimelapseIndexConflictModal(idx, conflict, selType, () -> {
+                                minecraft.gui.setScreen(this);
                                 this.init(this.width, this.height);
                             }));
                             return;
@@ -323,9 +323,9 @@ public class NodeEditorScreen extends Screen {
 
             addRenderableWidget(Button.builder(Component.literal(displayName), b -> {
                 NodeManager.get().setSelectedArea(area.id);
-                minecraft.setScreen(new AreaSettingsModal(area, updated -> {
+                minecraft.gui.setScreen(new AreaSettingsModal(area, updated -> {
                     NodeManager.get().save();
-                    minecraft.setScreen(this);
+                    minecraft.gui.setScreen(this);
                 }));
             }).bounds(areaListX, areaListY, 140, 18).build());
 
@@ -379,11 +379,11 @@ public class NodeEditorScreen extends Screen {
         // Key forwarding is handled in keyPressed/keyReleased; no per-tick polling here.
     }
 
-    @Override public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    @Override public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         // Render only our widgets; skip Screen default background/separators entirely
         for (net.minecraft.client.gui.components.events.GuiEventListener e : this.children()) {
             if (e instanceof net.minecraft.client.gui.components.Renderable d) {
-                d.render(context, mouseX, mouseY, delta);
+                d.extractRenderState(context, mouseX, mouseY, delta);
             }
         }
 
@@ -392,51 +392,51 @@ public class NodeEditorScreen extends Screen {
         int y = 10;
         CameraNode selNode = NodeManager.get().getSelected();
         if (selNode != null) {
-            context.drawString(font, Component.literal("Node: "+selNode.name), rightX, y, 0xFFFFFF, true); y+=12;
-            context.drawString(font, Component.literal("Type: "+selNode.type), rightX, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Node: "+selNode.name), rightX, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Type: "+selNode.type), rightX, y, 0xFFFFFF, true); y+=12;
             if (selNode.type == ninja.trek.nodes.model.NodeType.DRONE_SHOT) {
-                context.drawString(font, Component.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Radius: %.1f", selNode.droneRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Speed: %.0f deg/s", selNode.droneSpeedDegPerSec)), rightX, y, 0xFFFFFF, true); y+=12;
             }
             if (selNode.type == ninja.trek.nodes.model.NodeType.TIMELAPSE) {
-                context.drawString(font, Component.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal("Index: " + selNode.timelapseIndex), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(selNode.timelapseEnabled ? "Enabled" : "Disabled"), rightX, y, selNode.timelapseEnabled ? 0x88FF88 : 0xFF8888, true); y+=12;
+                context.text(font, Component.literal(String.format("Yaw: %.1f", selNode.timelapseYaw)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Pitch: %.1f", selNode.timelapsePitch)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("FOV: %.2f", selNode.timelapseFovMultiplier)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal("Index: " + selNode.timelapseIndex), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(selNode.timelapseEnabled ? "Enabled" : "Disabled"), rightX, y, selNode.timelapseEnabled ? 0x88FF88 : 0xFF8888, true); y+=12;
             }
         } else {
-            context.drawString(font, Component.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;
+            context.text(font, Component.literal("No node selected"), rightX, y, 0xAAAAAA, true); y+=12;
         }
 
         y += 6;
 
         AreaInstance selArea = NodeManager.get().getSelectedArea();
         if (selArea != null) {
-            context.drawString(font, Component.literal("Area: "+(selArea.name != null ? selArea.name : selArea.id.toString())), rightX, y, 0xFFFFFF, true); y+=12;
-            context.drawString(font, Component.literal("Shape: "+selArea.shape), rightX, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Area: "+(selArea.name != null ? selArea.name : selArea.id.toString())), rightX, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Shape: "+selArea.shape), rightX, y, 0xFFFFFF, true); y+=12;
             if (selArea.advanced && selArea.insideRadii != null && selArea.outsideRadii != null) {
-                context.drawString(font, Component.literal(String.format("Inside: %.1f/%.1f/%.1f", selArea.insideRadii.x, selArea.insideRadii.y, selArea.insideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(String.format("Outside: %.1f/%.1f/%.1f", selArea.outsideRadii.x, selArea.outsideRadii.y, selArea.outsideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Inside: %.1f/%.1f/%.1f", selArea.insideRadii.x, selArea.insideRadii.y, selArea.insideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Outside: %.1f/%.1f/%.1f", selArea.outsideRadii.x, selArea.outsideRadii.y, selArea.outsideRadii.z)), rightX, y, 0xFFFFFF, true); y+=12;
             } else {
-                context.drawString(font, Component.literal(String.format("Inside: %.1f", selArea.insideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
-                context.drawString(font, Component.literal(String.format("Outside: %.1f", selArea.outsideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Inside: %.1f", selArea.insideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
+                context.text(font, Component.literal(String.format("Outside: %.1f", selArea.outsideRadius)), rightX, y, 0xFFFFFF, true); y+=12;
             }
-            context.drawString(font, Component.literal("Curve: "+selArea.easing), rightX, y, 0xFFFFFF, true); y+=12;
+            context.text(font, Component.literal("Curve: "+selArea.easing), rightX, y, 0xFFFFFF, true); y+=12;
         } else {
-            context.drawString(font, Component.literal("No area selected"), rightX, y, 0xAAAAAA, true);
+            context.text(font, Component.literal("No area selected"), rightX, y, 0xAAAAAA, true);
         }
     }
 
     // Disable the default translucent in-game gradient background to avoid flicker
     @Override
-    public void renderTransparentBackground(GuiGraphics context) {
+    public void extractTransparentBackground(GuiGraphicsExtractor context) {
         // no-op: keep full game view without gradient/blur
     }
 
     // Belt/world blur guard: override to prevent any blur application
     @Override
-    protected void renderBlurredBackground(GuiGraphics context) {
+    protected void extractBlurredBackground(GuiGraphicsExtractor context) {
         // no-op
     }
 
@@ -482,8 +482,8 @@ public class NodeEditorScreen extends Screen {
         // Clear any forwarded key states to avoid stuck keys
         clearMovementKeys();
         if (this.minecraft != null) {
-            ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.minecraft, this.minecraft.gameRenderer.getMainCamera());
-            this.minecraft.setScreen(null);
+            ninja.trek.CraneshotClient.MOVEMENT_MANAGER.finishTransition(this.minecraft, this.minecraft.gameRenderer.mainCamera());
+            this.minecraft.gui.setScreen(null);
         }
     }
 
@@ -543,14 +543,14 @@ public class NodeEditorScreen extends Screen {
             if (clickDuration < CLICK_TIME_THRESHOLD_MS && distance < CLICK_MOVEMENT_THRESHOLD_PX) {
                 // This was a click, not a drag - select the node
                 try {
-                    Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+                    Camera cam = Minecraft.getInstance().gameRenderer.mainCamera();
                     if (cam != null) {
                         NodeManager.get().selectNearestToScreen(click.x(), click.y(), this.width, this.height, cam);
                         this.init(this.width, this.height);
                     }
                 } catch (Throwable t) {
                     // Fallback: select center
-                    Camera cam = Minecraft.getInstance().gameRenderer.getMainCamera();
+                    Camera cam = Minecraft.getInstance().gameRenderer.mainCamera();
                     if (cam != null) {
                         NodeManager.get().selectNearestToScreen(this.width/2.0, this.height/2.0, this.width, this.height, cam);
                         this.init(this.width, this.height);
@@ -700,4 +700,3 @@ public class NodeEditorScreen extends Screen {
         return Component.literal(axis + ": --");
     }
 }
-

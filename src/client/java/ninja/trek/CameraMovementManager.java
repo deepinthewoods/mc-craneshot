@@ -466,7 +466,7 @@ public class CameraMovementManager {
         if (!(movement instanceof AbstractMovementSettings ams)) return;
         if (!ams.isSaveFreeCamPose()) return;
         if (client == null || client.level == null) return;
-        String dimKey = client.level.dimension().location().toString();
+        String dimKey = client.level.dimension().identifier().toString();
         AbstractMovementSettings.SavedPose pose = new AbstractMovementSettings.SavedPose(
                 CraneshotClient.CAMERA_CONTROLLER.freeCamPosition,
                 CraneshotClient.CAMERA_CONTROLLER.freeCamYaw,

@@ -92,7 +92,7 @@ public class CameraSystem {
         if (mc.player == null || mc.level == null) return;
 
         // Get the current camera if available
-        Camera currentCamera = mc.gameRenderer.getMainCamera();
+        Camera currentCamera = mc.gameRenderer.mainCamera();
         Vec3 currentCameraPos = null;
         float currentYaw = 0;
         float currentPitch = 0;
@@ -259,7 +259,7 @@ public class CameraSystem {
 
         cameraPosition = cameraPosition.add(cameraVelocity);
 
-        Camera camera = mc.gameRenderer.getMainCamera();
+        Camera camera = mc.gameRenderer.mainCamera();
         if (camera != null) {
             updateCamera(camera);
         }
@@ -391,7 +391,7 @@ public class CameraSystem {
         if (cameraActive) {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
-                Camera camera = mc.gameRenderer.getMainCamera();
+                Camera camera = mc.gameRenderer.mainCamera();
                 if (camera != null) ((CameraAccessor) camera).invokesetPos(cameraPosition);
             }
         }
@@ -406,7 +406,7 @@ public class CameraSystem {
         if (cameraActive) {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
-                Camera camera = mc.gameRenderer.getMainCamera();
+                Camera camera = mc.gameRenderer.mainCamera();
                 if (camera != null) ((CameraAccessor) camera).invokeSetRotation(cameraYaw, cameraPitch);
             }
         }
