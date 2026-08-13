@@ -13,6 +13,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
@@ -75,6 +76,16 @@ public class MenuOverlayScreen extends Screen {
             createMovementList(slotIndex, visibleStartY, visibleEndY, BUTTON_HEIGHT,
                     MOVEMENT_ROW_HEIGHT, MOVEMENT_SPACING, SETTING_HEIGHT);
         }
+
+        hideFullyOffscreenWidgets();
+    }
+
+    private void hideFullyOffscreenWidgets() {
+        for (GuiEventListener child : children()) {
+            if (child instanceof AbstractWidget widget) {
+                widget.visible = widget.getBottom() > 0 && widget.getY() < height;
+            }
+        }
     }
 
     private void createTabButtons() {
@@ -125,7 +136,7 @@ public class MenuOverlayScreen extends Screen {
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
         String currentTypeName = movements.isEmpty() ? "None" : movements.get(selectedMovementTypeIndex).getName();
         this.addRenderableWidget(Button.builder(Component.literal("Type: " + currentTypeName),
-                        button -> cycleMovementType())
+                        this::cycleMovementType)
                 .bounds(centerX + addButtonWidth + clipboardButtonWidth + spacing * 2, centerY + CONTENT_START_Y,
                         typeButtonWidth, BUTTON_HEIGHT)
                 .build());
@@ -745,124 +756,34 @@ public class MenuOverlayScreen extends Screen {
                 .build());
                 
         if (freeCamReturnExpanded) {
-            // Add settings for FreeCamReturnMovement
             yOffset += spacing;
             ninja.trek.cameramovements.movements.FreeCamReturnMovement freeCamReturn = GeneralMenuSettings.getFreeCamReturnMovement();
-            
-            // Position Easing slider
-            this.addRenderableWidget(Button.builder(Component.literal("Position Easing"), button -> {})
-                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
-                    .build());
-                    
-            // Use reflection to get the current value
-            double positionEasing = 0.2; // Default value
-            try {
-                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionEasing");
+
+            List<Field> settingFields = new ArrayList<>();
+            for (Field field : freeCamReturn.getClass().getDeclaredFields()) {
+                if (field.isAnnotationPresent(MovementSetting.class)) {
+                    settingFields.add(field);
+                }
+            }
+            int settingWidth = labelWidth + controlWidth + 10;
+            int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+            int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+            for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                Field field = settingFields.get(fieldIndex);
+                MovementSetting annotation = field.getAnnotation(MovementSetting.class);
                 field.setAccessible(true);
-                positionEasing = (double)field.get(freeCamReturn);
-        } catch (Exception e) {
-            // logging removed
-        }
-            
-            this.addRenderableWidget(SettingWidget.createSlider(
-                    buttonX + labelWidth + 10,
-                    baseY + yOffset,
-                    controlWidth,
-                    BUTTON_HEIGHT,
-                    Component.literal("Position Easing"),
-                    0.01f,
-                    1.0f,
-                    positionEasing,
-                    "positionEasing",
-                    (AbstractMovementSettings)freeCamReturn
-            ));
-            
-            // Position Speed Limit slider
-            yOffset += spacing;
-            this.addRenderableWidget(Button.builder(Component.literal("Position Speed Limit"), button -> {})
-                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
-                    .build());
-                    
-            // Use reflection to get the current value
-            double positionSpeedLimit = 5.0; // Default value
-            try {
-                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("positionSpeedLimit");
-                field.setAccessible(true);
-                positionSpeedLimit = (double)field.get(freeCamReturn);
-        } catch (Exception e) {
-            // logging removed
-        }
-            
-            this.addRenderableWidget(SettingWidget.createSlider(
-                    buttonX + labelWidth + 10,
-                    baseY + yOffset,
-                    controlWidth,
-                    BUTTON_HEIGHT,
-                    Component.literal("Position Speed Limit"),
-                    0.1f,
-                    200.0f,
-                    positionSpeedLimit,
-                    "positionSpeedLimit",
-                    (AbstractMovementSettings)freeCamReturn
-            ));
-            
-            // Rotation Easing slider
-            yOffset += spacing;
-            this.addRenderableWidget(Button.builder(Component.literal("Rotation Easing"), button -> {})
-                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
-                    .build());
-                    
-            // Use reflection to get the current value
-            double rotationEasing = 0.2; // Default value
-            try {
-                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationEasing");
-                field.setAccessible(true);
-                rotationEasing = (double)field.get(freeCamReturn);
-        } catch (Exception e) {
-            // logging removed
-        }
-            
-            this.addRenderableWidget(SettingWidget.createSlider(
-                    buttonX + labelWidth + 10,
-                    baseY + yOffset,
-                    controlWidth,
-                    BUTTON_HEIGHT,
-                    Component.literal("Rotation Easing"),
-                    0.01f,
-                    1.0f,
-                    rotationEasing,
-                    "rotationEasing",
-                    (AbstractMovementSettings)freeCamReturn
-            ));
-            
-            // Rotation Speed Limit slider
-            yOffset += spacing;
-            this.addRenderableWidget(Button.builder(Component.literal("Rotation Speed Limit"), button -> {})
-                    .bounds(buttonX, baseY + yOffset, labelWidth, BUTTON_HEIGHT)
-                    .build());
-                    
-            // Use reflection to get the current value
-            double rotationSpeedLimit = 90.0; // Default value
-            try {
-                java.lang.reflect.Field field = freeCamReturn.getClass().getDeclaredField("rotationSpeedLimit");
-                field.setAccessible(true);
-                rotationSpeedLimit = (double)field.get(freeCamReturn);
-        } catch (Exception e) {
-            // logging removed
-        }
-            
-            this.addRenderableWidget(SettingWidget.createSlider(
-                    buttonX + labelWidth + 10,
-                    baseY + yOffset,
-                    controlWidth,
-                    BUTTON_HEIGHT,
-                    Component.literal("Rotation Speed Limit"),
-                    0.1f,
-                    360.0f,
-                    rotationSpeedLimit,
-                    "rotationSpeedLimit",
-                    (AbstractMovementSettings)freeCamReturn
-            ));
+                try {
+                    int column = fieldIndex / settingsPerColumn;
+                    int row = fieldIndex % settingsPerColumn;
+                    int settingX = centerX + 20 + column * (settingWidth + 20);
+                    int settingY = baseY + yOffset + (row * BUTTON_HEIGHT);
+                    createSettingControl(freeCamReturn, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, BUTTON_HEIGHT);
+                } catch (IllegalAccessException ignored) {}
+            }
+
+            yOffset += settingsPerColumn * BUTTON_HEIGHT;
         }
         
         // Update max scroll to handle the expanded/collapsed sections
@@ -1250,30 +1171,24 @@ public class MenuOverlayScreen extends Screen {
 
 
 
-    // In MenuOverlayScreen.java
-    private void cycleMovementType() {
+    private void cycleMovementType(Button typeButton) {
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
-        if (!movements.isEmpty()) {
-            selectedMovementTypeIndex = (selectedMovementTypeIndex + 1) % movements.size();
-
-            // Update the button text immediately
-            for (GuiEventListener child : this.children()) {
-                if (child instanceof Button button) {
-                    String buttonText = button.getMessage().getString();
-                    if (buttonText.startsWith("Type: ")) {
-                        String currentTypeName = movements.get(selectedMovementTypeIndex).getName();
-                        button.setMessage(Component.literal("Type: " + currentTypeName));
-                        break;
-                    }
-                }
-            }
+        if (movements.isEmpty()) {
+            typeButton.setMessage(Component.literal("Type: None"));
+            return;
         }
+
+        selectedMovementTypeIndex = (selectedMovementTypeIndex + 1) % movements.size();
+        typeButton.setMessage(Component.literal(
+                "Type: " + movements.get(selectedMovementTypeIndex).getName()
+        ));
     }
 
     private void addMovement(int slotIndex) {
         List<CameraMovementRegistry.MovementInfo> movements = CameraMovementRegistry.getAllMovements();
         if (!movements.isEmpty()) {
             try {
+                selectedMovementTypeIndex = Math.floorMod(selectedMovementTypeIndex, movements.size());
                 ICameraMovement newMovement = movements.get(selectedMovementTypeIndex)
                         .getMovementClass()
                         .getDeclaredConstructor()

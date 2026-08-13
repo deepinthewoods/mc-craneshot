@@ -78,7 +78,7 @@ public class CrosshairHudRenderer {
 
         // Effective FOV
         int baseFov = client.options.fov().get();
-        float fovMul = ((GameRendererFovAccessor) client.gameRenderer).getFovMultiplier();
+        float fovMul = ((GameRendererFovAccessor) client.gameRenderer.mainCamera()).getFovMultiplier();
         double fovYDeg = Math.max(1.0, baseFov * fovMul);
         double fovY = Math.toRadians(fovYDeg);
 

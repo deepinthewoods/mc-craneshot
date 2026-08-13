@@ -12,34 +12,29 @@ import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
         name = "FreeCamReturn",
-        description = "Return from freecam to stick target using Linear easing",
+        description = "Return from freecam to the tracked target using critically damped springs",
         showInSlots = false
 )
 public class FreeCamReturnMovement extends AbstractMovementSettings implements ICameraMovement {
     private static final double MAX_RETURN_TARGET_DISTANCE = 256.0;
 
-    // Linear-like parameters
-    @MovementSetting(label = "Position Easing", min = 0.01, max = 1.0)
-    private double positionEasing = 0.1;
+    @MovementSetting(label = "Position Halflife", min = 0.01, max = 1.0)
+    private double positionHalflife = 0.15;
 
-    @MovementSetting(label = "Position Speed Limit", min = 0.1, max = 200.0)
-    private double positionSpeedLimit = 10;
+    @MovementSetting(label = "Rotation Halflife", min = 0.01, max = 1.0)
+    private double rotationHalflife = 0.15;
 
-    @MovementSetting(label = "Rotation Easing", min = 0.01, max = 1.0)
-    private double rotationEasing = 0.1;
-
-    @MovementSetting(label = "Rotation Speed Limit", min = 0.1, max = 1000)
-    private double rotationSpeedLimit = 500;
-
-    @MovementSetting(label = "FOV Easing", min = 0.01, max = 1.0)
-    private double fovEasing = 0.1;
-
-    @MovementSetting(label = "FOV Speed Limit", min = 0.1, max = 100.0)
-    private double fovSpeedLimit = 10.0;
+    @MovementSetting(label = "FOV Halflife", min = 0.01, max = 1.0)
+    private double fovHalflife = 0.15;
 
     private CameraTarget start = new CameraTarget();
     private CameraTarget end = new CameraTarget();
     private CameraTarget current = new CameraTarget();
+
+    private Vec3 positionVelocity = Vec3.ZERO;
+    private float yawVelocity = 0.0f;
+    private float pitchVelocity = 0.0f;
+    private float fovVelocity = 0.0f;
 
     private boolean isComplete = false;
 
@@ -54,13 +49,20 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         Vec3 startPos = CameraController.freeCamPosition;
         float startYaw = CameraController.freeCamYaw;
         float startPitch = CameraController.freeCamPitch;
-        start = new CameraTarget(startPos, startYaw, startPitch, 1.0f);
-        current = new CameraTarget(startPos, startYaw, startPitch, 1.0f);
+        float startFov = camera != null
+                ? CameraTarget.fromCamera(camera).getFovMultiplier()
+                : 1.0f;
+        start = new CameraTarget(startPos, startYaw, startPitch, startFov);
+        current = new CameraTarget(startPos, startYaw, startPitch, startFov);
 
         // Initial end target (will be updated every frame)
         end = resolveReturnTarget(client);
         // No startup log
 
+        positionVelocity = Vec3.ZERO;
+        yawVelocity = 0.0f;
+        pitchVelocity = 0.0f;
+        fovVelocity = 0.0f;
         isComplete = false;
     }
 
@@ -70,16 +72,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             return new MovementState(current, true);
         }
 
-        // End follows live stick controller pose (player can move during return)
+        // The destination follows the live stick controller pose while the
+        // critically damped springs preserve momentum between frames.
         end = resolveReturnTarget(client);
 
-        // Position step with LinearMovement-like speed-capped easing
-        Vec3 delta = end.getPosition().subtract(current.getPosition());
-        double deltaLength = delta.length();
-        double maxMove = positionSpeedLimit * (deltaSeconds);
-        Vec3 move = deltaLength > 0 ? delta.scale(positionEasing) : Vec3.ZERO;
-        if (move.length() > maxMove) move = move.normalize().scale(maxMove);
-        Vec3 desiredPos = current.getPosition().add(move);
+        double dt = Math.max(0.0, Math.min(deltaSeconds, 0.25f));
+        Vec3 desiredPos = springPosition(
+                current.getPosition(), positionVelocity, end.getPosition(), positionHalflife, dt
+        );
 
         desiredPos = applyMinimumSpeedDuringReturn(
                 current.getPosition(),
@@ -89,43 +89,72 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
                 client
         );
 
-        // Rotation step with speed limits
-        float yawError = end.getYaw() - current.getYaw();
-        while (yawError > 180) yawError -= 360;
-        while (yawError < -180) yawError += 360;
-        float pitchError = end.getPitch() - current.getPitch();
-        float desiredYawSpeed = (float) (yawError * rotationEasing);
-        float desiredPitchSpeed = (float) (pitchError * rotationEasing);
-        float maxRot = (float) (rotationSpeedLimit * (deltaSeconds));
-        if (Math.abs(desiredYawSpeed) > maxRot) desiredYawSpeed = Math.signum(desiredYawSpeed) * maxRot;
-        if (Math.abs(desiredPitchSpeed) > maxRot) desiredPitchSpeed = Math.signum(desiredPitchSpeed) * maxRot;
-        float newYaw = current.getYaw() + desiredYawSpeed;
-        float newPitch = current.getPitch() + desiredPitchSpeed;
+        SpringValue yawSpring = springValue(
+                current.getYaw(), yawVelocity, end.getYaw(), rotationHalflife, dt, true
+        );
+        SpringValue pitchSpring = springValue(
+                current.getPitch(), pitchVelocity, end.getPitch(), rotationHalflife, dt, false
+        );
+        SpringValue fovSpring = springValue(
+                current.getFovMultiplier(), fovVelocity, 1.0f, fovHalflife, dt, false
+        );
+        yawVelocity = yawSpring.velocity();
+        pitchVelocity = pitchSpring.velocity();
+        fovVelocity = fovSpring.velocity();
 
-        // FOV returns to 1.0 with easing/speed-limit
-        float fovError = 1.0f - current.getFovMultiplier();
-        float absFovError = Math.abs(fovError);
-        float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
-        if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float) fovEasing;
-        float desiredFovSpeed = fovError * adaptiveFovEasing;
-        float maxFovChange = (float) (fovSpeedLimit * (deltaSeconds));
-        if (Math.abs(desiredFovSpeed) > maxFovChange) desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;
-        float newFov = (float) (current.getFovMultiplier() + desiredFovSpeed);
-
-        current = new CameraTarget(desiredPos, newYaw, newPitch, newFov);
+        current = new CameraTarget(
+                desiredPos, yawSpring.value(), pitchSpring.value(), fovSpring.value()
+        );
 
         // Drive visible FOV
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
         }
 
-        // Completion when very close and FOV near 1.0
         double posRemaining = current.getPosition().distanceTo(end.getPosition());
-        boolean positionComplete = posRemaining < 0.005;
+        boolean positionComplete = posRemaining < 0.005 && positionVelocity.length() < 0.05;
+        boolean rotationComplete = Math.abs(angleDifference(current.getYaw(), end.getYaw())) < 0.1f
+                && Math.abs(current.getPitch() - end.getPitch()) < 0.1f
+                && Math.abs(yawVelocity) < 0.1f
+                && Math.abs(pitchVelocity) < 0.1f;
         boolean fovComplete = Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
-        isComplete = positionComplete && fovComplete;
+        isComplete = positionComplete && rotationComplete && fovComplete;
         return new MovementState(current, isComplete);
     }
+
+    private Vec3 springPosition(Vec3 position, Vec3 velocity, Vec3 target, double halflife, double dt) {
+        double damping = (4.0 * Math.log(2.0)) / Math.max(halflife, 0.001);
+        double y = damping / 2.0;
+        double decay = Math.exp(-y * dt);
+        Vec3 offset = position.subtract(target);
+        Vec3 impulse = velocity.add(offset.scale(y));
+        positionVelocity = velocity.subtract(impulse.scale(y * dt)).scale(decay);
+        return offset.add(impulse.scale(dt)).scale(decay).add(target);
+    }
+
+    private SpringValue springValue(float position, float velocity, float target,
+                                    double halflife, double dt, boolean angle) {
+        if (angle) {
+            target = position + angleDifference(target, position);
+        }
+        double damping = (4.0 * Math.log(2.0)) / Math.max(halflife, 0.001);
+        double y = damping / 2.0;
+        double decay = Math.exp(-y * dt);
+        float offset = position - target;
+        float impulse = velocity + offset * (float) y;
+        float newPosition = (float) ((offset + impulse * dt) * decay + target);
+        float newVelocity = (float) ((velocity - impulse * y * dt) * decay);
+        return new SpringValue(newPosition, newVelocity);
+    }
+
+    private static float angleDifference(float target, float current) {
+        float difference = target - current;
+        while (difference > 180.0f) difference -= 360.0f;
+        while (difference < -180.0f) difference += 360.0f;
+        return difference;
+    }
+
+    private record SpringValue(float value, float velocity) {}
 
 
     @Override
@@ -171,7 +200,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
 
         Vec3 playerEye = client.player.getEyePosition();
         double distance = targetPos.distanceTo(playerEye);
-        if (Double.isNaN(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
+        if (!Double.isFinite(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
             return new CameraTarget(playerEye, client.player.getYRot(), client.player.getXRot() + pitchOffset, 1.0f);
         }
 

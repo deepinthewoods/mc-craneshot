@@ -2,7 +2,13 @@ package ninja.trek;
 
 import ninja.trek.cameramovements.CameraMovementType;
 import ninja.trek.cameramovements.ICameraMovement;
-import net.fabricmc.loader.api.FabricLoader;
+import ninja.trek.cameramovements.movements.BezierMovement;
+import ninja.trek.cameramovements.movements.FreeCamReturnMovement;
+import ninja.trek.cameramovements.movements.LinearMovement;
+import ninja.trek.cameramovements.movements.SpringBezierMovement;
+import ninja.trek.cameramovements.movements.SpringLinearMovement;
+import ninja.trek.cameramovements.movements.StaticMovement;
+import ninja.trek.cameramovements.movements.TimelapseMovement;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -10,6 +16,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -19,6 +26,21 @@ public class CameraMovementRegistry {
     private static final String BASE_PACKAGE = "ninja.trek.cameramovements";
 
     public static void initialize() {
+        movementTypes.clear();
+
+        // Package-directory resources are not exposed consistently by the
+        // production Knot class loader. Register Craneshot's built-in types
+        // explicitly so the settings selector and config loader are reliable.
+        registerMovement(LinearMovement.class);
+        registerMovement(BezierMovement.class);
+        registerMovement(SpringLinearMovement.class);
+        registerMovement(SpringBezierMovement.class);
+        registerMovement(StaticMovement.class);
+        registerMovement(TimelapseMovement.class);
+        registerMovement(FreeCamReturnMovement.class);
+
+        // Retain discovery as a best-effort extension point for additional
+        // annotated movement classes supplied on a compatible classpath.
         try {
             scanPackage(BASE_PACKAGE);
         } catch (Exception e) {
@@ -126,6 +148,36 @@ public class CameraMovementRegistry {
             }
         }
         return movements;
+    }
+
+    /**
+     * Creates a movement only when its serialized type matches a registered,
+     * slot-visible movement. This keeps config and clipboard input from naming
+     * arbitrary classes while retaining compatibility with older class-name
+     * based config files.
+     */
+    public static ICameraMovement createRegisteredMovement(String serializedType) {
+        if (serializedType == null || serializedType.isBlank()) {
+            return null;
+        }
+
+        String normalized = serializedType.trim().toLowerCase(Locale.ROOT);
+        for (MovementInfo info : getAllMovements()) {
+            Class<? extends ICameraMovement> movementClass = info.getMovementClass();
+            if (!movementClass.getName().toLowerCase(Locale.ROOT).equals(normalized)
+                    && !movementClass.getSimpleName().toLowerCase(Locale.ROOT).equals(normalized)
+                    && !info.getName().toLowerCase(Locale.ROOT).equals(normalized)) {
+                continue;
+            }
+
+            try {
+                return movementClass.getDeclaredConstructor().newInstance();
+            } catch (ReflectiveOperationException e) {
+                Craneshot.LOGGER.warn("Failed to create registered camera movement {}", movementClass.getName(), e);
+                return null;
+            }
+        }
+        return null;
     }
 
     public static void cycleNextMovement() {

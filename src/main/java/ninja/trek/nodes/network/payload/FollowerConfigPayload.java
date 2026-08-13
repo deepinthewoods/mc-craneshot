@@ -7,6 +7,7 @@ import net.minecraft.resources.Identifier;
 import ninja.trek.Craneshot;
 
 public record FollowerConfigPayload(String configJson) implements CustomPacketPayload {
+    public static final int MAX_CONFIG_LENGTH = 32_767;
     public static final Type<FollowerConfigPayload> ID = new Type<>(Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "follower_config"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, FollowerConfigPayload> CODEC = StreamCodec.ofMember(
@@ -15,11 +16,11 @@ public record FollowerConfigPayload(String configJson) implements CustomPacketPa
     );
 
     private static FollowerConfigPayload read(RegistryFriendlyByteBuf buf) {
-        return new FollowerConfigPayload(buf.readUtf());
+        return new FollowerConfigPayload(buf.readUtf(MAX_CONFIG_LENGTH));
     }
 
     private void write(RegistryFriendlyByteBuf buf) {
-        buf.writeUtf(configJson);
+        buf.writeUtf(configJson, MAX_CONFIG_LENGTH);
     }
 
     @Override

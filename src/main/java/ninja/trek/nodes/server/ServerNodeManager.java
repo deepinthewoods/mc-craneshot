@@ -103,26 +103,35 @@ public class ServerNodeManager {
     }
 
     public String validateNodePayload(CameraNodeDTO dto) {
+        if (dto == null) return "node_missing";
         if (dto.position == null) return "position_missing";
+        if (!isFinite(dto.position.x, dto.position.y, dto.position.z)) {
+            return "position_not_finite";
+        }
         if (Math.abs(dto.position.x) > MAX_COORD_ABS ||
                 Math.abs(dto.position.y) > MAX_COORD_ABS ||
                 Math.abs(dto.position.z) > MAX_COORD_ABS) {
             return "position_out_of_bounds";
         }
-        if (dto.droneRadius < 0.0 || dto.droneRadius > 512.0) {
+        if (!Double.isFinite(dto.droneRadius) || dto.droneRadius < 0.0 || dto.droneRadius > 512.0) {
             return "invalid_drone_radius";
         }
         return null;
     }
 
     public String validateAreaPayload(ServerLevel world, AreaInstanceDTO dto) {
+        if (dto == null) return "area_missing";
         if (dto.center == null) return "center_missing";
+        if (!isFinite(dto.center.x, dto.center.y, dto.center.z)) {
+            return "center_not_finite";
+        }
         if (Math.abs(dto.center.x) > MAX_COORD_ABS ||
                 Math.abs(dto.center.y) > MAX_COORD_ABS ||
                 Math.abs(dto.center.z) > MAX_COORD_ABS) {
             return "center_out_of_bounds";
         }
-        if (dto.insideRadius < 0.0 || dto.outsideRadius < 0.0) {
+        if (!Double.isFinite(dto.insideRadius) || !Double.isFinite(dto.outsideRadius)
+                || dto.insideRadius < 0.0 || dto.outsideRadius < 0.0) {
             return "invalid_radius";
         }
         if (dto.outsideRadius < dto.insideRadius) {
@@ -134,6 +143,10 @@ public class ServerNodeManager {
         if (dto.advanced) {
             if (dto.insideRadii == null || dto.outsideRadii == null) {
                 return "missing_advanced_radii";
+            }
+            if (!isFinite(dto.insideRadii.x, dto.insideRadii.y, dto.insideRadii.z)
+                    || !isFinite(dto.outsideRadii.x, dto.outsideRadii.y, dto.outsideRadii.z)) {
+                return "advanced_radii_not_finite";
             }
             if (dto.insideRadii.x < 0 || dto.insideRadii.y < 0 || dto.insideRadii.z < 0) {
                 return "invalid_inside_radii";
@@ -149,14 +162,20 @@ public class ServerNodeManager {
         }
         Set<String> claimedStates = new HashSet<>();
         var state = CameraNodesState.get(world);
+        if (dto.movements == null) {
+            return "movements_missing";
+        }
         for (AreaMovementConfig cfg : dto.movements) {
+            if (cfg == null) {
+                return "movement_missing";
+            }
             if (cfg.movementType == null || cfg.movementType.isBlank()) {
                 return "movement_type_missing";
             }
             if (!ALLOWED_MOVEMENTS.contains(cfg.movementType)) {
                 return "movement_type_forbidden";
             }
-            if (cfg.weight < 0.0f || cfg.weight > 10.0f) {
+            if (!Float.isFinite(cfg.weight) || cfg.weight < 0.0f || cfg.weight > 10.0f) {
                 return "invalid_weight";
             }
             if (cfg.id == null) {
@@ -308,5 +327,12 @@ public class ServerNodeManager {
             }
         }
         return null;
+    }
+
+    private static boolean isFinite(double... values) {
+        for (double value : values) {
+            if (!Double.isFinite(value)) return false;
+        }
+        return true;
     }
 }

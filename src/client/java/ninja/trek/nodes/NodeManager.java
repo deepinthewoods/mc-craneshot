@@ -305,7 +305,7 @@ public class NodeManager {
         Vec3 forward = new Vec3(fV.x, fV.y, fV.z);
 
         int baseFov = net.minecraft.client.Minecraft.getInstance().options.fov().get();
-        float fovMul = ((ninja.trek.mixin.client.GameRendererFovAccessor) net.minecraft.client.Minecraft.getInstance().gameRenderer).getFovMultiplier();
+        float fovMul = ((ninja.trek.mixin.client.GameRendererFovAccessor) net.minecraft.client.Minecraft.getInstance().gameRenderer.mainCamera()).getFovMultiplier();
         double fovY = Math.toRadians(Math.max(1.0, baseFov * fovMul));
         double aspect = (double)screenW / (double)screenH;
         double tanHalfY = Math.tan(fovY * 0.5);

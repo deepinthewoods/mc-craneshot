@@ -541,13 +541,20 @@ public class CameraMovementManager {
             return null;
         }
 
-        // Handle zoom overlay deactivation
-        if (isZoomActive && zoomOverlay != null && zoomOverlay.isComplete()) {
-            isZoomActive = false;
-            zoomOverlay = null;
-        }
-
         if (activeMovement == null) {
+            if (isZoomActive && zoomOverlay != null) {
+                MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+                CameraTarget zoomTarget = zoomState.getCameraTarget();
+                if (zoomState.isComplete() || zoomOverlay.isComplete()) {
+                    zoomTarget = new CameraTarget(
+                            zoomTarget.getPosition(), zoomTarget.getYaw(), zoomTarget.getPitch(), 1.0f
+                    );
+                    clearZoomOverlay(client);
+                    zoomState = new MovementState(zoomTarget, true);
+                }
+                baseTarget = zoomTarget;
+                return zoomState;
+            }
             return null;
         }
 
@@ -635,6 +642,20 @@ public class CameraMovementManager {
         if (state.isComplete()) {
             // Store final camera position before ending movement
             CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+
+            // A held zoom remains active after the base movement ends. Tick it
+            // for this frame so completion cannot cause an unzoomed flash.
+            if (isZoomActive && zoomOverlay != null) {
+                MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+                float zoomFov = zoomState.getCameraTarget().getFovMultiplier();
+                if (zoomState.isComplete() || zoomOverlay.isComplete()) {
+                    zoomFov = 1.0f;
+                    clearZoomOverlay(client);
+                }
+                finalTarget = new CameraTarget(
+                        finalTarget.getPosition(), finalTarget.getYaw(), finalTarget.getPitch(), zoomFov
+                );
+            }
             baseTarget = finalTarget;
             
             // Clean up movement state
@@ -677,6 +698,10 @@ public class CameraMovementManager {
             MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
             if (zoomState != null) {
                 float zoomFov = zoomState.getCameraTarget().getFovMultiplier();
+                if (zoomState.isComplete() || zoomOverlay.isComplete()) {
+                    zoomFov = 1.0f;
+                    clearZoomOverlay(client);
+                }
                 // Create new target with zoom FOV but preserve base movement's position/rotation
                 CameraTarget zoomedTarget = new CameraTarget(
                     baseTarget.getPosition(),
@@ -694,9 +719,17 @@ public class CameraMovementManager {
         return state;
     }
 
+    private void clearZoomOverlay(Minecraft client) {
+        isZoomActive = false;
+        zoomOverlay = null;
+        if (client != null && client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
+        }
+    }
+
     public CameraTarget update(Minecraft client, Camera camera, float deltaSeconds) {
         // If no active movement and allowed, start default idle movement (Linear)
-        if ((activeMovement == null) && client.player != null) {
+        if (activeMovement == null && !isZoomActive && client.player != null) {
             if (ninja.trek.config.GeneralMenuSettings.isUseDefaultIdleMovement()) {
                 ICameraMovement idle = ninja.trek.config.GeneralMenuSettings.getDefaultIdleMovement();
                 snapCameraIfFarFromPlayer(client, camera);
@@ -915,10 +948,10 @@ public class CameraMovementManager {
      * @return The current camera target, or null if no active movement.
      */
     public CameraTarget getCurrentTarget() {
-        // Only return a target if we have an active movement
-        if (activeMovement != null && baseTarget != null) {
+        // Zoom can run as a standalone overlay without a base movement.
+        if ((activeMovement != null || isZoomActive) && baseTarget != null) {
             return baseTarget;
-        } else if (baseTarget != null && activeMovement == null) {
+        } else if (baseTarget != null && activeMovement == null && !isZoomActive) {
             // Force clear the stale base target
             baseTarget = null;
             return null;

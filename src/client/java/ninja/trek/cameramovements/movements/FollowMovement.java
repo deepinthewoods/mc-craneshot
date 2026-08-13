@@ -782,8 +782,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
         }
 
         boolean complete = resetting && isComplete();

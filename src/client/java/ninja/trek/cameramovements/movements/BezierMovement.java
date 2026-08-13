@@ -373,8 +373,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
         // Update FOV in game renderer
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
         }
 
         // Update alpha for external systems

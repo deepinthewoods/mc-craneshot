@@ -1,6 +1,11 @@
 package ninja.trek.nodes.network;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -38,6 +43,7 @@ public final class ServerNodeNetworking {
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register(ServerNodeNetworking::onPlayerJoin);
         ServerPlayConnectionEvents.DISCONNECT.register(ServerNodeNetworking::onPlayerDisconnect);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> latestFollowerConfigJson = null);
 
         // Register CustomPayload receivers
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayload.ID, ServerNodeNetworking::handleHandshakePayload);
@@ -63,11 +69,6 @@ public final class ServerNodeNetworking {
         sendHandshakeOffer(player, canEdit);
         ServerNodeManager.get().markHandshakeSent(player, canEdit);
 
-        // Send stored follower config to joining player so late-connecting followers get it immediately
-        String storedConfig = latestFollowerConfigJson;
-        if (storedConfig != null) {
-            ServerPlayNetworking.send(player, new FollowerConfigPayload(storedConfig));
-        }
     }
 
     private static void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
@@ -85,6 +86,10 @@ public final class ServerNodeNetworking {
             }
             boolean canEdit = ServerNodeManager.get().canEditOnServer(player);
             ServerNodeManager.get().markHandshakeComplete(player, canEdit);
+            String storedConfig = latestFollowerConfigJson;
+            if (storedConfig != null) {
+                ServerPlayNetworking.send(player, new FollowerConfigPayload(storedConfig));
+            }
             // Get the world the player is in by looking through all worlds
             for (ServerLevel world : context.server().getAllLevels()) {
                 if (world.players().contains(player)) {
@@ -114,9 +119,27 @@ public final class ServerNodeNetworking {
         }
 
         switch (payload.operation()) {
-            case CREATE -> handleCreate(player, world, payload.nodeData());
-            case UPDATE -> handleUpdate(player, world, payload.nodeData());
-            case DELETE -> handleDelete(player, world, payload.nodeIdForDelete());
+            case CREATE -> {
+                if (payload.nodeData() == null) {
+                    rejectMalformedRequest(player, "create request has no node data");
+                    return;
+                }
+                handleCreate(player, world, payload.nodeData());
+            }
+            case UPDATE -> {
+                if (payload.nodeData() == null || payload.nodeData().uuid == null) {
+                    rejectMalformedRequest(player, "update request has incomplete node data");
+                    return;
+                }
+                handleUpdate(player, world, payload.nodeData());
+            }
+            case DELETE -> {
+                if (payload.nodeIdForDelete() == null) {
+                    rejectMalformedRequest(player, "delete request has no node id");
+                    return;
+                }
+                handleDelete(player, world, payload.nodeIdForDelete());
+            }
         }
     }
 
@@ -138,9 +161,27 @@ public final class ServerNodeNetworking {
         }
 
         switch (payload.operation()) {
-            case CREATE -> handleAreaCreate(player, world, payload.areaData());
-            case UPDATE -> handleAreaUpdate(player, world, payload.areaData());
-            case DELETE -> handleAreaDelete(player, world, payload.areaIdForDelete());
+            case CREATE -> {
+                if (payload.areaData() == null) {
+                    rejectMalformedRequest(player, "create request has no area data");
+                    return;
+                }
+                handleAreaCreate(player, world, payload.areaData());
+            }
+            case UPDATE -> {
+                if (payload.areaData() == null || payload.areaData().uuid == null) {
+                    rejectMalformedRequest(player, "update request has incomplete area data");
+                    return;
+                }
+                handleAreaUpdate(player, world, payload.areaData());
+            }
+            case DELETE -> {
+                if (payload.areaIdForDelete() == null) {
+                    rejectMalformedRequest(player, "delete request has no area id");
+                    return;
+                }
+                handleAreaDelete(player, world, payload.areaIdForDelete());
+            }
         }
     }
 
@@ -221,14 +262,96 @@ public final class ServerNodeNetworking {
     }
 
     private static void handleFollowerConfigPayload(FollowerConfigPayload payload, ServerPlayNetworking.Context context) {
-        latestFollowerConfigJson = payload.configJson();
         ServerPlayer sender = context.player();
-        // Broadcast to all other connected players
+        if (!ServerNodeManager.get().isHandshakeComplete(sender)
+                || !ServerNodeManager.get().hasCreatePermission(sender)) {
+            Craneshot.LOGGER.warn("Ignoring follower configuration from unauthorized player {}",
+                    sender.getName().getString());
+            return;
+        }
+        if (!ServerNodeManager.get().consumeRequest(sender)) {
+            sender.sendSystemMessage(Component.literal("[Craneshot] Too many configuration requests; slow down."));
+            return;
+        }
+
+        String configJson = payload.configJson();
+        if (!isValidFollowerConfig(configJson)) {
+            sender.sendSystemMessage(Component.literal("[Craneshot] Invalid follower configuration."));
+            return;
+        }
+
+        latestFollowerConfigJson = configJson;
         for (ServerPlayer player : PlayerLookup.all(context.server())) {
-            if (player != sender) {
+            if (player != sender && ServerNodeManager.get().isHandshakeComplete(player)) {
                 ServerPlayNetworking.send(player, payload);
             }
         }
+    }
+
+    private static boolean isValidFollowerConfig(String configJson) {
+        if (configJson == null || configJson.length() > FollowerConfigPayload.MAX_CONFIG_LENGTH) {
+            return false;
+        }
+        try {
+            JsonElement parsed = JsonParser.parseString(configJson);
+            if (!parsed.isJsonObject()) return false;
+            JsonObject root = parsed.getAsJsonObject();
+
+            if (root.has("targetPlayerName")) {
+                JsonElement name = root.get("targetPlayerName");
+                if (!name.isJsonPrimitive() || !name.getAsJsonPrimitive().isString()
+                        || name.getAsString().length() > 64) {
+                    return false;
+                }
+            }
+
+            if (!root.has("followers") || !root.get("followers").isJsonArray()) return false;
+            JsonArray followers = root.getAsJsonArray("followers");
+            if (followers.size() > 32) return false;
+            for (JsonElement followerElement : followers) {
+                if (!followerElement.isJsonObject()) return false;
+                JsonObject follower = followerElement.getAsJsonObject();
+                if (follower.has("useZones")
+                        && (!follower.get("useZones").isJsonPrimitive()
+                        || !follower.get("useZones").getAsJsonPrimitive().isBoolean())) {
+                    return false;
+                }
+                if (follower.has("movement") && !follower.get("movement").isJsonNull()
+                        && !isValidMovementConfig(follower.get("movement"))) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static boolean isValidMovementConfig(JsonElement movementElement) {
+        if (!movementElement.isJsonObject()) return false;
+        JsonObject movement = movementElement.getAsJsonObject();
+        if (!movement.has("type") || !movement.get("type").isJsonPrimitive()
+                || !movement.get("type").getAsJsonPrimitive().isString()
+                || movement.get("type").getAsString().length() > 256) {
+            return false;
+        }
+        if (!movement.has("settings")) return true;
+        if (!movement.get("settings").isJsonObject()) return false;
+        JsonObject settings = movement.getAsJsonObject("settings");
+        if (settings.size() > 128) return false;
+        for (Map.Entry<String, JsonElement> entry : settings.entrySet()) {
+            if (entry.getKey().length() > 128 || !entry.getValue().isJsonPrimitive()
+                    || entry.getValue().getAsString().length() > 2048) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void rejectMalformedRequest(ServerPlayer player, String reason) {
+        Craneshot.LOGGER.warn("Ignoring malformed edit request from {}: {}",
+                player.getName().getString(), reason);
+        player.sendSystemMessage(Component.literal("[Craneshot] Malformed edit request."));
     }
 
     private static void handleAreaCreate(ServerPlayer player, ServerLevel world, AreaInstanceDTO incoming) {

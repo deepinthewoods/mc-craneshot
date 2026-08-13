@@ -42,8 +42,8 @@ public class CameraTarget {
     public static CameraTarget fromCamera(Camera camera) {
         Minecraft client = Minecraft.getInstance();
         float currentFovMultiplier = 1.0f;
-        if (client.gameRenderer instanceof FovAccessor) {
-            currentFovMultiplier = ((FovAccessor) client.gameRenderer).getFovModifier();
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            currentFovMultiplier = ((FovAccessor) client.gameRenderer.mainCamera()).getFovModifier();
             if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
         }
         CameraTarget target = new CameraTarget(camera.position(), camera.yRot(), camera.xRot(), currentFovMultiplier);

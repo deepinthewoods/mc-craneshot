@@ -35,13 +35,6 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     @Override
     public void start(Minecraft client, Camera camera) {
         current = CameraTarget.fromCamera(camera);
-        // Set initial FOV to target zoom level
-        current = new CameraTarget(
-            current.getPosition(),
-            current.getYaw(),
-            current.getPitch(),
-            targetZoomFov
-        );
         resetting = false;
     }
 
@@ -86,8 +79,8 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
         );
 
         // Apply FOV to game renderer
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
         }
 
         boolean complete = resetting && isComplete();

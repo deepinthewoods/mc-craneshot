@@ -191,8 +191,8 @@ public class CameraSystem {
                 mc.setCameraEntity(mc.player);
             }
             mc.smartCull = originalChunkCulling;
-            if (mc.gameRenderer instanceof ninja.trek.mixin.client.FovAccessor) {
-                ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer).setFovModifier(1.0f);
+            if (mc.gameRenderer.mainCamera() instanceof ninja.trek.mixin.client.FovAccessor) {
+                ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer.mainCamera()).setFovModifier(1.0f);
             }
         }
 

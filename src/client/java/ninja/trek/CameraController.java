@@ -280,8 +280,8 @@ public class CameraController {
         currentYawOffset = m.getYawOffset();
         // Reset any FOV modifications when starting a new movement
         Minecraft client = Minecraft.getInstance();
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
         }
     }
 
@@ -650,9 +650,9 @@ public class CameraController {
 
         if (baseTarget != null) {
             // Update FOV in game renderer
-            if (client.gameRenderer instanceof FovAccessor) {
+            if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
                 float fovMultiplier = (float) baseTarget.getFovMultiplier();
-                ((FovAccessor) client.gameRenderer).setFovModifier(fovMultiplier);
+                ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(fovMultiplier);
             }
             
             if (cameraSystemActive) {
@@ -914,8 +914,8 @@ public class CameraController {
         }
 
         // Reset FOV to default
-        if (client != null && client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(1.0f);
+        if (client != null && client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
         }
     }
 

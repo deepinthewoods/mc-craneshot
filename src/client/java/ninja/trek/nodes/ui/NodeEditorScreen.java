@@ -134,7 +134,7 @@ public class NodeEditorScreen extends Screen {
             if (cam != null) {
                 float fovMul = 1.0f;
                 try {
-                    fovMul = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer).getFovModifier();
+                    fovMul = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer.mainCamera()).getFovModifier();
                     if (fovMul == 0) fovMul = 1.0f;
                 } catch (Throwable ignored) {}
                 CameraNode n = NodeManager.get().addTimelapseNode(cam.position(), cam.yRot(), cam.xRot(), fovMul);
@@ -176,7 +176,7 @@ public class NodeEditorScreen extends Screen {
                         selType.timelapseYaw = cam2.yRot();
                         selType.timelapsePitch = cam2.xRot();
                         try {
-                            float fov = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer).getFovModifier();
+                            float fov = ((ninja.trek.mixin.client.FovAccessor) Minecraft.getInstance().gameRenderer.mainCamera()).getFovModifier();
                             if (fov != 0) selType.timelapseFovMultiplier = fov;
                         } catch (Throwable ignored) {}
                         NodeManager.get().save();

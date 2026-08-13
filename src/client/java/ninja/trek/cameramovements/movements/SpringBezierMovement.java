@@ -390,8 +390,8 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
         current = new CameraTarget(newPos, newYaw, newPitch, newFov);
 
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier(current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
         }
 
         // Calculate distance to player for completion/overshoot checks

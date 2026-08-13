@@ -230,8 +230,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // No per-frame logs
 
         // Update FOV visibly
-        if (client.gameRenderer instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer).setFovModifier((float) current.getFovMultiplier());
+        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
+            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
         }
 
         // Update alpha based on distance progress

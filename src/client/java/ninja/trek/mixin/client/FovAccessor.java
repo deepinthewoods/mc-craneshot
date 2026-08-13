@@ -1,10 +1,10 @@
 package ninja.trek.mixin.client;
 
-import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.Camera;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(GameRenderer.class)
+@Mixin(Camera.class)
 public interface FovAccessor {
     @Accessor("fovModifier")
     float getFovModifier();

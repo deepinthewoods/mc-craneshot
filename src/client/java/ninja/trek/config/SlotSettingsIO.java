@@ -1,6 +1,7 @@
 package ninja.trek.config;
 
 import com.google.gson.*;
+import ninja.trek.CameraMovementRegistry;
 import ninja.trek.CameraMovementManager;
 import ninja.trek.Craneshot;
 import ninja.trek.cameramovements.AbstractMovementSettings;
@@ -11,7 +12,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -84,15 +84,20 @@ public class SlotSettingsIO {
     }
 
     public static ICameraMovement jsonToMovement(JsonObject movementObj) {
-        String type = movementObj.get("type").getAsString();
-
         try {
-            Class<?> movementClass = Class.forName(type);
-            Constructor<?> constructor = movementClass.getDeclaredConstructor();
-            ICameraMovement movement = (ICameraMovement) constructor.newInstance();
+            if (movementObj == null || !movementObj.has("type")
+                    || !movementObj.get("type").isJsonPrimitive()) {
+                throw new JsonParseException("Movement type is missing");
+            }
+
+            String type = movementObj.get("type").getAsString();
+            ICameraMovement movement = CameraMovementRegistry.createRegisteredMovement(type);
+            if (movement == null) {
+                throw new JsonParseException("Unknown movement type: " + type);
+            }
 
             if (movement instanceof AbstractMovementSettings settings &&
-                    movementObj.has("settings")) {
+                    movementObj.has("settings") && movementObj.get("settings").isJsonObject()) {
                 JsonObject settingsObj = movementObj.getAsJsonObject("settings");
                 for (Map.Entry<String, JsonElement> entry : settingsObj.entrySet()) {
                     JsonElement element = entry.getValue();

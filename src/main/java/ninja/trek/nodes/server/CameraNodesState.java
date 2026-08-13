@@ -1,11 +1,9 @@
 package ninja.trek.nodes.server;
 
 import com.mojang.serialization.Codec;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
@@ -15,15 +13,12 @@ import net.minecraft.world.level.saveddata.SavedData;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
 
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.BiFunction;
-import java.util.function.Supplier;
 
 public class CameraNodesState extends SavedData {
     public static final Identifier STORAGE_KEY = Identifier.fromNamespaceAndPath("craneshot", "nodes");
@@ -33,8 +28,10 @@ public class CameraNodesState extends SavedData {
     private final Map<ResourceKey<net.minecraft.world.level.Level>, Map<UUID, Long>> nodeIndex = new HashMap<>();
     private final Map<ResourceKey<net.minecraft.world.level.Level>, LinkedHashMap<UUID, AreaInstanceDTO>> areasByDimension = new HashMap<>();
 
-    // Create a Codec that wraps our NBT-based serialization
-    private static final Codec<CameraNodesState> CODEC = com.mojang.serialization.MapCodec.unit(CameraNodesState::new).codec();
+    private static final Codec<CameraNodesState> CODEC = CompoundTag.CODEC.xmap(
+            CameraNodesState::fromNbt,
+            CameraNodesState::writeNbt
+    );
 
     private static final net.minecraft.world.level.saveddata.SavedDataType<CameraNodesState> TYPE =
         new net.minecraft.world.level.saveddata.SavedDataType<>(
@@ -171,7 +168,8 @@ public class CameraNodesState extends SavedData {
         return map.get(areaId);
     }
 
-    public CompoundTag writeNbt(CompoundTag nbt, HolderLookup.Provider registryLookup) {
+    private CompoundTag writeNbt() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putInt("formatVersion", FORMAT_VERSION);
         ListTag dims = new ListTag();
         java.util.Set<ResourceKey<net.minecraft.world.level.Level>> dimensionKeys = new java.util.HashSet<>(nodesByDimension.keySet());
@@ -210,7 +208,7 @@ public class CameraNodesState extends SavedData {
         return nbt;
     }
 
-    private static CameraNodesState fromNbt(CompoundTag nbt, HolderLookup.Provider registryLookup) {
+    private static CameraNodesState fromNbt(CompoundTag nbt) {
         CameraNodesState state = new CameraNodesState();
         nbt.getList("dimensions").ifPresent(dimList -> {
             for (Tag element : dimList) {

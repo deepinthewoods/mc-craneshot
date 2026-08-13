@@ -49,6 +49,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
     private int currentNodeIndex = 0;
     private CameraTarget captureTarget = null;
     private CameraTarget lastTarget = null;
+    private boolean resetting = false;
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -61,10 +62,16 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         currentNodeIndex = 0;
         captureTarget = null;
         lastTarget = null;
+        resetting = false;
     }
 
     @Override
     public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+        if (resetting) {
+            cancelCaptureCycle();
+            return new MovementState(buildTarget(client, camera), true);
+        }
+
         if (client == null || client.player == null || client.level == null) {
             return new MovementState(buildTarget(client, camera), false);
         }
@@ -205,9 +212,16 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
         currentNodeIndex = 0;
     }
 
+    private void cancelCaptureCycle() {
+        state = State.IDLE;
+        captureTarget = null;
+        inRangeNodes.clear();
+        currentNodeIndex = 0;
+    }
+
     @Override
     public boolean isComplete() {
-        return false;
+        return resetting;
     }
 
     @Override
@@ -217,7 +231,8 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
 
     @Override
     public void queueReset(Minecraft client, Camera camera) {
-        // no-op
+        resetting = true;
+        cancelCaptureCycle();
     }
 
     @Override
