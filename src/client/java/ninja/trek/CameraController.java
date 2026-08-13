@@ -38,6 +38,9 @@ public class CameraController {
 
     // Save sneak key state before entering free movement to restore on exit
     private static boolean savedSneakKeyState = false;
+    private static boolean hasSavedSneakKeyState = false;
+    private static boolean suppressSneakUntilRelease = false;
+    private static boolean restoreSneakAfterRelease = false;
 
     /**
      * Check if a key is physically held down, ignoring toggle/hold settings.
@@ -304,10 +307,21 @@ public class CameraController {
             if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
                 ((IKeyboardInputMixin) client.player.input).setDisabled(false);
             }
-            // Restore sneak key state to what it was before entering free movement.
-            // During free movement, shift key presses for camera movement can toggle
-            // the sneak key binding state, causing the player to sneak on return.
-            client.options.keyShift.setDown(savedSneakKeyState);
+            // Restore sneak only when this free-movement session captured it. Never
+            // restore an active sneak input while mounted: Minecraft treats that as
+            // a dismount request, which would make camera movement eject the player.
+            if (hasSavedSneakKeyState) {
+                boolean mounted = client.player != null && client.player.getVehicle() != null;
+                boolean shouldRestore = client.options.toggleCrouch().get()
+                        && !mounted
+                        && savedSneakKeyState;
+                restoreSneakAfterRelease = suppressSneakUntilRelease && shouldRestore;
+                client.options.keyShift.setDown(!suppressSneakUntilRelease && shouldRestore);
+                hasSavedSneakKeyState = false;
+            }
+            if (suppressSneakUntilRelease) {
+                client.options.keyShift.setDown(false);
+            }
             // Close node editor if open
             net.minecraft.client.Minecraft _mc = net.minecraft.client.Minecraft.getInstance();
             if (_mc != null && _mc.gui.screen() instanceof ninja.trek.nodes.ui.NodeEditorScreen) {
@@ -341,6 +355,8 @@ public class CameraController {
                     // when exiting free movement (prevents shift presses for camera-down
                     // from toggling sneak on return)
                     savedSneakKeyState = client.options.keyShift.isDown();
+                    hasSavedSneakKeyState = true;
+                    client.options.keyShift.setDown(false);
                 }
                 ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
             }
@@ -846,6 +862,23 @@ public class CameraController {
             boolean shouldDisable = currentKeyMoveMode == POST_MOVE_KEYS.MOVE8 ||
                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+
+            boolean cameraUsesSneak = currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
+                                      currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+            if (cameraUsesSneak) {
+                suppressSneakUntilRelease = isKeyPhysicallyHeld(client, client.options.keyShift);
+                client.options.keyShift.setDown(false);
+            } else if (suppressSneakUntilRelease) {
+                client.options.keyShift.setDown(false);
+                if (!isKeyPhysicallyHeld(client, client.options.keyShift)) {
+                    suppressSneakUntilRelease = false;
+                    if (restoreSneakAfterRelease) {
+                        client.options.keyShift.setDown(true);
+                        restoreSneakAfterRelease = false;
+                    }
+                }
+            }
+
             ((IKeyboardInputMixin) client.player.input).setDisabled(shouldDisable);
         }
     }
@@ -873,6 +906,9 @@ public class CameraController {
         Minecraft client = Minecraft.getInstance();
         if (client != null && client.player != null && client.player.input instanceof IKeyboardInputMixin) {
             ((IKeyboardInputMixin) client.player.input).setDisabled(false);
+            if (suppressSneakUntilRelease) {
+                client.options.keyShift.setDown(false);
+            }
         }
 
         // Disable mouse interception
