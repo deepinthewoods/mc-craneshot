@@ -333,12 +333,11 @@ public class NodeManager {
     }
 
     // Influence computation
-    public CameraTarget applyInfluence(CameraTarget base, boolean skipInfluence) {
+    public CameraTarget applyInfluence(CameraTarget base, boolean skipInfluence, Vec3 playerPos) {
         if (skipInfluence || areas.isEmpty() || base == null) return base;
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.player == null) return base;
+        if (mc == null || mc.player == null || playerPos == null) return base;
         PlayerStateSnapshot stateSnapshot = collectPlayerStates(mc);
-        Vec3 playerPos = mc.player.getEyePosition();
 
         double totalWeight = 0.0;
         Vec3 accumPos = Vec3.ZERO;

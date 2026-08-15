@@ -714,7 +714,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         Vec3 stickPos = CameraController.controlStick.getPosition();
@@ -727,9 +727,9 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         float targetFovDelta;
 
         if (resetting) {
-            Vec3 playerPos = client.player.getEyePosition();
-            targetYaw = client.player.getYRot();
-            targetPitch = (float) (client.player.getXRot() + pitchOffset);
+            Vec3 playerPos = client.player.getEyePosition(tickDelta);
+            targetYaw = client.player.getViewYRot(tickDelta);
+            targetPitch = (float) (client.player.getViewXRot(tickDelta) + pitchOffset);
             targetFovDelta = 1.0f;
 
             desiredPos = easedStep(current.getPosition(), playerPos, deltaSeconds, returnPositionEasingY, returnPositionSpeedLimitY);
@@ -786,7 +786,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
         }
 
-        boolean complete = resetting && isComplete();
+        boolean complete = resetting && isComplete(client.player.getEyePosition(tickDelta));
         return new MovementState(current, complete);
     }
 
@@ -933,6 +933,10 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         if (!resetting) return false;
         if (Minecraft.getInstance().player == null) return true;
         Vec3 playerPos = Minecraft.getInstance().player.getEyePosition();
+        return isComplete(playerPos);
+    }
+
+    private boolean isComplete(Vec3 playerPos) {
         double positionDistance = current.getPosition().distanceTo(playerPos);
         float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
         boolean positionComplete = positionDistance < 0.005;

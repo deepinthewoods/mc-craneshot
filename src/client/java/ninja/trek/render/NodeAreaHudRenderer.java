@@ -38,7 +38,8 @@ public class NodeAreaHudRenderer {
         NodeManager nodeManager = NodeManager.get();
         if (nodeManager.getAreas().isEmpty()) return;
 
-        Vec3 playerPos = client.player.getEyePosition();
+        float tickDelta = tickCounter.getGameTimeDeltaPartialTick(true);
+        Vec3 playerPos = client.player.getEyePosition(tickDelta);
         Font textRenderer = client.font;
         int screenHeight = client.getWindow().getGuiScaledHeight();
 

@@ -37,11 +37,10 @@ public class CrosshairHudRenderer {
         if (!ninja.trek.config.GeneralMenuSettings.isShowCameraCrosshair()) return;
 
         // Raycast from the PLAYER HEAD orientation (decoupled from camera)
-        float tickProgress = tickCounter.getGameTimeDeltaPartialTick(false);
-        Vec3 lerpedPos = player.getPosition(tickProgress);
-        Vec3 eye = new Vec3(lerpedPos.x, lerpedPos.y + player.getEyeHeight(), lerpedPos.z);
-        float yaw = player.getYRot(tickProgress);
-        float pitch = player.getXRot(tickProgress);
+        float tickProgress = tickCounter.getGameTimeDeltaPartialTick(true);
+        Vec3 eye = player.getEyePosition(tickProgress);
+        float yaw = player.getViewYRot(tickProgress);
+        float pitch = player.getViewXRot(tickProgress);
         Vec3 headDir = Vec3.directionFromRotation(pitch, yaw);
         double maxDistance = 128.0;
         Vec3 end = eye.add(headDir.scale(maxDistance));

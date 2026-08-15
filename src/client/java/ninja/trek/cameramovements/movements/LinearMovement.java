@@ -49,7 +49,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     private float lastTargetPitch = 0f;
     private float lastYawError = 0f;
     private float lastPitchError = 0f;
-    private Vec3 lastPlayerEyePos = null;
 
     @Override
     public void start(Minecraft client, Camera camera) {
@@ -66,7 +65,6 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         alpha = 1;
 
         // Reset jitter suppression tracking
-        lastPlayerEyePos = null;
         lastTargetYaw = current.getYaw();
         lastTargetPitch = current.getPitch();
         lastYawError = 0f;
@@ -84,7 +82,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -108,9 +106,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // During return, track the player head position and rotation continuously
         if (resetting) {
             Player tracked = CameraController.getTrackedPlayer(client);
-            Vec3 playerPos = tracked.getEyePosition();
-            float playerYaw = tracked.getYRot();
-            float playerPitch = tracked.getXRot() + pitchOffset;
+            Vec3 playerPos = tracked.getEyePosition(tickDelta);
+            float playerYaw = tracked.getViewYRot(tickDelta);
+            float playerPitch = tracked.getViewXRot(tickDelta) + pitchOffset;
             b = new CameraTarget(playerPos, playerYaw, playerPitch, b.getFovMultiplier());
         }
 
@@ -173,14 +171,12 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float desiredYawSpeed = (float)(yawError * rotationEasing);
         float desiredPitchSpeed = (float)(pitchError * rotationEasing);
 
-        // Jitter suppression when fully out (near target) while player moves
-        if (!resetting && client.player != null) {
-            Player tracked = CameraController.getTrackedPlayer(client);
-            Vec3 eye = tracked.getEyePosition();
-            double playerMove = lastPlayerEyePos == null ? 0.0 : eye.distanceTo(lastPlayerEyePos);
+        // Suppress only tiny direction reversals near the target. Using player
+        // movement as a gate caused a periodic stall because it was sampled at
+        // tick rate while the camera target was sampled every render frame.
+        if (!resetting) {
             final float ANGLE_EPS = 0.7f;
             final float TARGET_EPS = 0.7f;
-            final double MOVE_EPS = 0.03;
 
             float targetYawDelta = targetYaw - lastTargetYaw;
             while (targetYawDelta > 180) targetYawDelta -= 360;
@@ -189,23 +185,26 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
             while (targetPitchDelta > 180) targetPitchDelta -= 360;
             while (targetPitchDelta < -180) targetPitchDelta += 360;
 
-            boolean smallYawJitter = Math.abs(yawError) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
-            boolean smallPitchJitter = Math.abs(pitchError) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
-            boolean playerMoving = playerMove > MOVE_EPS;
-
             // Consider near-complete when remaining alpha is small
             double totalDistance = a.getPosition().distanceTo(b.getPosition());
             double remaining = current.getPosition().distanceTo(b.getPosition());
             boolean fullyOut = totalDistance > 0 && (remaining / totalDistance) <= 0.01;
 
-            if (fullyOut && playerMoving && (smallYawJitter || (lastYawError * yawError < 0 && Math.abs(yawError) < ANGLE_EPS))) {
+            boolean tinyYawReversal = lastYawError * yawError < 0
+                    && Math.abs(lastYawError) < ANGLE_EPS
+                    && Math.abs(yawError) < ANGLE_EPS
+                    && Math.abs(targetYawDelta) < TARGET_EPS;
+            boolean tinyPitchReversal = lastPitchError * pitchError < 0
+                    && Math.abs(lastPitchError) < ANGLE_EPS
+                    && Math.abs(pitchError) < ANGLE_EPS
+                    && Math.abs(targetPitchDelta) < TARGET_EPS;
+
+            if (fullyOut && tinyYawReversal) {
                 desiredYawSpeed = 0f;
             }
-            if (fullyOut && playerMoving && (smallPitchJitter || (lastPitchError * pitchError < 0 && Math.abs(pitchError) < ANGLE_EPS))) {
+            if (fullyOut && tinyPitchReversal) {
                 desiredPitchSpeed = 0f;
             }
-
-            lastPlayerEyePos = eye;
         }
 
         // FOV easing with adaptive smoothness

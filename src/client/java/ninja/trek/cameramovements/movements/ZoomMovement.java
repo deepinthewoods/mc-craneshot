@@ -39,14 +39,14 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) {
             return new MovementState(current, true);
         }
 
         // Get player position and rotation (follow player)
-        float playerYaw = client.player.getYRot();
-        float playerPitch = client.player.getXRot() + pitchOffset;
+        float playerYaw = client.player.getViewYRot(tickDelta);
+        float playerPitch = client.player.getViewXRot(tickDelta) + pitchOffset;
 
         // Target FOV depends on whether we're resetting
         float targetFov = resetting ? 1.0f : targetZoomFov;
@@ -72,7 +72,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
 
         // Update camera target with player rotation and new FOV
         current = new CameraTarget(
-            client.player.getEyePosition(),
+            client.player.getEyePosition(tickDelta),
             playerYaw,
             playerPitch,
             newFov

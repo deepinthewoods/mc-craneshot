@@ -9,9 +9,10 @@ public interface ICameraMovement {
      * Calculate the movement state for this frame.
      * @param client Minecraft client
      * @param camera Active camera
+     * @param tickDelta Partial tick used to interpolate tracked entity poses
      * @param deltaSeconds Seconds elapsed since last frame
      */
-    MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds);
+    MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds);
     void queueReset(Minecraft client, Camera camera);
     void adjustDistance(boolean increase, Minecraft client);
     String getName();

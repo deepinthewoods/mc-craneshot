@@ -62,8 +62,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     private float lastTargetPitch = 0f;
     private float lastYawError = 0f;
     private float lastPitchError = 0f;
-    private Vec3 lastPlayerEyePos = null;
-    private boolean jitterStateInit = false;
 
     @Override
     public void start(Minecraft client, Camera camera) {
@@ -92,8 +90,6 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Orthographic handling removed
 
         // Reset jitter suppression tracking
-        jitterStateInit = false;
-        lastPlayerEyePos = null;
         lastTargetYaw = current.getYaw();
         lastTargetPitch = current.getPitch();
         lastYawError = 0f;
@@ -110,7 +106,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Update start target with controlStick's current state
@@ -139,9 +135,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // When returning, continuously update the target to follow the player's head position and rotation
         if (resetting && client.player != null) {
             Player tracked = CameraController.getTrackedPlayer(client);
-            Vec3 playerPos = tracked.getEyePosition();
-            float playerYaw = tracked.getYRot();
-            float playerPitch = tracked.getXRot() + pitchOffset;
+            Vec3 playerPos = tracked.getEyePosition(tickDelta);
+            float playerYaw = tracked.getViewYRot(tickDelta);
+            float playerPitch = tracked.getViewXRot(tickDelta) + pitchOffset;
 
             // Update return target to always be the player's current head position and rotation
             // Update the return target
@@ -242,21 +238,13 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float desiredYawSpeed = (float)(yawError * rotationEasing);
         float desiredPitchSpeed = (float)(pitchError * rotationEasing);
 
-        // Jitter suppression: when fully out (linear mode) and player is moving,
-        // ignore one-frame micro corrections caused by tiny oscillations.
+        // Suppress only tiny direction reversals near the target. The old
+        // player-movement gate mixed tick-rate and render-frame samples.
         if (!resetting) {
             boolean fullyOut = linearMode || progress >= 0.999;
-            if (fullyOut && client.player != null) {
-                Player tracked = CameraController.getTrackedPlayer(client);
-                Vec3 eye = tracked.getEyePosition();
-                double playerMove = 0.0;
-                if (lastPlayerEyePos != null) {
-                    playerMove = eye.distanceTo(lastPlayerEyePos);
-                }
-                // Thresholds tuned to suppress sub-degree jitter while running
+            if (fullyOut) {
                 final float ANGLE_EPS = 0.7f;      // degrees
                 final float TARGET_EPS = 0.7f;     // degrees
-                final double MOVE_EPS = 0.03;      // blocks per tick
 
                 // Angle delta for target (normalize to [-180,180])
                 float targetYawDelta = targetYaw - lastTargetYaw;
@@ -266,20 +254,21 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
                 while (targetPitchDelta > 180) targetPitchDelta -= 360;
                 while (targetPitchDelta < -180) targetPitchDelta += 360;
 
-                boolean smallYawJitter = Math.abs(yawError) < ANGLE_EPS && Math.abs(lastYawError) < ANGLE_EPS && Math.abs(targetYawDelta) < TARGET_EPS;
-                boolean smallPitchJitter = Math.abs(pitchError) < ANGLE_EPS && Math.abs(lastPitchError) < ANGLE_EPS && Math.abs(targetPitchDelta) < TARGET_EPS;
-                boolean playerMoving = playerMove > MOVE_EPS;
+                boolean tinyYawReversal = lastYawError * yawError < 0
+                        && Math.abs(lastYawError) < ANGLE_EPS
+                        && Math.abs(yawError) < ANGLE_EPS
+                        && Math.abs(targetYawDelta) < TARGET_EPS;
+                boolean tinyPitchReversal = lastPitchError * pitchError < 0
+                        && Math.abs(lastPitchError) < ANGLE_EPS
+                        && Math.abs(pitchError) < ANGLE_EPS
+                        && Math.abs(targetPitchDelta) < TARGET_EPS;
 
-                if (playerMoving && (smallYawJitter || (lastYawError * yawError < 0 && Math.abs(yawError) < ANGLE_EPS))) {
+                if (tinyYawReversal) {
                     desiredYawSpeed = 0f;
                 }
-                if (playerMoving && (smallPitchJitter || (lastPitchError * pitchError < 0 && Math.abs(pitchError) < ANGLE_EPS))) {
+                if (tinyPitchReversal) {
                     desiredPitchSpeed = 0f;
                 }
-
-                // Update jitter tracking state
-                lastPlayerEyePos = eye;
-                jitterStateInit = true;
             }
         }
         

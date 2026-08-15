@@ -27,7 +27,7 @@ public class StaticMovement extends AbstractMovementSettings implements ICameraM
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         // Fallback behaviour when invoked through the generic movement system: remain at current camera state
         CameraTarget target = CameraTarget.fromCamera(camera);
         return new MovementState(target, true);

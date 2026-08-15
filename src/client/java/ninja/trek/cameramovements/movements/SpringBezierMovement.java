@@ -274,14 +274,14 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) return new MovementState(current, true);
 
         // Calculate player velocity for return modes
         Player tracked = CameraController.getTrackedPlayer(client);
-        Vec3 playerPos = tracked.getEyePosition();
-        float playerYaw = tracked.getYRot();
-        float playerPitch = tracked.getXRot();
+        Vec3 playerPos = tracked.getEyePosition(tickDelta);
+        float playerYaw = tracked.getViewYRot(tickDelta);
+        float playerPitch = tracked.getViewXRot(tickDelta);
 
         Vec3 playerVelocity = Vec3.ZERO;
         float playerYawVelocity = 0f;

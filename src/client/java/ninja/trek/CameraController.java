@@ -184,8 +184,8 @@ public class CameraController {
                 // Update movement tracking for VELOCITY targets
                 if (currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_BACK ||
                         currentEndTarget == AbstractMovementSettings.END_TARGET.VELOCITY_FRONT) {
-                    // Track the target player's position (not local player)
-                    updateMovementTracking(new Vec3(trackedPlayer.getX(), trackedPlayer.getY(), trackedPlayer.getZ()));
+                    // Track the same interpolated pose used by the camera target.
+                    updateMovementTracking(eyePos);
                 }
 
                 // Calculate final angles based on target type
@@ -598,13 +598,14 @@ public class CameraController {
         // Cache interpolated player position for consistent rendering decisions
         // This must be done BEFORE any rendering decisions (like shouldRenderPlayerModel)
         CameraSystem cameraSystem = CameraSystem.getInstance();
+        Vec3 interpolatedPlayerEyePos = null;
         if (client.player != null) {
-            Vec3 interpolatedEyePos = client.player.getEyePosition(tickDelta);
-            cameraSystem.updateInterpolatedPlayerPosition(interpolatedEyePos);
+            interpolatedPlayerEyePos = client.player.getEyePosition(tickDelta);
+            cameraSystem.updateInterpolatedPlayerPosition(interpolatedPlayerEyePos);
         }
 
         // Get the base camera state from movement manager - always update to track state
-        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, deltaSeconds);
+        CameraTarget baseTarget = CraneshotClient.MOVEMENT_MANAGER.update(client, camera, tickDelta, deltaSeconds);
 
         // Skip node influence when:
         // - Zones are disabled in settings
@@ -615,12 +616,14 @@ public class CameraController {
                 || currentMouseMoveMode != POST_MOVE_MOUSE.NONE
                 ;
 
-        baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(baseTarget, skipNodeInfluence);
+        baseTarget = ninja.trek.nodes.NodeManager.get().applyInfluence(
+                baseTarget, skipNodeInfluence, interpolatedPlayerEyePos
+        );
 
         // Handle node-based camera activation/deactivation
         double currentNodeInfluence = 0.0;
-        if (!skipNodeInfluence && client.player != null) {
-            currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(client.player.getEyePosition());
+        if (!skipNodeInfluence && interpolatedPlayerEyePos != null) {
+            currentNodeInfluence = ninja.trek.nodes.NodeManager.get().getTotalInfluence(interpolatedPlayerEyePos);
         }
 
         // Activate camera when nodes start influencing
@@ -884,6 +887,10 @@ public class CameraController {
     }
 
     public void onComplete() {
+        onComplete(1.0f);
+    }
+
+    public void onComplete(float tickDelta) {
         // If node edit is active, preserve freecam and input states
         if (ninja.trek.nodes.NodeManager.get().isEditing()) {
             return;
@@ -922,9 +929,9 @@ public class CameraController {
 
         // Reset the camera position to follow the player
         if (client != null && client.player != null) {
-            Vec3 eyePos = client.player.getEyePosition();
-            float yaw = client.player.getYRot();
-            float pitch = client.player.getXRot();
+            Vec3 eyePos = client.player.getEyePosition(tickDelta);
+            float yaw = client.player.getViewYRot(tickDelta);
+            float pitch = client.player.getViewXRot(tickDelta);
 
             freeCamPosition = eyePos;
             freeCamYaw = yaw;

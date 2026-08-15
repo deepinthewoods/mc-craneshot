@@ -56,7 +56,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         current = new CameraTarget(startPos, startYaw, startPitch, startFov);
 
         // Initial end target (will be updated every frame)
-        end = resolveReturnTarget(client);
+        end = resolveReturnTarget(client, 1.0f);
         // No startup log
 
         positionVelocity = Vec3.ZERO;
@@ -67,14 +67,14 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client == null || client.player == null) {
             return new MovementState(current, true);
         }
 
         // The destination follows the live stick controller pose while the
         // critically damped springs preserve momentum between frames.
-        end = resolveReturnTarget(client);
+        end = resolveReturnTarget(client, tickDelta);
 
         double dt = Math.max(0.0, Math.min(deltaSeconds, 0.25f));
         Vec3 desiredPos = springPosition(
@@ -189,7 +189,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         return RaycastType.NONE;
     }
 
-    private CameraTarget resolveReturnTarget(Minecraft client) {
+    private CameraTarget resolveReturnTarget(Minecraft client, float tickDelta) {
         Vec3 targetPos = CameraController.controlStick.getPosition();
         float targetYaw = CameraController.controlStick.getYaw();
         float targetPitch = CameraController.controlStick.getPitch() + pitchOffset;
@@ -198,10 +198,15 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
             return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);
         }
 
-        Vec3 playerEye = client.player.getEyePosition();
+        Vec3 playerEye = client.player.getEyePosition(tickDelta);
         double distance = targetPos.distanceTo(playerEye);
         if (!Double.isFinite(distance) || distance > MAX_RETURN_TARGET_DISTANCE) {
-            return new CameraTarget(playerEye, client.player.getYRot(), client.player.getXRot() + pitchOffset, 1.0f);
+            return new CameraTarget(
+                    playerEye,
+                    client.player.getViewYRot(tickDelta),
+                    client.player.getViewXRot(tickDelta) + pitchOffset,
+                    1.0f
+            );
         }
 
         return new CameraTarget(targetPos, targetYaw, targetPitch, 1.0f);

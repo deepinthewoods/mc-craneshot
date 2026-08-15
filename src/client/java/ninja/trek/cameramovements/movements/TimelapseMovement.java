@@ -66,7 +66,7 @@ public class TimelapseMovement extends AbstractMovementSettings implements ICame
     }
 
     @Override
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (resetting) {
             cancelCaptureCycle();
             return new MovementState(buildTarget(client, camera), true);

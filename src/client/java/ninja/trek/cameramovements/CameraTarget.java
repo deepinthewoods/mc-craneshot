@@ -77,13 +77,13 @@ public class CameraTarget {
         this.fovMultiplier = Math.max(0.1f, multiplier); // Ensure we never have a zero or negative multiplier
     }
 
-    public CameraTarget withAdjustedPosition(Player player, RaycastType raycastType) {
+    public CameraTarget withAdjustedPosition(Player player, RaycastType raycastType, float tickDelta) {
         // Handle null raycastType safely
         if (raycastType == null) {
             raycastType = RaycastType.NONE;
         }
         
-        Vec3 adjustedPos = RaycastUtil.adjustForCollision(player.getEyePosition(), this.position, raycastType);
+        Vec3 adjustedPos = RaycastUtil.adjustForCollision(player.getEyePosition(tickDelta), this.position, raycastType);
         CameraTarget adjusted = new CameraTarget(adjustedPos, this.yaw, this.pitch, this.fovMultiplier);
         // logging removed
         return adjusted;

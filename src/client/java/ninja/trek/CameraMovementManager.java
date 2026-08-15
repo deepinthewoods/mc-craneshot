@@ -157,12 +157,16 @@ public class CameraMovementManager {
      * Prevents long camera travel when starting movements after teleports/portals.
      */
     private void snapCameraIfFarFromPlayer(Minecraft client, Camera camera) {
+        snapCameraIfFarFromPlayer(client, camera, 1.0f);
+    }
+
+    private void snapCameraIfFarFromPlayer(Minecraft client, Camera camera, float tickDelta) {
         if (client == null || client.player == null) return;
 
         Player tracked = CameraController.getTrackedPlayer(client);
-        Vec3 playerPos = tracked.getEyePosition();
-        float playerYaw = tracked.getYRot();
-        float playerPitch = tracked.getXRot();
+        Vec3 playerPos = tracked.getEyePosition(tickDelta);
+        float playerYaw = tracked.getViewYRot(tickDelta);
+        float playerPitch = tracked.getViewXRot(tickDelta);
 
         CameraSystem cameraSystem = CameraSystem.getInstance();
         Vec3 cameraPos = null;
@@ -536,14 +540,14 @@ public class CameraMovementManager {
         }
     }
 
-    public MovementState calculateState(Minecraft client, Camera camera, float deltaSeconds) {
+    public MovementState calculateState(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         if (client.player == null) {
             return null;
         }
 
         if (activeMovement == null) {
             if (isZoomActive && zoomOverlay != null) {
-                MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+                MovementState zoomState = zoomOverlay.calculateState(client, camera, tickDelta, deltaSeconds);
                 CameraTarget zoomTarget = zoomState.getCameraTarget();
                 if (zoomState.isComplete() || zoomOverlay.isComplete()) {
                     zoomTarget = new CameraTarget(
@@ -562,8 +566,8 @@ public class CameraMovementManager {
         if (inFreeCamReturnPhase) {
             FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
             if (activeMovement == freeCamReturnMovement) {
-                MovementState state = freeCamReturnMovement.calculateState(client, camera, deltaSeconds);
-                baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                MovementState state = freeCamReturnMovement.calculateState(client, camera, tickDelta, deltaSeconds);
+                baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
                 
                 // Check if FreeCamReturnMovement has completed
                 if (state.isComplete() || freeCamReturnMovement.isComplete()) {
@@ -583,7 +587,7 @@ public class CameraMovementManager {
                     // Smooth finalize: provide one last frame at the final target
                     // Use the FreeCamReturnMovement's raycast type before clearing activeMovement
                     RaycastType finalRaycastType = freeCamReturnMovement.getRaycastType();
-                    CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, finalRaycastType);
+                    CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, finalRaycastType, tickDelta);
                     baseTarget = finalTarget;
 
                     // Switch back to normal camera movement - normal state
@@ -596,12 +600,12 @@ public class CameraMovementManager {
                     cameraSystem.deactivateCamera();
 
                     // Explicitly reset controller state
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePosition();
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getYRot();
-                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getXRot();
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPosition = client.player.getEyePosition(tickDelta);
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamYaw = client.player.getViewYRot(tickDelta);
+                    CraneshotClient.CAMERA_CONTROLLER.freeCamPitch = client.player.getViewXRot(tickDelta);
                     CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                     ninja.trek.MouseInterceptor.setIntercepting(false);
-                    CraneshotClient.CAMERA_CONTROLLER.onComplete();
+                    CraneshotClient.CAMERA_CONTROLLER.onComplete(tickDelta);
 
                     // Return a completed state so the controller applies this final frame cleanly
                     return new MovementState(finalTarget, true);
@@ -612,13 +616,13 @@ public class CameraMovementManager {
         }
         
         // Normal movement state calculation
-        MovementState state = activeMovement.calculateState(client, camera, deltaSeconds);
+        MovementState state = activeMovement.calculateState(client, camera, tickDelta, deltaSeconds);
         if (!isOut) {
             isOut = activeMovement.hasCompletedOutPhase();
             if (isOut) {
                 // Get the current target from movement and apply collision
                 CameraTarget preAdjust = state.getCameraTarget();
-                CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType());
+                CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
 
                 // logging removed
 
@@ -641,12 +645,12 @@ public class CameraMovementManager {
         }
         if (state.isComplete()) {
             // Store final camera position before ending movement
-            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType());
+            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
 
             // A held zoom remains active after the base movement ends. Tick it
             // for this frame so completion cannot cause an unzoomed flash.
             if (isZoomActive && zoomOverlay != null) {
-                MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+                MovementState zoomState = zoomOverlay.calculateState(client, camera, tickDelta, deltaSeconds);
                 float zoomFov = zoomState.getCameraTarget().getFovMultiplier();
                 if (zoomState.isComplete() || zoomOverlay.isComplete()) {
                     zoomFov = 1.0f;
@@ -683,7 +687,7 @@ public class CameraMovementManager {
             }
             
             // Notify controller of completion, but maintain final camera position
-            CraneshotClient.CAMERA_CONTROLLER.onComplete();
+            CraneshotClient.CAMERA_CONTROLLER.onComplete(tickDelta);
             
             // Return the final state to ensure one last smooth frame
             return new MovementState(finalTarget, true);
@@ -691,11 +695,11 @@ public class CameraMovementManager {
 
         // Apply collision adjustment to the movement target
         CameraTarget rawTarget = state.getCameraTarget();
-        baseTarget = rawTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType());
+        baseTarget = rawTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
 
         // Apply zoom overlay if active (modifies FOV only)
         if (isZoomActive && zoomOverlay != null) {
-            MovementState zoomState = zoomOverlay.calculateState(client, camera, deltaSeconds);
+            MovementState zoomState = zoomOverlay.calculateState(client, camera, tickDelta, deltaSeconds);
             if (zoomState != null) {
                 float zoomFov = zoomState.getCameraTarget().getFovMultiplier();
                 if (zoomState.isComplete() || zoomOverlay.isComplete()) {
@@ -727,12 +731,12 @@ public class CameraMovementManager {
         }
     }
 
-    public CameraTarget update(Minecraft client, Camera camera, float deltaSeconds) {
+    public CameraTarget update(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {
         // If no active movement and allowed, start default idle movement (Linear)
         if (activeMovement == null && !isZoomActive && client.player != null) {
             if (ninja.trek.config.GeneralMenuSettings.isUseDefaultIdleMovement()) {
                 ICameraMovement idle = ninja.trek.config.GeneralMenuSettings.getDefaultIdleMovement();
-                snapCameraIfFarFromPlayer(client, camera);
+                snapCameraIfFarFromPlayer(client, camera, tickDelta);
                 // Reset any post-move states before starting a fresh movement
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
                 idle.start(client, camera);
@@ -754,7 +758,7 @@ public class CameraMovementManager {
             return null;
         }
         
-        MovementState state = calculateState(client, camera, deltaSeconds);
+        MovementState state = calculateState(client, camera, tickDelta, deltaSeconds);
         if (state == null) {
             // If we have no state but had a previous target, return it
             return baseTarget;
@@ -768,7 +772,7 @@ public class CameraMovementManager {
         
         // At this point we have a valid state and raycast type
         CameraTarget rawTarget = state.getCameraTarget();
-        CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType);
+        CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType, tickDelta);
 
         // Log any large target jumps (raw or adjusted)
         final double JUMP_THRESH = 1.0; // blocks
