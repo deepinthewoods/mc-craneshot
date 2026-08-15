@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
-import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.util.FrameRateUtil;
 
 @CameraMovementType(
         name = "Bezier",
@@ -153,17 +153,15 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         if (!linearMode) {
             // Bezier movement mode
-            double potentialDelta;
-            
+            double easing = positionEasing;
             if (resetting && progress > 0.8) {
                 // When returning and progress is high (near completion), accelerate to ensure we reach the end
                 // This helps avoid stopping short of the target position
-                potentialDelta = (1.0 - progress) * positionEasing * 1.5; // Use higher multiplier
+                easing *= 1.5;
                 // logging removed
-            } else {
-                // Standard easing for normal progress
-                potentialDelta = (1.0 - progress) * positionEasing;
             }
+            double positionBlend = FrameRateUtil.perTickBlend(easing, deltaSeconds);
+            double potentialDelta = (1.0 - progress) * positionBlend;
             
             double totalDistance = a.getPosition().distanceTo(b.getPosition());
             double maxMove = positionSpeedLimit * (deltaSeconds);
@@ -173,7 +171,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             // When very close to completion during reset, use larger steps
             if (resetting && progress > 0.95) {
                 // Ensure we reach the final position by using larger steps near the end
-                progressDelta = Math.max(progressDelta, 0.01);
+                progressDelta = Math.max(progressDelta, 0.01 * FrameRateUtil.tickScale(deltaSeconds));
             }
             
             progress = Math.min(1.0, progress + progressDelta);
@@ -190,7 +188,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
             double maxMove = positionSpeedLimit * (deltaSeconds);
             Vec3 move;
             if (deltaLength > 0) {
-                move = delta.scale(positionEasing);
+                double positionBlend = FrameRateUtil.perTickBlend(positionEasing, deltaSeconds);
+                move = delta.scale(positionBlend);
                 if (move.length() > maxMove) {
                     move = move.normalize().scale(maxMove);
                 }
@@ -235,8 +234,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
 
-        float desiredYawSpeed = (float)(yawError * rotationEasing);
-        float desiredPitchSpeed = (float)(pitchError * rotationEasing);
+        double rotationBlend = FrameRateUtil.perTickBlend(rotationEasing, deltaSeconds);
+        float desiredYawSpeed = (float)(yawError * rotationBlend);
+        float desiredPitchSpeed = (float)(pitchError * rotationBlend);
 
         // Suppress only tiny direction reversals near the target. The old
         // player-movement gate mixed tick-rate and render-frame samples.
@@ -283,7 +283,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
         
-        float desiredFovSpeed = fovError * adaptiveFovEasing;
+        double fovBlend = FrameRateUtil.perTickBlend(adaptiveFovEasing, deltaSeconds);
+        float desiredFovSpeed = (float) (fovError * fovBlend);
         
         // Handle orthographic projection with smooth transitions in both directions
         float calculatedOrthoTarget;
@@ -362,9 +363,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
         // Update FOV in game renderer
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier((float) current.getFovMultiplier());
 
         // Update alpha for external systems
         double remaining = current.getPosition().distanceTo(b.getPosition());

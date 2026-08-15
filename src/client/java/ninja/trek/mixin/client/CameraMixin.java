@@ -17,7 +17,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class CameraMixin {
     private boolean wasCustomCameraActive = false;
 
-    @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V", at = @At("TAIL"))
+    @Inject(
+            method = "update(Lnet/minecraft/client/DeltaTracker;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/Camera;calculateFov(F)F"
+            )
+    )
     private void onCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
         CameraSystem cameraSystem = CameraSystem.getInstance();
         boolean isCustomCameraActive = cameraSystem.isCameraActive();
@@ -48,6 +54,15 @@ public class CameraMixin {
                 frameSeconds,
                 (Camera) (Object) this
         );
+    }
+
+    @Inject(method = "calculateFov(F)F", at = @At("RETURN"), cancellable = true)
+    private void applyCraneshotFovMultiplier(float tickDelta, CallbackInfoReturnable<Float> cir) {
+        CameraSystem cameraSystem = CameraSystem.getInstance();
+        float multiplier = cameraSystem.getFovMultiplier();
+        if (multiplier != 1.0f) {
+            cir.setReturnValue(cir.getReturnValue() * multiplier);
+        }
     }
 
     /**

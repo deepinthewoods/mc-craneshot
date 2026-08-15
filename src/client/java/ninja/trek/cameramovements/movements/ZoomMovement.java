@@ -7,7 +7,7 @@ import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.cameramovements.ICameraMovement;
 import ninja.trek.cameramovements.MovementState;
 import ninja.trek.config.MovementSetting;
-import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.util.FrameRateUtil;
 
 /**
  * Zoom movement - adjusts FOV while maintaining camera position and rotation.
@@ -56,7 +56,8 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
 
         // Calculate desired change based on error and easing
         float fovError = targetFov - currentFov;
-        float desiredSpeed = fovError * (float) zoomFovEasing;
+        double fovBlend = FrameRateUtil.perTickBlend(zoomFovEasing, deltaSeconds);
+        float desiredSpeed = (float) (fovError * fovBlend);
 
         // Apply speed limit
         float maxSpeed = (float) (zoomFovSpeedLimit * deltaSeconds);
@@ -79,9 +80,7 @@ public class ZoomMovement extends AbstractMovementSettings implements ICameraMov
         );
 
         // Apply FOV to game renderer
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier(current.getFovMultiplier());
 
         boolean complete = resetting && isComplete();
         return new MovementState(current, complete);

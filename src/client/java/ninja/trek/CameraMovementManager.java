@@ -10,7 +10,6 @@ import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.config.SlotSettingsIO;
 import ninja.trek.mixin.client.CameraAccessor;
-import ninja.trek.mixin.client.FovAccessor;
 
 import java.util.*;
 import net.minecraft.client.Camera;
@@ -726,9 +725,7 @@ public class CameraMovementManager {
     private void clearZoomOverlay(Minecraft client) {
         isZoomActive = false;
         zoomOverlay = null;
-        if (client != null && client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier(1.0f);
     }
 
     public CameraTarget update(Minecraft client, Camera camera, float tickDelta, float deltaSeconds) {

@@ -16,8 +16,8 @@ import ninja.trek.cameramovements.CameraTarget;
 import ninja.trek.config.FreeCamSettings;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.mixin.client.CameraAccessor;
-import ninja.trek.mixin.client.FovAccessor;
 import ninja.trek.mixin.client.KeyBindingAccessor;
+import ninja.trek.util.FrameRateUtil;
 
 public class CameraController {
     public static POST_MOVE_KEYS currentKeyMoveMode = POST_MOVE_KEYS.NONE;
@@ -255,7 +255,10 @@ public class CameraController {
                 currentPos.z - lastPlayerPos.z
         );
 
-        if (movement.lengthSqr() > 0.001) { // Only update if there's significant movement
+        // Use only a numerical-noise threshold here. A per-frame distance
+        // threshold changes behavior with FPS and can suppress normal movement
+        // direction entirely at high render rates.
+        if (movement.lengthSqr() > 1.0E-10) {
             cumulativeMovement = cumulativeMovement.add(movement);
 
             // Calculate movement direction (Minecraft coordinates)
@@ -281,11 +284,8 @@ public class CameraController {
     public void setPreMoveStates(AbstractMovementSettings m){
         currentEndTarget = m.getEndTarget();
         currentYawOffset = m.getYawOffset();
-        // Reset any FOV modifications when starting a new movement
-        Minecraft client = Minecraft.getInstance();
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
-        }
+        // Reset Craneshot's multiplier without disturbing vanilla sprint FOV.
+        CameraSystem.getInstance().setFovMultiplier(1.0f);
     }
 
     public void setPostMoveStates(AbstractMovementSettings m) {
@@ -434,7 +434,7 @@ public class CameraController {
         }
     }
 
-    private void handleKeyboardMovement(Minecraft client, Camera camera) {
+    private void handleKeyboardMovement(Minecraft client, Camera camera, float deltaSeconds) {
         if (client.player == null) return;
 
         // Let the camera system handle movement
@@ -444,7 +444,8 @@ public class CameraController {
             boolean moved = cameraSystem.handleMovementInput(
                 settings.getMoveSpeed(),
                 settings.getAcceleration(),
-                settings.getDeceleration()
+                settings.getDeceleration(),
+                deltaSeconds
             );
             
             // Track if camera moved when using the camera system
@@ -567,11 +568,13 @@ public class CameraController {
         // Apply acceleration or deceleration
         float acceleration = GeneralMenuSettings.getFreeCamSettings().getAcceleration();
         float deceleration = GeneralMenuSettings.getFreeCamSettings().getDeceleration();
+        double tickScale = FrameRateUtil.tickScale(deltaSeconds);
 
         if (targetVelocity.lengthSqr() > 0.0001) {
             // Accelerating
+            double accelerationBlend = FrameRateUtil.perTickBlend(acceleration, deltaSeconds);
             currentVelocity = currentVelocity.add(
-                    targetVelocity.subtract(currentVelocity).scale(acceleration)
+                    targetVelocity.subtract(currentVelocity).scale(accelerationBlend)
             );
             
             // Mark as moved with keyboard if acceleration is happening
@@ -580,7 +583,8 @@ public class CameraController {
             }
         } else {
             // Decelerating
-            currentVelocity = currentVelocity.scale(1.0 - deceleration);
+            double decelerationRetention = 1.0 - FrameRateUtil.perTickBlend(deceleration, deltaSeconds);
+            currentVelocity = currentVelocity.scale(decelerationRetention);
             // Zero out very small velocities to prevent perpetual drift
             if (currentVelocity.lengthSqr() < 0.0001) {
                 currentVelocity = Vec3.ZERO;
@@ -588,7 +592,7 @@ public class CameraController {
         }
 
         // Apply movement
-        freeCamPosition = freeCamPosition.add(currentVelocity);
+        freeCamPosition = freeCamPosition.add(currentVelocity.scale(tickScale));
         ((CameraAccessor) camera).invokesetPos(freeCamPosition);
     }
 
@@ -610,8 +614,9 @@ public class CameraController {
         // Skip node influence when:
         // - Zones are disabled in settings
         // - In freecam/edit modes (manual camera control)
+        boolean nodeEditing = ninja.trek.nodes.NodeManager.get().isEditing();
         boolean skipNodeInfluence = !GeneralMenuSettings.isZonesEnabled()
-                || ninja.trek.nodes.NodeManager.get().isEditing()
+                || nodeEditing
                 || currentKeyMoveMode != POST_MOVE_KEYS.NONE
                 || currentMouseMoveMode != POST_MOVE_MOUSE.NONE
                 ;
@@ -627,7 +632,8 @@ public class CameraController {
         }
 
         // Activate camera when nodes start influencing
-        if (currentNodeInfluence > 0.0 && !cameraActivatedByNodes && !skipNodeInfluence) {
+        if (baseTarget != null && currentNodeInfluence > 0.0
+                && !cameraActivatedByNodes && !skipNodeInfluence) {
             // Only activate if not already active from another source
             if (!cameraSystem.isCameraActive()) {
                 cameraSystem.setCameraPosition(baseTarget.getPosition());
@@ -668,11 +674,8 @@ public class CameraController {
         boolean cameraSystemActive = cameraSystem.isCameraActive();
 
         if (baseTarget != null) {
-            // Update FOV in game renderer
-            if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-                float fovMultiplier = (float) baseTarget.getFovMultiplier();
-                ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(fovMultiplier);
-            }
+            // Compose this multiplier with Minecraft's independently smoothed FOV.
+            cameraSystem.setFovMultiplier((float) baseTarget.getFovMultiplier());
             
             if (cameraSystemActive) {
                 // Let the camera system update its state
@@ -790,22 +793,39 @@ public class CameraController {
                 ((CameraAccessor) camera).invokeSetRotation(freeCamYaw, freeCamPitch);
             }
         } else if (cameraSystemActive) {
-            // If we have no target but the camera system is active, let it update
-            cameraSystem.updateCamera(camera);
-            
-            // Update tracking variables
-            freeCamPosition = cameraSystem.getCameraPosition();
-            freeCamYaw = cameraSystem.getCameraYaw();
-            freeCamPitch = cameraSystem.getCameraPitch();
+            boolean hasManualCameraControl = nodeEditing
+                    || currentKeyMoveMode != POST_MOVE_KEYS.NONE
+                    || currentMouseMoveMode != POST_MOVE_MOUSE.NONE;
+            if (hasManualCameraControl) {
+                // Manual freecam owns its transform even when no movement target exists.
+                cameraSystem.updateCamera(camera);
+
+                freeCamPosition = cameraSystem.getCameraPosition();
+                freeCamYaw = cameraSystem.getCameraYaw();
+                freeCamPitch = cameraSystem.getCameraPitch();
+            } else {
+                // No movement, node, or manual mode owns the camera. Leaving the
+                // camera system active here reapplies a stale transform every frame
+                // and fights vanilla's sprint/view-bobbing camera update.
+                cameraSystem.deactivateCamera();
+                cameraActivatedByNodes = false;
+                lastNodeInfluence = 0.0;
+                clearPlayerHeadLock();
+                MouseInterceptor.setIntercepting(false);
+            }
         }
 
         // Handle keyboard movement for camera modes (also when editor is open)
         if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
             currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-            handleKeyboardMovement(client, camera);
+            handleKeyboardMovement(client, camera, deltaSeconds);
         }
 
-        applyPlayerHeadLock(client);
+        if (cameraSystem.isCameraActive()) {
+            applyPlayerHeadLock(client);
+        } else {
+            clearPlayerHeadLock();
+        }
 
         updateMessageTimer();
     }
@@ -956,10 +976,8 @@ public class CameraController {
             }
         }
 
-        // Reset FOV to default
-        if (client != null && client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(1.0f);
-        }
+        // Reset Craneshot's FOV layer; vanilla keeps its own sprint/effect state.
+        CameraSystem.getInstance().setFovMultiplier(1.0f);
     }
 
     private void capturePlayerHeadLock(Minecraft client) {

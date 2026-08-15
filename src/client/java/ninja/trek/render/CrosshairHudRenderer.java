@@ -11,7 +11,6 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import ninja.trek.mixin.client.GameRendererFovAccessor;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -75,11 +74,9 @@ public class CrosshairHudRenderer {
         double zCam = v.dot(forward);
         if (zCam <= 0.0) return; // behind camera or at eye
 
-        // Effective FOV
-        int baseFov = client.options.fov().get();
-        float fovMul = ((GameRendererFovAccessor) client.gameRenderer.mainCamera()).getFovMultiplier();
-        double fovYDeg = Math.max(1.0, baseFov * fovMul);
-        double fovY = Math.toRadians(fovYDeg);
+        // Camera#getFov is already interpolated for this render frame and includes
+        // both Minecraft's dynamic FOV and Craneshot's composed multiplier.
+        double fovY = Math.toRadians(Math.max(1.0, camera.getFov()));
 
         // Aspect and per-axis tangents
         double w = client.getWindow().getGuiScaledWidth();

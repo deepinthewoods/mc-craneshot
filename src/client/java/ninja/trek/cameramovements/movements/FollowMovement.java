@@ -22,7 +22,7 @@ import ninja.trek.cameramovements.MovementState;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
 import ninja.trek.Craneshot;
-import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.util.FrameRateUtil;
 
 public class FollowMovement extends AbstractMovementSettings implements ICameraMovement {
     @MovementSetting(label = "Follow Height", min = 0.0, max = 50.0)
@@ -782,9 +782,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
         current = new CameraTarget(desiredPos, newYaw, newPitch, newFovDelta);
 
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier(current.getFovMultiplier());
 
         boolean complete = resetting && isComplete(client.player.getEyePosition(tickDelta));
         return new MovementState(current, complete);
@@ -842,14 +840,16 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         }
 
         Vec3 deltaXZ = new Vec3(delta.x, 0.0, delta.z);
-        Vec3 moveXZ = deltaXZ.scale(positionEasingXZ);
+        double xzBlend = FrameRateUtil.perTickBlend(positionEasingXZ, deltaSeconds);
+        Vec3 moveXZ = deltaXZ.scale(xzBlend);
         double maxMoveXZ = positionSpeedLimitXZ * deltaSeconds;
         double moveXZLength = moveXZ.length();
         if (moveXZLength > maxMoveXZ && moveXZLength > 1e-12) {
             moveXZ = moveXZ.scale(maxMoveXZ / moveXZLength);
         }
 
-        double moveY = delta.y * easingY;
+        double yBlend = FrameRateUtil.perTickBlend(easingY, deltaSeconds);
+        double moveY = delta.y * yBlend;
         double maxMoveY = speedLimitY * deltaSeconds;
         if (Math.abs(moveY) > maxMoveY) {
             moveY = Math.copySign(maxMoveY, moveY);
@@ -863,7 +863,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         while (err > 180) err -= 360;
         while (err < -180) err += 360;
 
-        float desiredSpeed = (float) (err * rotationEasing);
+        double rotationBlend = FrameRateUtil.perTickBlend(rotationEasing, deltaSeconds);
+        float desiredSpeed = (float) (err * rotationBlend);
         float maxRotation = (float) (rotationSpeedLimit * deltaSeconds);
         if (Math.abs(desiredSpeed) > maxRotation) desiredSpeed = Math.signum(desiredSpeed) * maxRotation;
         return currentAngle + desiredSpeed;
@@ -874,7 +875,8 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
         float absFovError = Math.abs(fovError);
         float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1f)));
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float) fovEasing;
-        float desiredFovSpeed = fovError * adaptiveFovEasing;
+        double fovBlend = FrameRateUtil.perTickBlend(adaptiveFovEasing, deltaSeconds);
+        float desiredFovSpeed = (float) (fovError * fovBlend);
 
         float maxFovChange = (float) (fovSpeedLimit * deltaSeconds);
         if (Math.abs(desiredFovSpeed) > maxFovChange) desiredFovSpeed = Math.signum(desiredFovSpeed) * maxFovChange;

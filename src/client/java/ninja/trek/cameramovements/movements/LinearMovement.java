@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
-import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.util.FrameRateUtil;
  
 
 @CameraMovementType(
@@ -126,7 +126,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         double maxMove = positionSpeedLimit * (deltaSeconds);
         Vec3 move;
         if (deltaLength > 0) {
-            move = delta.scale(positionEasing);
+            double positionBlend = FrameRateUtil.perTickBlend(positionEasing, deltaSeconds);
+            move = delta.scale(positionBlend);
             if (move.length() > maxMove) {
                 move = move.normalize().scale(maxMove);
             }
@@ -168,8 +169,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         while (yawError > 180) yawError -= 360;
         while (yawError < -180) yawError += 360;
 
-        float desiredYawSpeed = (float)(yawError * rotationEasing);
-        float desiredPitchSpeed = (float)(pitchError * rotationEasing);
+        double rotationBlend = FrameRateUtil.perTickBlend(rotationEasing, deltaSeconds);
+        float desiredYawSpeed = (float)(yawError * rotationBlend);
+        float desiredPitchSpeed = (float)(pitchError * rotationBlend);
 
         // Suppress only tiny direction reversals near the target. Using player
         // movement as a gate caused a periodic stall because it was sampled at
@@ -212,7 +214,8 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         float absFovError = Math.abs(fovError);
         float adaptiveFovEasing = (float) (fovEasing * (0.5 + 0.5 * (absFovError / 0.1)));
         if (adaptiveFovEasing > fovEasing) adaptiveFovEasing = (float)fovEasing;
-        float desiredFovSpeed = fovError * adaptiveFovEasing;
+        double fovBlend = FrameRateUtil.perTickBlend(adaptiveFovEasing, deltaSeconds);
+        float desiredFovSpeed = (float) (fovError * fovBlend);
 
         // Apply speed limits
         float maxRotation = (float)(rotationSpeedLimit * (deltaSeconds));
@@ -229,9 +232,7 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         // No per-frame logs
 
         // Update FOV visibly
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier((float) current.getFovMultiplier());
 
         // Update alpha based on distance progress
         double remaining = current.getPosition().distanceTo(b.getPosition());

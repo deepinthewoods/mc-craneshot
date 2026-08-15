@@ -1304,6 +1304,13 @@ public class MenuOverlayScreen extends Screen {
             return true;
         }
 
+        // Key mappings are not queued through consumeClick while a screen owns
+        // keyboard input, so handle the menu binding directly here as well.
+        if (CraneshotClient.toggleMenuKey != null && CraneshotClient.toggleMenuKey.matches(input)) {
+            onClose();
+            return true;
+        }
+
         return super.keyPressed(input);
     }
 
@@ -1324,7 +1331,7 @@ public class MenuOverlayScreen extends Screen {
 
     public void toggleMenu() {
         Minecraft client = Minecraft.getInstance();
-        if (isMenuOpen) {
+        if (client.gui.screen() == this) {
             onClose();
         } else {
             client.gui.setScreen(this);

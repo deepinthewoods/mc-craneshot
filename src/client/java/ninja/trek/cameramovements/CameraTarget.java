@@ -1,10 +1,9 @@
 package ninja.trek.cameramovements;
 
 import net.minecraft.client.Camera;
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
-import ninja.trek.mixin.client.FovAccessor;
+import ninja.trek.camera.CameraSystem;
 
 public class CameraTarget {
     private Vec3 position;
@@ -40,12 +39,7 @@ public class CameraTarget {
     }
 
     public static CameraTarget fromCamera(Camera camera) {
-        Minecraft client = Minecraft.getInstance();
-        float currentFovMultiplier = 1.0f;
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            currentFovMultiplier = ((FovAccessor) client.gameRenderer.mainCamera()).getFovModifier();
-            if (currentFovMultiplier == 0) currentFovMultiplier = 1.0f;
-        }
+        float currentFovMultiplier = CameraSystem.getInstance().getFovMultiplier();
         CameraTarget target = new CameraTarget(camera.position(), camera.yRot(), camera.xRot(), currentFovMultiplier);
         // logging removed
         return target;

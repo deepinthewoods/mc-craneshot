@@ -8,7 +8,6 @@ import ninja.trek.CameraController;
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
 import ninja.trek.config.MovementSettingType;
-import ninja.trek.mixin.client.FovAccessor;
 
 
 @CameraMovementType(
@@ -337,9 +336,7 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         current = new CameraTarget(newPos, newYaw, newPitch, newFov);
 
         // Update FOV in game renderer
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier(current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier(current.getFovMultiplier());
 
         // Calculate distance to player for completion/overshoot checks
         double distanceToPlayer = current.getPosition().distanceTo(playerPos);

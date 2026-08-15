@@ -304,9 +304,9 @@ public class NodeManager {
         Vec3 up = new Vec3(uV.x, uV.y, uV.z);
         Vec3 forward = new Vec3(fV.x, fV.y, fV.z);
 
-        int baseFov = net.minecraft.client.Minecraft.getInstance().options.fov().get();
-        float fovMul = ((ninja.trek.mixin.client.GameRendererFovAccessor) net.minecraft.client.Minecraft.getInstance().gameRenderer.mainCamera()).getFovMultiplier();
-        double fovY = Math.toRadians(Math.max(1.0, baseFov * fovMul));
+        // Use the FOV calculated for this render frame. Reading fovModifier directly
+        // skips tick interpolation and omits Craneshot's composed multiplier.
+        double fovY = Math.toRadians(Math.max(1.0, camera.getFov()));
         double aspect = (double)screenW / (double)screenH;
         double tanHalfY = Math.tan(fovY * 0.5);
         double tanHalfX = tanHalfY * aspect;

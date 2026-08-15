@@ -8,7 +8,6 @@ import ninja.trek.CraneshotClient;
  
 import ninja.trek.cameramovements.*;
 import ninja.trek.config.MovementSetting;
-import ninja.trek.mixin.client.FovAccessor;
 
 @CameraMovementType(
         name = "FreeCamReturn",
@@ -107,9 +106,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         );
 
         // Drive visible FOV
-        if (client.gameRenderer.mainCamera() instanceof FovAccessor) {
-            ((FovAccessor) client.gameRenderer.mainCamera()).setFovModifier((float) current.getFovMultiplier());
-        }
+        ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier((float) current.getFovMultiplier());
 
         double posRemaining = current.getPosition().distanceTo(end.getPosition());
         boolean positionComplete = posRemaining < 0.005 && positionVelocity.length() < 0.05;

@@ -10,6 +10,7 @@ import ninja.trek.CameraController;
 import ninja.trek.CraneshotClient;
 import ninja.trek.cameramovements.AbstractMovementSettings;
 import ninja.trek.mixin.client.CameraAccessor;
+import ninja.trek.util.FrameRateUtil;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -48,6 +49,7 @@ public class CameraSystem {
     private Vec3 cameraPosition = Vec3.ZERO;
     private float cameraYaw = 0f;
     private float cameraPitch = 0f;
+    private float fovMultiplier = 1.0f;
     private boolean disableChunkCulling = false;
     private Entity originalCameraEntity = null;
     private boolean originalChunkCulling = true;
@@ -191,9 +193,6 @@ public class CameraSystem {
                 mc.setCameraEntity(mc.player);
             }
             mc.smartCull = originalChunkCulling;
-            if (mc.gameRenderer.mainCamera() instanceof ninja.trek.mixin.client.FovAccessor) {
-                ((ninja.trek.mixin.client.FovAccessor) mc.gameRenderer.mainCamera()).setFovModifier(1.0f);
-            }
         }
 
         // Restore original CameraType (perspective) before resetting state
@@ -207,6 +206,7 @@ public class CameraSystem {
 
         // Reset all camera state
         cameraActive = false;
+        fovMultiplier = 1.0f;
         cameraVelocity = Vec3.ZERO;
         disableChunkCulling = false;
         originalCameraEntity = null;
@@ -233,10 +233,25 @@ public class CameraSystem {
     }
 
     /**
+     * Sets Craneshot's FOV multiplier without modifying Minecraft's own
+     * tick-smoothed sprint/effect FOV state.
+     */
+    public void setFovMultiplier(float multiplier) {
+        if (!Float.isFinite(multiplier)) {
+            multiplier = 1.0f;
+        }
+        fovMultiplier = Mth.clamp(multiplier, 0.1f, 3.0f);
+    }
+
+    public float getFovMultiplier() {
+        return fovMultiplier;
+    }
+
+    /**
      * Handles keyboard movement input for the camera.
      * @return true if any movement occurred.
      */
-    public boolean handleMovementInput(float baseSpeed, float acceleration, float deceleration) {
+    public boolean handleMovementInput(float baseSpeed, float acceleration, float deceleration, float deltaSeconds) {
         if (!cameraActive) return false;
 
         Minecraft mc = Minecraft.getInstance();
@@ -244,12 +259,15 @@ public class CameraSystem {
 
         Vec3 targetVelocity = calculateTargetVelocity(mc, baseSpeed);
         boolean isMoved = false;
+        double tickScale = FrameRateUtil.tickScale(deltaSeconds);
 
         if (targetVelocity.lengthSqr() > 0.0001) {
-            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).scale(acceleration));
+            double accelerationBlend = FrameRateUtil.perTickBlend(acceleration, deltaSeconds);
+            cameraVelocity = cameraVelocity.add(targetVelocity.subtract(cameraVelocity).scale(accelerationBlend));
             isMoved = true;
         } else {
-            cameraVelocity = cameraVelocity.scale(1.0 - deceleration);
+            double decelerationRetention = 1.0 - FrameRateUtil.perTickBlend(deceleration, deltaSeconds);
+            cameraVelocity = cameraVelocity.scale(decelerationRetention);
             if (cameraVelocity.lengthSqr() < 0.0001) {
                 cameraVelocity = Vec3.ZERO;
             } else {
@@ -257,7 +275,7 @@ public class CameraSystem {
             }
         }
 
-        cameraPosition = cameraPosition.add(cameraVelocity);
+        cameraPosition = cameraPosition.add(cameraVelocity.scale(tickScale));
 
         Camera camera = mc.gameRenderer.mainCamera();
         if (camera != null) {
@@ -342,7 +360,7 @@ public class CameraSystem {
         if (!cameraActive) return;
 
         ninja.trek.config.FreeCamSettings settings = ninja.trek.config.GeneralMenuSettings.getFreeCamSettings();
-        float easingFactor = settings.getRotationEasing();
+        float easingFactor = (float) FrameRateUtil.perTickBlend(settings.getRotationEasing(), deltaSeconds);
         float speedLimit = settings.getRotationSpeedLimit();
 
         // Ease yaw toward target
