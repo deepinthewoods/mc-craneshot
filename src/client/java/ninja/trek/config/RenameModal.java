@@ -59,11 +59,6 @@ public class RenameModal extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
-        if (parent != null) {
-           // parent.render(context, mouseX, mouseY, delta);
-        }
-        super.extractRenderState(context, mouseX, mouseY, delta);
-
         int centerX = width / 2;
         int centerY = height / 2;
         int modalLeft = centerX - MODAL_WIDTH / 2;
@@ -76,6 +71,8 @@ public class RenameModal extends Screen {
         // Draw title
         context.centeredText(font, "Rename Movement", centerX, modalTop + 10, 0xFFFFFF);
 
+        // Extract widgets after the panel so the text field and buttons render on top.
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override

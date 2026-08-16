@@ -260,7 +260,13 @@ public class CameraMovementManager {
         ICameraMovement movement = getMovementAt(slotIndex);
         if (movement == null) return;
 
-        if (activeMovementSlot != null && activeMovementSlot.equals(slotIndex)) {
+        boolean sameSlot = activeMovementSlot != null && activeMovementSlot.equals(slotIndex);
+        boolean switchingMovement = sameSlot && activeMovement != null && activeMovement != movement;
+
+        // Re-pressing the same movement keeps the existing resume/return behavior.
+        // A scroll selection in the same slot is a different movement and must fall
+        // through so its out phase starts directly from the live camera transform.
+        if (sameSlot && !switchingMovement) {
             if (!resumeOutPhaseIfReturning(client, camera)) {
                 finishTransition(client, camera);
             }
@@ -276,11 +282,13 @@ public class CameraMovementManager {
 
         activeMovementSlot = slotIndex;
         activeMovement = movement;
+        inFreeCamReturnPhase = false;
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
 
         // If camera is very far from player, snap it first to prevent long travel
         // BUT don't snap for FreeCamReturnMovement - that's designed to return from far away
-        if (!(movement instanceof FreeCamReturnMovement)) {
+        // Also preserve the live pose during same-slot movement handoffs.
+        if (!switchingMovement && !(movement instanceof FreeCamReturnMovement)) {
             snapCameraIfFarFromPlayer(client, camera);
         }
 
@@ -513,11 +521,13 @@ public class CameraMovementManager {
                     finishTransition(client, camera);
                 }
 
-                if (!isToggleMode || (isToggleMode && !toggledStates.getOrDefault(keyIndex, false))) {
-                    // Determine which movement to use
-                    int selectedType = scrollSelectedTypes.get(keyIndex);
-                    boolean hasScrolled = hasScrolledDuringPress.getOrDefault(keyIndex, false);
+                int selectedType = scrollSelectedTypes.get(keyIndex);
+                boolean hasScrolled = hasScrolledDuringPress.getOrDefault(keyIndex, false);
+                boolean shouldStartSelection = hasScrolled
+                        || !isToggleMode
+                        || !toggledStates.getOrDefault(keyIndex, false);
 
+                if (shouldStartSelection) {
                     if (!hasScrolled && GeneralMenuSettings.isAutoAdvance()) {
                         // Auto advance to next movement if no scrolling occurred
                         List<ICameraMovement> movements = slots.get(keyIndex);
@@ -531,7 +541,7 @@ public class CameraMovementManager {
                     if (isToggleMode) {
                         toggledStates.put(keyIndex, true);
                     }
-                } else if (isToggleMode && toggledStates.getOrDefault(keyIndex, false)) {
+                } else {
                     toggledStates.put(keyIndex, false);
                     finishTransition(client, camera);
                 }
