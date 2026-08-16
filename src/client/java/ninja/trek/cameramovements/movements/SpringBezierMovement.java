@@ -93,6 +93,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
     @Override
     public void start(Minecraft client, Camera camera) {
+        resetReturnTargetTracking();
         start = CameraTarget.fromCamera(camera);
         current = CameraTarget.fromCamera(camera);
 
@@ -326,6 +327,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             }
 
             targetFov = 1.0f;
+            end = new CameraTarget(playerPos, playerYaw, playerPitch + pitchOffset, targetFov);
 
         } else {
             // Out phase: advance curve progress and spring toward the curve point
@@ -346,15 +348,49 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             end = new CameraTarget(curveEnd, targetYaw, targetPitch, targetFov);
         }
 
+        // Inside one block, progressively shorten the spring halflife and blend
+        // toward the player's velocity. A zero-velocity spring can otherwise
+        // settle into a permanent trailing distance behind a moving player.
+        double distanceBeforeSpring = current.getPosition().distanceTo(
+                resetting ? playerPos : targetPos
+        );
+        double closeRangeBoost = resetting ? getCloseRangeReturnBoost(distanceBeforeSpring) : 0.0;
+        double convergenceProgress = resetting
+                ? updateGuaranteedCloseRangeReturn(distanceBeforeSpring, deltaSeconds)
+                : 0.0;
+        double velocityMatchBlend = Math.max(closeRangeBoost, convergenceProgress);
+        double effectivePositionHalflife = resetting
+                ? getGuaranteedCloseRangeReturnHalflife(
+                        positionHalflife, distanceBeforeSpring, convergenceProgress
+                )
+                : positionHalflife;
+        double effectiveRotationHalflife = resetting
+                ? getGuaranteedCloseRangeReturnHalflife(
+                        rotationHalflife, distanceBeforeSpring, convergenceProgress
+                )
+                : rotationHalflife;
+        double effectiveFovHalflife = resetting
+                ? getGuaranteedCloseRangeReturnHalflife(
+                        fovHalflife, distanceBeforeSpring, convergenceProgress
+                )
+                : fovHalflife;
+        Vec3 effectiveTargetVelocity = targetVelocity.lerp(playerVelocity, velocityMatchBlend);
+        float effectiveTargetYawVel = (float) (
+                targetYawVel + (playerYawVelocity - targetYawVel) * velocityMatchBlend
+        );
+        float effectiveTargetPitchVel = (float) (
+                targetPitchVel + (playerPitchVelocity - targetPitchVel) * velocityMatchBlend
+        );
+
         // Apply spring for position
         Vec3 newPos;
-        if (resetting && returnMode == ReturnMode.VELOCITY_MATCH) {
+        if (resetting && (returnMode == ReturnMode.VELOCITY_MATCH || velocityMatchBlend > 0.0)) {
             newPos = springDamperVelocityMatch(
                 current.getPosition(),
                 positionVelocity,
                 targetPos,
-                targetVelocity,
-                positionHalflife,
+                effectiveTargetVelocity,
+                effectivePositionHalflife,
                 deltaSeconds
             );
         } else {
@@ -362,30 +398,30 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
                 current.getPosition(),
                 positionVelocity,
                 targetPos,
-                positionHalflife,
+                effectivePositionHalflife,
                 deltaSeconds
             );
         }
 
         // Apply springs for rotation
         float newYaw, newPitch;
-        if (resetting && returnMode == ReturnMode.VELOCITY_MATCH) {
-            newYaw = springDamperVelocityMatch1D(current.getYaw(), yawVelocity, targetYaw, targetYawVel, rotationHalflife, deltaSeconds, true);
-            yawVelocity = springVelocityUpdate1DVelMatch(yawVelocity, current.getYaw(), targetYaw, targetYawVel, rotationHalflife, deltaSeconds, true);
+        if (resetting && (returnMode == ReturnMode.VELOCITY_MATCH || velocityMatchBlend > 0.0)) {
+            newYaw = springDamperVelocityMatch1D(current.getYaw(), yawVelocity, targetYaw, effectiveTargetYawVel, effectiveRotationHalflife, deltaSeconds, true);
+            yawVelocity = springVelocityUpdate1DVelMatch(yawVelocity, current.getYaw(), targetYaw, effectiveTargetYawVel, effectiveRotationHalflife, deltaSeconds, true);
 
-            newPitch = springDamperVelocityMatch1D(current.getPitch(), pitchVelocity, targetPitch, targetPitchVel, rotationHalflife, deltaSeconds, false);
-            pitchVelocity = springVelocityUpdate1DVelMatch(pitchVelocity, current.getPitch(), targetPitch, targetPitchVel, rotationHalflife, deltaSeconds, false);
+            newPitch = springDamperVelocityMatch1D(current.getPitch(), pitchVelocity, targetPitch, effectiveTargetPitchVel, effectiveRotationHalflife, deltaSeconds, false);
+            pitchVelocity = springVelocityUpdate1DVelMatch(pitchVelocity, current.getPitch(), targetPitch, effectiveTargetPitchVel, effectiveRotationHalflife, deltaSeconds, false);
         } else {
-            newYaw = springDamperExact1D(current.getYaw(), yawVelocity, targetYaw, rotationHalflife, deltaSeconds, true);
-            yawVelocity = springVelocityUpdate1D(yawVelocity, current.getYaw(), targetYaw, rotationHalflife, deltaSeconds, true);
+            newYaw = springDamperExact1D(current.getYaw(), yawVelocity, targetYaw, effectiveRotationHalflife, deltaSeconds, true);
+            yawVelocity = springVelocityUpdate1D(yawVelocity, current.getYaw(), targetYaw, effectiveRotationHalflife, deltaSeconds, true);
 
-            newPitch = springDamperExact1D(current.getPitch(), pitchVelocity, targetPitch, rotationHalflife, deltaSeconds, false);
-            pitchVelocity = springVelocityUpdate1D(pitchVelocity, current.getPitch(), targetPitch, rotationHalflife, deltaSeconds, false);
+            newPitch = springDamperExact1D(current.getPitch(), pitchVelocity, targetPitch, effectiveRotationHalflife, deltaSeconds, false);
+            pitchVelocity = springVelocityUpdate1D(pitchVelocity, current.getPitch(), targetPitch, effectiveRotationHalflife, deltaSeconds, false);
         }
 
         // Apply spring for FOV
-        float newFov = springDamperExact1D(current.getFovMultiplier(), fovVelocity, targetFov, fovHalflife, deltaSeconds, false);
-        fovVelocity = springVelocityUpdate1D(fovVelocity, current.getFovMultiplier(), targetFov, fovHalflife, deltaSeconds, false);
+        float newFov = springDamperExact1D(current.getFovMultiplier(), fovVelocity, targetFov, effectiveFovHalflife, deltaSeconds, false);
+        fovVelocity = springVelocityUpdate1D(fovVelocity, current.getFovMultiplier(), targetFov, effectiveFovHalflife, deltaSeconds, false);
 
         current = new CameraTarget(newPos, newYaw, newPitch, newFov);
 
@@ -397,9 +433,10 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         // Overshoot detection during return phase
         // If distance is increasing and we're close, we've passed the player - clamp and complete
         boolean overshot = false;
-        if (resetting && distanceToPlayer > lastDistanceToPlayer && lastDistanceToPlayer < 2.0) {
+        if (resetting && !isGuaranteedCloseRangeReturnActive()
+                && distanceToPlayer > lastDistanceToPlayer && lastDistanceToPlayer < 2.0) {
             // We overshot - snap to player position
-            current = new CameraTarget(playerPos, playerYaw, playerPitch, 1.0f);
+            current = new CameraTarget(playerPos, playerYaw, playerPitch + pitchOffset, 1.0f);
             positionVelocity = playerVelocity; // Match player velocity on completion
             overshot = true;
         }
@@ -413,9 +450,13 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         }
 
         // Completion check - use actual player position, or overshot
-        boolean complete = overshot || (resetting &&
-            distanceToPlayer < 0.05 &&
-            Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f);
+        boolean complete = resetting
+                && (isGuaranteedCloseRangeReturnComplete() || overshot);
+
+        if (complete && !overshot) {
+            current = new CameraTarget(playerPos, playerYaw, playerPitch + pitchOffset, 1.0f);
+            positionVelocity = playerVelocity;
+        }
 
         return new MovementState(current, complete);
     }
@@ -505,12 +546,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
     @Override
     public boolean isComplete() {
-        if (resetting) {
-            double positionDistance = current.getPosition().distanceTo(end.getPosition());
-            float fovDifference = Math.abs(current.getFovMultiplier() - 1.0f);
-            return positionDistance < 0.05 && fovDifference < 0.01f;
-        }
-        return false;
+        return resetting && isGuaranteedCloseRangeReturnComplete();
     }
 
     @Override

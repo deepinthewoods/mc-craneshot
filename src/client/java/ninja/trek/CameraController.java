@@ -41,6 +41,7 @@ public class CameraController {
     private static boolean hasSavedSneakKeyState = false;
     private static boolean suppressSneakUntilRelease = false;
     private static boolean restoreSneakAfterRelease = false;
+    private AbstractMovementSettings armedFreeMovementSettings = null;
 
     /**
      * Check if a key is physically held down, ignoring toggle/hold settings.
@@ -288,9 +289,60 @@ public class CameraController {
         CameraSystem.getInstance().setFovMultiplier(1.0f);
     }
 
+    /**
+     * Reserves player movement input while a movement with keyboard freecam is
+     * travelling out. The first camera movement key can then take over from the
+     * camera's current position instead of moving the player.
+     */
+    public void armFreeMovementInput(AbstractMovementSettings settings) {
+        POST_MOVE_KEYS keyMode = settings.getPostMoveKeys();
+        if (keyMode != POST_MOVE_KEYS.MOVE_CAMERA_FLAT &&
+                keyMode != POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
+            armedFreeMovementSettings = null;
+            return;
+        }
+
+        armedFreeMovementSettings = settings;
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null && client.player.input instanceof IKeyboardInputMixin input) {
+            input.setDisabled(true);
+        }
+    }
+
+    public boolean isFreeMovementInputArmed() {
+        return armedFreeMovementSettings != null;
+    }
+
+    /**
+     * Activates an armed keyboard freecam as soon as a movement key is held.
+     * Returns true when ownership changed on this frame.
+     */
+    public boolean activateArmedFreeMovementIfRequested(Minecraft client, Camera camera) {
+        if (armedFreeMovementSettings == null || !hasFreeMovementKeyDown(client)) {
+            return false;
+        }
+
+        AbstractMovementSettings settings = armedFreeMovementSettings;
+        freeCamPosition = camera.position();
+        freeCamYaw = camera.yRot();
+        freeCamPitch = camera.xRot();
+        setPostMoveStates(settings);
+        return true;
+    }
+
+    private boolean hasFreeMovementKeyDown(Minecraft client) {
+        return client.options.keyUp.isDown()
+                || client.options.keyDown.isDown()
+                || client.options.keyLeft.isDown()
+                || client.options.keyRight.isDown()
+                || client.options.keyJump.isDown()
+                || isKeyPhysicallyHeld(client, client.options.keyShift);
+    }
+
     public void setPostMoveStates(AbstractMovementSettings m) {
         // If node edit is active, ignore requests to clear post-move state so freecam persists
         if (m == null) {
+            armedFreeMovementSettings = null;
             // Reset state when movement ends
             currentKeyMoveMode = POST_MOVE_KEYS.NONE;
             currentMouseMoveMode = POST_MOVE_MOUSE.NONE;
@@ -332,6 +384,7 @@ public class CameraController {
             boolean wasActive = cs.isCameraActive();
             
         } else {
+            armedFreeMovementSettings = null;
             // Set new movement modes
             currentMouseMoveMode = m.getPostMoveMouse();
             currentKeyMoveMode = m.getPostMoveKeys();
@@ -884,10 +937,12 @@ public class CameraController {
             // Do NOT blanket-disable just because the camera system is active; Bezier out-phase needs player input.
             boolean shouldDisable = currentKeyMoveMode == POST_MOVE_KEYS.MOVE8 ||
                                    currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                                   currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+                                   currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                                   armedFreeMovementSettings != null;
 
             boolean cameraUsesSneak = currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-                                      currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE;
+                                      currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE ||
+                                      armedFreeMovementSettings != null;
             if (cameraUsesSneak) {
                 suppressSneakUntilRelease = isKeyPhysicallyHeld(client, client.options.keyShift);
                 client.options.keyShift.setDown(false);

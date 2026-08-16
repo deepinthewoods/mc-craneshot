@@ -266,9 +266,13 @@ public abstract class AbstractMovementSettings {
     }
 
     protected Vec3 lastReturnTargetPos = null;
+    private double guaranteedReturnElapsed = -1.0;
+    private boolean guaranteedReturnComplete = false;
 
     protected void resetReturnTargetTracking() {
         lastReturnTargetPos = null;
+        guaranteedReturnElapsed = -1.0;
+        guaranteedReturnComplete = false;
     }
 
 
@@ -393,6 +397,66 @@ public abstract class AbstractMovementSettings {
                 return null;
             }
         }
+    }
+
+    /**
+     * Returns a 0..1 boost that begins when a returning camera is one block
+     * from its target and reaches full strength at the target.
+     */
+    protected double getCloseRangeReturnBoost(double distanceToTarget) {
+        return 1.0 - Math.max(0.0, Math.min(1.0, distanceToTarget));
+    }
+
+    /**
+     * Shorten a return spring's halflife near the player so it converges instead
+     * of settling into a persistent trailing distance behind a moving target.
+     */
+    protected double getCloseRangeReturnHalflife(double configuredHalflife, double distanceToTarget) {
+        double boost = getCloseRangeReturnBoost(distanceToTarget);
+        return Math.max(0.01, configuredHalflife * (1.0 - 0.8 * boost));
+    }
+
+    /**
+     * Starts a one-second close-range convergence phase after the spring enters
+     * the final block. The returned progress is stable even if the moving target
+     * temporarily pulls outside that block again.
+     */
+    protected double updateGuaranteedCloseRangeReturn(double distanceToTarget, float deltaSeconds) {
+        if (guaranteedReturnElapsed < 0.0) {
+            if (distanceToTarget > 1.0) {
+                return 0.0;
+            }
+            guaranteedReturnElapsed = 0.0;
+        }
+
+        if (Float.isFinite(deltaSeconds)) {
+            guaranteedReturnElapsed += Math.max(0.0, deltaSeconds);
+        }
+        double progress = Math.min(1.0, guaranteedReturnElapsed);
+        guaranteedReturnComplete = progress >= 1.0;
+        return progress;
+    }
+
+    /**
+     * Tightens the real spring throughout the final second instead of replacing
+     * it with a separate interpolation. This preserves momentum and makes the
+     * remaining positional error negligible before the handoff to vanilla.
+     */
+    protected double getGuaranteedCloseRangeReturnHalflife(
+            double configuredHalflife,
+            double distanceToTarget,
+            double convergenceProgress) {
+        double distanceHalflife = getCloseRangeReturnHalflife(configuredHalflife, distanceToTarget);
+        double timedHalflife = configuredHalflife * Math.pow(0.02, convergenceProgress);
+        return Math.max(0.001, Math.min(distanceHalflife, timedHalflife));
+    }
+
+    protected boolean isGuaranteedCloseRangeReturnComplete() {
+        return guaranteedReturnComplete;
+    }
+
+    protected boolean isGuaranteedCloseRangeReturnActive() {
+        return guaranteedReturnElapsed >= 0.0;
     }
 
     protected Vec3 applyMinimumSpeedDuringReturn(

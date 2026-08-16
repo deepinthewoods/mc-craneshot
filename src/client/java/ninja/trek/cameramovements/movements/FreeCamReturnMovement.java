@@ -16,6 +16,7 @@ import ninja.trek.config.MovementSetting;
 )
 public class FreeCamReturnMovement extends AbstractMovementSettings implements ICameraMovement {
     private static final double MAX_RETURN_TARGET_DISTANCE = 256.0;
+    private static final double MAX_TRACKED_TARGET_SPEED = 100.0;
 
     @MovementSetting(label = "Position Halflife", min = 0.01, max = 1.0)
     private double positionHalflife = 0.15;
@@ -34,6 +35,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
     private float yawVelocity = 0.0f;
     private float pitchVelocity = 0.0f;
     private float fovVelocity = 0.0f;
+    private Vec3 lastTargetPosition = null;
 
     private boolean isComplete = false;
 
@@ -56,6 +58,7 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
 
         // Initial end target (will be updated every frame)
         end = resolveReturnTarget(client, 1.0f);
+        lastTargetPosition = end.getPosition();
         // No startup log
 
         positionVelocity = Vec3.ZERO;
@@ -76,8 +79,29 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         end = resolveReturnTarget(client, tickDelta);
 
         double dt = Math.max(0.0, Math.min(deltaSeconds, 0.25f));
+        Vec3 targetVelocity = calculateTargetVelocity(end.getPosition(), dt);
+        double distanceBeforeSpring = current.getPosition().distanceTo(end.getPosition());
+        double closeRangeBoost = getCloseRangeReturnBoost(distanceBeforeSpring);
+        double convergenceProgress = updateGuaranteedCloseRangeReturn(
+                distanceBeforeSpring, deltaSeconds
+        );
+        double velocityMatchBlend = Math.max(closeRangeBoost, convergenceProgress);
+        double effectivePositionHalflife = getGuaranteedCloseRangeReturnHalflife(
+                positionHalflife, distanceBeforeSpring, convergenceProgress
+        );
+        double effectiveRotationHalflife = getGuaranteedCloseRangeReturnHalflife(
+                rotationHalflife, distanceBeforeSpring, convergenceProgress
+        );
+        double effectiveFovHalflife = getGuaranteedCloseRangeReturnHalflife(
+                fovHalflife, distanceBeforeSpring, convergenceProgress
+        );
         Vec3 desiredPos = springPosition(
-                current.getPosition(), positionVelocity, end.getPosition(), positionHalflife, dt
+                current.getPosition(),
+                positionVelocity,
+                end.getPosition(),
+                targetVelocity.scale(velocityMatchBlend),
+                effectivePositionHalflife,
+                dt
         );
 
         desiredPos = applyMinimumSpeedDuringReturn(
@@ -89,13 +113,13 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         );
 
         SpringValue yawSpring = springValue(
-                current.getYaw(), yawVelocity, end.getYaw(), rotationHalflife, dt, true
+                current.getYaw(), yawVelocity, end.getYaw(), effectiveRotationHalflife, dt, true
         );
         SpringValue pitchSpring = springValue(
-                current.getPitch(), pitchVelocity, end.getPitch(), rotationHalflife, dt, false
+                current.getPitch(), pitchVelocity, end.getPitch(), effectiveRotationHalflife, dt, false
         );
         SpringValue fovSpring = springValue(
-                current.getFovMultiplier(), fovVelocity, 1.0f, fovHalflife, dt, false
+                current.getFovMultiplier(), fovVelocity, 1.0f, effectiveFovHalflife, dt, false
         );
         yawVelocity = yawSpring.velocity();
         pitchVelocity = pitchSpring.velocity();
@@ -108,25 +132,50 @@ public class FreeCamReturnMovement extends AbstractMovementSettings implements I
         // Drive visible FOV
         ninja.trek.camera.CameraSystem.getInstance().setFovMultiplier((float) current.getFovMultiplier());
 
-        double posRemaining = current.getPosition().distanceTo(end.getPosition());
-        boolean positionComplete = posRemaining < 0.005 && positionVelocity.length() < 0.05;
-        boolean rotationComplete = Math.abs(angleDifference(current.getYaw(), end.getYaw())) < 0.1f
-                && Math.abs(current.getPitch() - end.getPitch()) < 0.1f
-                && Math.abs(yawVelocity) < 0.1f
-                && Math.abs(pitchVelocity) < 0.1f;
-        boolean fovComplete = Math.abs(current.getFovMultiplier() - 1.0f) < 0.01f;
-        isComplete = positionComplete && rotationComplete && fovComplete;
+        isComplete = isGuaranteedCloseRangeReturnComplete();
+        if (isComplete) {
+            // Finish on the live target pose. Requiring the camera's absolute
+            // spring velocity to reach zero can never complete while the player
+            // is moving, even after the camera has caught them.
+            current = new CameraTarget(
+                    end.getPosition(), end.getYaw(), end.getPitch(), 1.0f
+            );
+            positionVelocity = targetVelocity;
+            yawVelocity = 0.0f;
+            pitchVelocity = 0.0f;
+            fovVelocity = 0.0f;
+        }
         return new MovementState(current, isComplete);
     }
 
-    private Vec3 springPosition(Vec3 position, Vec3 velocity, Vec3 target, double halflife, double dt) {
+    private Vec3 springPosition(Vec3 position, Vec3 velocity, Vec3 target, Vec3 targetVelocity,
+                                double halflife, double dt) {
         double damping = (4.0 * Math.log(2.0)) / Math.max(halflife, 0.001);
         double y = damping / 2.0;
         double decay = Math.exp(-y * dt);
         Vec3 offset = position.subtract(target);
-        Vec3 impulse = velocity.add(offset.scale(y));
-        positionVelocity = velocity.subtract(impulse.scale(y * dt)).scale(decay);
+        Vec3 relativeVelocity = velocity.subtract(targetVelocity);
+        Vec3 impulse = relativeVelocity.add(offset.scale(y));
+        positionVelocity = relativeVelocity.subtract(impulse.scale(y * dt)).scale(decay).add(targetVelocity);
         return offset.add(impulse.scale(dt)).scale(decay).add(target);
+    }
+
+    private Vec3 calculateTargetVelocity(Vec3 targetPosition, double dt) {
+        if (lastTargetPosition == null || dt <= 1.0e-6) {
+            lastTargetPosition = targetPosition;
+            return Vec3.ZERO;
+        }
+
+        Vec3 velocity = targetPosition.subtract(lastTargetPosition).scale(1.0 / dt);
+        lastTargetPosition = targetPosition;
+        double speed = velocity.length();
+        if (!Double.isFinite(speed)) {
+            return Vec3.ZERO;
+        }
+        if (speed > MAX_TRACKED_TARGET_SPEED) {
+            return velocity.scale(MAX_TRACKED_TARGET_SPEED / speed);
+        }
+        return velocity;
     }
 
     private SpringValue springValue(float position, float velocity, float target,

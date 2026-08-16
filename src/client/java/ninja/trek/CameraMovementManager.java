@@ -27,6 +27,7 @@ public class CameraMovementManager {
     private ICameraMovement activeMovement;
     private CameraTarget baseTarget;
     private boolean isOut;
+    private boolean manualFreeMovementActive;
 
     // For handling free camera return
     private boolean inFreeCamReturnPhase = false;
@@ -127,6 +128,7 @@ public class CameraMovementManager {
         activeMovementSlot = null;
         inFreeCamReturnPhase = false;
         isOut = false;
+        manualFreeMovementActive = false;
         baseTarget = null;
 
         // Deactivate camera system when cancelling movements
@@ -266,6 +268,7 @@ public class CameraMovementManager {
         }
 
         isOut = false;
+        manualFreeMovementActive = false;
         if (activeMovementSlot != null && !activeMovementSlot.equals(slotIndex)) {
             toggledStates.put(activeMovementSlot, false);
             finishTransition(client, camera);
@@ -289,14 +292,8 @@ public class CameraMovementManager {
             ninja.trek.camera.CameraSystem.getInstance().activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
         }
 
-        // Immediately disable player movement if post-move keys will use camera movement modes
         AbstractMovementSettings startSettings = (AbstractMovementSettings) movement;
-        if (startSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-            startSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
-            }
-        }
+        CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(startSettings);
 
         // Show the toast when starting a new movement
         MovementToastRenderer.showToast(slotIndex);
@@ -309,6 +306,8 @@ public class CameraMovementManager {
             if (follow.isResetting()) {
                 follow.resumeOutPhase(client, camera);
                 isOut = false;
+                manualFreeMovementActive = false;
+                CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(follow);
             }
             return;
         }
@@ -321,6 +320,7 @@ public class CameraMovementManager {
         activeMovement = follow;
         inFreeCamReturnPhase = false;
         isOut = false;
+        manualFreeMovementActive = false;
 
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         follow.start(client, camera);
@@ -331,24 +331,22 @@ public class CameraMovementManager {
             ninja.trek.camera.CameraSystem.getInstance().activateCamera(ninja.trek.camera.CameraSystem.CameraMode.THIRD_PERSON);
         }
 
-        // Immediately disable player movement if post-move keys will use camera movement modes
-        if (follow.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-            follow.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
-            }
-        }
+        CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(follow);
     }
 
     private boolean resumeOutPhaseIfReturning(Minecraft client, Camera camera) {
         if (activeMovement instanceof LinearMovement linear && linear.isResetting()) {
             linear.resumeOutPhase(client, camera);
             isOut = false;
+            manualFreeMovementActive = false;
+            CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(linear);
             return true;
         }
         if (activeMovement instanceof BezierMovement bezier && bezier.isResetting()) {
             bezier.resumeOutPhase(client, camera);
             isOut = false;
+            manualFreeMovementActive = false;
+            CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(bezier);
             return true;
         }
         return false;
@@ -379,6 +377,9 @@ public class CameraMovementManager {
 
     public void finishTransition(Minecraft client, Camera camera) {
         if (activeMovement != null) {
+            boolean freeMovementInputArmed = CraneshotClient.CAMERA_CONTROLLER.isFreeMovementInputArmed();
+            manualFreeMovementActive = false;
+
             // Check if we're in free camera mode before initiating return
             boolean inFreeCameraMode = 
                 CraneshotClient.CAMERA_CONTROLLER.currentKeyMoveMode == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
@@ -447,6 +448,8 @@ public class CameraMovementManager {
             // Ensure we exit free camera modes so the movement can drive the return
             if (inFreeCameraMode) {
                 persistSavedPoseIfEnabled(activeMovement, client);
+            }
+            if (inFreeCameraMode || freeMovementInputArmed) {
                 CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
             }
 
@@ -593,6 +596,7 @@ public class CameraMovementManager {
                     activeMovementSlot = null;
                     activeMovement = null;
                     isOut = false;
+                    manualFreeMovementActive = false;
 
                     // Restore default camera behavior
                     CameraSystem cameraSystem = CameraSystem.getInstance();
@@ -614,6 +618,30 @@ public class CameraMovementManager {
             }
         }
         
+        if (!isOut && CraneshotClient.CAMERA_CONTROLLER.activateArmedFreeMovementIfRequested(client, camera)) {
+            manualFreeMovementActive = true;
+            isOut = true;
+        }
+
+        if (manualFreeMovementActive) {
+            CameraSystem cameraSystem = CameraSystem.getInstance();
+            Vec3 position = cameraSystem.isCameraActive()
+                    ? cameraSystem.getCameraPosition()
+                    : CraneshotClient.CAMERA_CONTROLLER.freeCamPosition;
+            float yaw = cameraSystem.isCameraActive()
+                    ? cameraSystem.getCameraYaw()
+                    : CraneshotClient.CAMERA_CONTROLLER.freeCamYaw;
+            float pitch = cameraSystem.isCameraActive()
+                    ? cameraSystem.getCameraPitch()
+                    : CraneshotClient.CAMERA_CONTROLLER.freeCamPitch;
+            float fovMultiplier = baseTarget != null
+                    ? baseTarget.getFovMultiplier()
+                    : cameraSystem.getFovMultiplier();
+            CameraTarget manualTarget = new CameraTarget(position, yaw, pitch, fovMultiplier);
+            baseTarget = manualTarget;
+            return new MovementState(manualTarget, false);
+        }
+
         // Normal movement state calculation
         MovementState state = activeMovement.calculateState(client, camera, tickDelta, deltaSeconds);
         if (!isOut) {
@@ -668,6 +696,7 @@ public class CameraMovementManager {
             // Reset movement tracking variables
             activeMovement = null;
             activeMovementSlot = null;
+            manualFreeMovementActive = false;
             if (previousSlot != null) {
                 toggledStates.put(previousSlot, false);
             }
@@ -741,6 +770,7 @@ public class CameraMovementManager {
                 activeMovement = idle;
                 activeMovementSlot = null;
                 isOut = false;
+                manualFreeMovementActive = false;
 
                 // Activate CameraSystem for rendering control
                 // Use THIRD_PERSON mode (shows player model) since default idle can have varying distance
@@ -851,6 +881,7 @@ public class CameraMovementManager {
         this.activeMovement = movement;
         this.activeMovementSlot = null; // Not associated with any slot
         this.inFreeCamReturnPhase = true;
+        this.manualFreeMovementActive = false;
     }
 
     /**
@@ -869,20 +900,15 @@ public class CameraMovementManager {
         activeMovementSlot = null;
         isOut = false;
         inFreeCamReturnPhase = false;
+        manualFreeMovementActive = false;
 
         CraneshotClient.CAMERA_CONTROLLER.setPostMoveStates(null);
         snapCameraIfFarFromPlayer(client, camera);
         movement.start(client, camera);
         CraneshotClient.CAMERA_CONTROLLER.setPreMoveStates((AbstractMovementSettings) movement);
 
-        // Immediately disable player movement if post-move keys will use camera movement modes
         AbstractMovementSettings followerSettings = (AbstractMovementSettings) movement;
-        if (followerSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
-            followerSettings.getPostMoveKeys() == AbstractMovementSettings.POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
-            if (client.player != null && client.player.input instanceof IKeyboardInputMixin) {
-                ((IKeyboardInputMixin) client.player.input).setDisabled(true);
-            }
-        }
+        CraneshotClient.CAMERA_CONTROLLER.armFreeMovementInput(followerSettings);
     }
 
     /**
