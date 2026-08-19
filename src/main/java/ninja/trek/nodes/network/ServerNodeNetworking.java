@@ -261,6 +261,29 @@ public final class ServerNodeNetworking {
         }
     }
 
+    /** Upsert a server-authoritative integration node and notify tracking clients. */
+    public static void upsertManagedNode(ServerLevel world, CameraNodeDTO incoming) {
+        CameraNodeDTO existing = ServerNodeManager.get().getNode(world, incoming.uuid);
+        ChunkPos newChunk = ServerNodeManager.chunkPosFromNode(incoming);
+        if (existing == null) {
+            ServerNodeManager.get().upsertNode(world, newChunk, incoming);
+            broadcastDeltas(world, List.of(NodeDelta.add(world.dimension(), newChunk, incoming)));
+            return;
+        }
+
+        ChunkPos oldChunk = ServerNodeManager.chunkPosFromNode(existing);
+        if (!oldChunk.equals(newChunk)) {
+            ServerNodeManager.get().removeNode(world, existing.uuid);
+            ServerNodeManager.get().upsertNode(world, newChunk, incoming);
+            broadcastDeltas(world, List.of(
+                    NodeDelta.remove(world.dimension(), oldChunk, existing.uuid),
+                    NodeDelta.add(world.dimension(), newChunk, incoming)));
+        } else {
+            ServerNodeManager.get().upsertNode(world, newChunk, incoming);
+            broadcastDeltas(world, List.of(NodeDelta.update(world.dimension(), newChunk, incoming)));
+        }
+    }
+
     private static void handleFollowerConfigPayload(FollowerConfigPayload payload, ServerPlayNetworking.Context context) {
         ServerPlayer sender = context.player();
         if (!ServerNodeManager.get().isHandshakeComplete(sender)

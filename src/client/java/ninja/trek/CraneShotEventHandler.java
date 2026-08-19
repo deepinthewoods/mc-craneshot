@@ -15,6 +15,7 @@ import ninja.trek.config.FollowerConfig;
 import ninja.trek.config.FollowerMode;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
+import ninja.trek.follower.FollowerCameraDirector;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -344,38 +345,19 @@ public class CraneShotEventHandler {
         // Propagate per-entry zone toggle to the global zone flag
         GeneralMenuSettings.setZonesEnabled(entry.isUseZones());
 
-        ICameraMovement newMovement = entry.getMovement();
-
-        // Detect if the movement type or settings changed
-        if (configChanged && newMovement != null) {
-            String newType = newMovement.getClass().getName();
-            boolean typeChanged = !newType.equals(lastFollowerMovementType);
-
-            if (typeChanged || followerMovementInstance == null) {
-                // Movement type changed or first start - restart with new movement
-                CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
-                followerMovementInstance = newMovement;
-                lastFollowerMovementType = newType;
-                CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
-                ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
-                return;
-            } else {
-                // Same type but settings may have changed - update the instance
-                CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
-                followerMovementInstance = newMovement;
-                CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
-                ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
-                return;
-            }
-        }
-
-        // Auto-start the assigned movement if not already running
-        if (!ninja.trek.config.FollowerMode.isFollowerMovementStarted() || CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null) {
+        boolean shouldStart = configChanged
+                || followerMovementInstance == null
+                || !ninja.trek.config.FollowerMode.isFollowerMovementStarted()
+                || CraneshotClient.MOVEMENT_MANAGER.getActiveMovement() == null;
+        if (shouldStart) {
+            ICameraMovement newMovement = createFollowerMovement(index, entry);
             if (newMovement != null) {
+                CraneshotClient.MOVEMENT_MANAGER.cancelAllMovements(client, camera);
                 followerMovementInstance = newMovement;
                 lastFollowerMovementType = newMovement.getClass().getName();
                 CraneshotClient.MOVEMENT_MANAGER.startFollowerMovement(newMovement, client, camera);
                 ninja.trek.config.FollowerMode.setFollowerMovementStarted(true);
+                return;
             }
         }
 
@@ -383,6 +365,13 @@ public class CraneShotEventHandler {
         if (followerMovementInstance != null) {
             CraneshotClient.MOVEMENT_MANAGER.restartFollowerMovementIfComplete(followerMovementInstance, client, camera);
         }
+    }
+
+    private static ICameraMovement createFollowerMovement(int index, FollowerConfig.FollowerEntry entry) {
+        if (index == 0 && entry.isDirectorEnabled()) {
+            return new FollowerCameraDirector(entry);
+        }
+        return entry.getMovement();
     }
 
     private static void handleScrollInput(Minecraft client) {

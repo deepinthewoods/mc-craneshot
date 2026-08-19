@@ -23,6 +23,7 @@ public class Craneshot implements ModInitializer {
 
         // Register server networking handlers
         ServerNodeNetworking.register();
+        ninja.trek.integration.GoldGolemTimelapseIntegration.register();
 
         String followerProp = System.getProperty("craneshot.follower");
         if (followerProp != null) {

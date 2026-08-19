@@ -12,7 +12,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
 
 public class CameraNodeDTO {
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
 
     public int version = CURRENT_VERSION;
     public UUID uuid = UUID.randomUUID();
@@ -25,6 +25,19 @@ public class CameraNodeDTO {
     public double droneRadius = 6.0;
     public double droneSpeedDegPerSec = 30.0;
     public double droneStartAngleDeg = 0.0;
+    public float timelapseYaw = 0f;
+    public float timelapsePitch = 0f;
+    public float timelapseFovMultiplier = 1.0f;
+    public int timelapseIndex = 0;
+    public boolean timelapseEnabled = true;
+    public boolean autoManaged = false;
+    public UUID buildSessionId = null;
+    public UUID trackedEntityId = null;
+    public String buildMode = "";
+    public String buildState = "";
+    public Vec3 framingMin = null;
+    public Vec3 framingMax = null;
+    public float autoRigYaw = 0f;
 
     public static CameraNodeDTO fromCameraNode(CameraNode node) {
         return fromCameraNode(node, null);
@@ -41,6 +54,19 @@ public class CameraNodeDTO {
         dto.droneRadius = node.droneRadius;
         dto.droneSpeedDegPerSec = node.droneSpeedDegPerSec;
         dto.droneStartAngleDeg = node.droneStartAngleDeg;
+        dto.timelapseYaw = node.timelapseYaw;
+        dto.timelapsePitch = node.timelapsePitch;
+        dto.timelapseFovMultiplier = node.timelapseFovMultiplier;
+        dto.timelapseIndex = node.timelapseIndex;
+        dto.timelapseEnabled = node.timelapseEnabled;
+        dto.autoManaged = node.autoManaged;
+        dto.buildSessionId = node.buildSessionId;
+        dto.trackedEntityId = node.trackedEntityId;
+        dto.buildMode = node.buildMode;
+        dto.buildState = node.buildState;
+        dto.framingMin = node.framingMin;
+        dto.framingMax = node.framingMax;
+        dto.autoRigYaw = node.autoRigYaw;
         return dto;
     }
 
@@ -54,13 +80,26 @@ public class CameraNodeDTO {
         node.droneRadius = this.droneRadius;
         node.droneSpeedDegPerSec = this.droneSpeedDegPerSec;
         node.droneStartAngleDeg = this.droneStartAngleDeg;
+        node.timelapseYaw = this.timelapseYaw;
+        node.timelapsePitch = this.timelapsePitch;
+        node.timelapseFovMultiplier = this.timelapseFovMultiplier;
+        node.timelapseIndex = this.timelapseIndex;
+        node.timelapseEnabled = this.timelapseEnabled;
+        node.autoManaged = this.autoManaged;
+        node.buildSessionId = this.buildSessionId;
+        node.trackedEntityId = this.trackedEntityId;
+        node.buildMode = this.buildMode;
+        node.buildState = this.buildState;
+        node.framingMin = this.framingMin;
+        node.framingMax = this.framingMax;
+        node.autoRigYaw = this.autoRigYaw;
         node.owner = this.owner;
         return node;
     }
 
     public CameraNodeDTO copy() {
         CameraNodeDTO dto = new CameraNodeDTO();
-        dto.version = this.version;
+        dto.version = CURRENT_VERSION;
         dto.uuid = this.uuid;
         dto.clientRequestId = this.clientRequestId;
         dto.owner = this.owner;
@@ -71,11 +110,26 @@ public class CameraNodeDTO {
         dto.droneRadius = this.droneRadius;
         dto.droneSpeedDegPerSec = this.droneSpeedDegPerSec;
         dto.droneStartAngleDeg = this.droneStartAngleDeg;
+        dto.timelapseYaw = this.timelapseYaw;
+        dto.timelapsePitch = this.timelapsePitch;
+        dto.timelapseFovMultiplier = this.timelapseFovMultiplier;
+        dto.timelapseIndex = this.timelapseIndex;
+        dto.timelapseEnabled = this.timelapseEnabled;
+        dto.autoManaged = this.autoManaged;
+        dto.buildSessionId = this.buildSessionId;
+        dto.trackedEntityId = this.trackedEntityId;
+        dto.buildMode = this.buildMode;
+        dto.buildState = this.buildState;
+        dto.framingMin = this.framingMin;
+        dto.framingMax = this.framingMax;
+        dto.autoRigYaw = this.autoRigYaw;
         return dto;
     }
 
     public void write(FriendlyByteBuf buf) {
-        buf.writeVarInt(version);
+        // Always advertise the layout actually written below. DTOs loaded from
+        // older NBT may retain a legacy version value until their first save.
+        buf.writeVarInt(CURRENT_VERSION);
         buf.writeUUID(uuid);
         buf.writeBoolean(clientRequestId != null);
         if (clientRequestId != null) buf.writeUUID(clientRequestId);
@@ -88,6 +142,19 @@ public class CameraNodeDTO {
         buf.writeDouble(droneRadius);
         buf.writeDouble(droneSpeedDegPerSec);
         buf.writeDouble(droneStartAngleDeg);
+        buf.writeFloat(timelapseYaw);
+        buf.writeFloat(timelapsePitch);
+        buf.writeFloat(timelapseFovMultiplier);
+        buf.writeVarInt(timelapseIndex);
+        buf.writeBoolean(timelapseEnabled);
+        buf.writeBoolean(autoManaged);
+        writeOptionalUuid(buf, buildSessionId);
+        writeOptionalUuid(buf, trackedEntityId);
+        buf.writeUtf(buildMode == null ? "" : buildMode);
+        buf.writeUtf(buildState == null ? "" : buildState);
+        writeOptionalVec3d(buf, framingMin);
+        writeOptionalVec3d(buf, framingMax);
+        buf.writeFloat(autoRigYaw);
     }
 
     public static CameraNodeDTO read(FriendlyByteBuf buf) {
@@ -103,12 +170,27 @@ public class CameraNodeDTO {
         dto.droneRadius = buf.readDouble();
         dto.droneSpeedDegPerSec = buf.readDouble();
         dto.droneStartAngleDeg = buf.readDouble();
+        if (dto.version >= 4) {
+            dto.timelapseYaw = buf.readFloat();
+            dto.timelapsePitch = buf.readFloat();
+            dto.timelapseFovMultiplier = buf.readFloat();
+            dto.timelapseIndex = buf.readVarInt();
+            dto.timelapseEnabled = buf.readBoolean();
+            dto.autoManaged = buf.readBoolean();
+            dto.buildSessionId = readOptionalUuid(buf);
+            dto.trackedEntityId = readOptionalUuid(buf);
+            dto.buildMode = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
+            dto.buildState = buf.readUtf(FriendlyByteBuf.MAX_STRING_LENGTH);
+            dto.framingMin = readOptionalVec3d(buf);
+            dto.framingMax = readOptionalVec3d(buf);
+            dto.autoRigYaw = buf.readFloat();
+        }
         return dto;
     }
 
     public CompoundTag toNbt() {
         CompoundTag tag = new CompoundTag();
-        tag.putInt("version", version);
+        tag.putInt("version", CURRENT_VERSION);
         tag.putString("uuid", uuid.toString());
         if (owner != null) tag.putString("owner", owner.toString());
         tag.putString("name", name);
@@ -118,12 +200,25 @@ public class CameraNodeDTO {
         tag.putDouble("droneRadius", droneRadius);
         tag.putDouble("droneSpeedDegPerSec", droneSpeedDegPerSec);
         tag.putDouble("droneStartAngleDeg", droneStartAngleDeg);
+        tag.putFloat("timelapseYaw", timelapseYaw);
+        tag.putFloat("timelapsePitch", timelapsePitch);
+        tag.putFloat("timelapseFovMultiplier", timelapseFovMultiplier);
+        tag.putInt("timelapseIndex", timelapseIndex);
+        tag.putBoolean("timelapseEnabled", timelapseEnabled);
+        tag.putBoolean("autoManaged", autoManaged);
+        if (buildSessionId != null) tag.putString("buildSessionId", buildSessionId.toString());
+        if (trackedEntityId != null) tag.putString("trackedEntityId", trackedEntityId.toString());
+        tag.putString("buildMode", buildMode == null ? "" : buildMode);
+        tag.putString("buildState", buildState == null ? "" : buildState);
+        if (framingMin != null) tag.put("framingMin", vec3dToNbt(framingMin));
+        if (framingMax != null) tag.put("framingMax", vec3dToNbt(framingMax));
+        tag.putFloat("autoRigYaw", autoRigYaw);
         return tag;
     }
 
     public static CameraNodeDTO fromNbt(CompoundTag tag) {
         CameraNodeDTO dto = new CameraNodeDTO();
-        dto.version = tag.getInt("version").orElse(0);
+        dto.version = CURRENT_VERSION;
         tag.getString("uuid").ifPresent(uuidStr -> {
             try {
                 dto.uuid = UUID.fromString(uuidStr);
@@ -150,6 +245,19 @@ public class CameraNodeDTO {
         dto.droneRadius = tag.getDouble("droneRadius").orElse(6.0);
         dto.droneSpeedDegPerSec = tag.getDouble("droneSpeedDegPerSec").orElse(30.0);
         dto.droneStartAngleDeg = tag.getDouble("droneStartAngleDeg").orElse(0.0);
+        dto.timelapseYaw = tag.getFloat("timelapseYaw").orElse(0f);
+        dto.timelapsePitch = tag.getFloat("timelapsePitch").orElse(0f);
+        dto.timelapseFovMultiplier = tag.getFloat("timelapseFovMultiplier").orElse(1f);
+        dto.timelapseIndex = tag.getInt("timelapseIndex").orElse(0);
+        dto.timelapseEnabled = tag.getBoolean("timelapseEnabled").orElse(true);
+        dto.autoManaged = tag.getBoolean("autoManaged").orElse(false);
+        dto.buildSessionId = readUuid(tag, "buildSessionId");
+        dto.trackedEntityId = readUuid(tag, "trackedEntityId");
+        dto.buildMode = tag.getString("buildMode").orElse("");
+        dto.buildState = tag.getString("buildState").orElse("");
+        tag.getList("framingMin").ifPresent(list -> dto.framingMin = vec3dFromNbt(list));
+        tag.getList("framingMax").ifPresent(list -> dto.framingMax = vec3dFromNbt(list));
+        dto.autoRigYaw = tag.getFloat("autoRigYaw").orElse(0f);
         return dto;
     }
 
@@ -183,6 +291,34 @@ public class CameraNodeDTO {
 
     private static Vec3 readVec3d(FriendlyByteBuf buf) {
         return new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
+    }
+
+    private static void writeOptionalUuid(FriendlyByteBuf buf, UUID value) {
+        buf.writeBoolean(value != null);
+        if (value != null) buf.writeUUID(value);
+    }
+
+    private static UUID readOptionalUuid(FriendlyByteBuf buf) {
+        return buf.readBoolean() ? buf.readUUID() : null;
+    }
+
+    private static void writeOptionalVec3d(FriendlyByteBuf buf, Vec3 value) {
+        buf.writeBoolean(value != null);
+        if (value != null) writeVec3d(buf, value);
+    }
+
+    private static Vec3 readOptionalVec3d(FriendlyByteBuf buf) {
+        return buf.readBoolean() ? readVec3d(buf) : null;
+    }
+
+    private static UUID readUuid(CompoundTag tag, String key) {
+        String value = tag.getString(key).orElse("");
+        if (value.isEmpty()) return null;
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static ListTag vec3dToNbt(Vec3 vec) {

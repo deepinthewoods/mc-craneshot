@@ -25,11 +25,27 @@ public class FollowerSettingsIO {
         for (FollowerConfig.FollowerEntry entry : config.getFollowers()) {
             JsonObject entryObj = new JsonObject();
             entryObj.addProperty("useZones", entry.isUseZones());
+            entryObj.addProperty("directorEnabled", entry.isDirectorEnabled());
+            entryObj.addProperty("speechCameraEnabled", entry.isSpeechCameraEnabled());
+            entryObj.addProperty("timelapseEnabled", entry.isTimelapseEnabled());
+            entryObj.addProperty("timelapseIntervalSeconds", entry.getTimelapseIntervalSeconds());
+            entryObj.addProperty("timelapseDistanceChunks", entry.getTimelapseDistanceChunks());
+            entryObj.addProperty("timelapseIndex", entry.getTimelapseIndex());
+            entryObj.addProperty("speechOnsetMs", entry.getSpeechOnsetMs());
+            entryObj.addProperty("speechReleaseMs", entry.getSpeechReleaseMs());
+            entryObj.addProperty("trackingSmoothingSeconds", entry.getTrackingSmoothingSeconds());
+            entryObj.addProperty("trackingDistance", entry.getTrackingDistance());
+            entryObj.addProperty("rigElevationDegrees", entry.getRigElevationDegrees());
 
             if (entry.getMovement() != null) {
                 entryObj.add("movement", SlotSettingsIO.movementToJson(entry.getMovement()));
             } else {
                 entryObj.add("movement", JsonNull.INSTANCE);
+            }
+            if (entry.getSpeakingMovement() != null) {
+                entryObj.add("speakingMovement", SlotSettingsIO.movementToJson(entry.getSpeakingMovement()));
+            } else {
+                entryObj.add("speakingMovement", JsonNull.INSTANCE);
             }
 
             followersArray.add(entryObj);
@@ -104,6 +120,7 @@ public class FollowerSettingsIO {
 
         if (root.has("followers") && root.get("followers").isJsonArray()) {
             JsonArray followersArray = root.getAsJsonArray("followers");
+            int followerIndex = 0;
             for (JsonElement element : followersArray) {
                 JsonObject entryObj = element.getAsJsonObject();
 
@@ -121,7 +138,24 @@ public class FollowerSettingsIO {
                     movement = SlotSettingsIO.jsonToMovement(entryObj.getAsJsonObject("movement"));
                 }
 
-                config.addFollower(new FollowerConfig.FollowerEntry(movement, useZones));
+                FollowerConfig.FollowerEntry entry = new FollowerConfig.FollowerEntry(movement, useZones);
+                if (entryObj.has("speakingMovement") && !entryObj.get("speakingMovement").isJsonNull()) {
+                    entry.setSpeakingMovement(SlotSettingsIO.jsonToMovement(entryObj.getAsJsonObject("speakingMovement")));
+                }
+                entry.setDirectorEnabled(entryObj.has("directorEnabled")
+                        ? entryObj.get("directorEnabled").getAsBoolean() : followerIndex == 0);
+                if (entryObj.has("speechCameraEnabled")) entry.setSpeechCameraEnabled(entryObj.get("speechCameraEnabled").getAsBoolean());
+                if (entryObj.has("timelapseEnabled")) entry.setTimelapseEnabled(entryObj.get("timelapseEnabled").getAsBoolean());
+                if (entryObj.has("timelapseIntervalSeconds")) entry.setTimelapseIntervalSeconds(entryObj.get("timelapseIntervalSeconds").getAsFloat());
+                if (entryObj.has("timelapseDistanceChunks")) entry.setTimelapseDistanceChunks(entryObj.get("timelapseDistanceChunks").getAsInt());
+                if (entryObj.has("timelapseIndex")) entry.setTimelapseIndex(entryObj.get("timelapseIndex").getAsInt());
+                if (entryObj.has("speechOnsetMs")) entry.setSpeechOnsetMs(entryObj.get("speechOnsetMs").getAsInt());
+                if (entryObj.has("speechReleaseMs")) entry.setSpeechReleaseMs(entryObj.get("speechReleaseMs").getAsInt());
+                if (entryObj.has("trackingSmoothingSeconds")) entry.setTrackingSmoothingSeconds(entryObj.get("trackingSmoothingSeconds").getAsFloat());
+                if (entryObj.has("trackingDistance")) entry.setTrackingDistance(entryObj.get("trackingDistance").getAsFloat());
+                if (entryObj.has("rigElevationDegrees")) entry.setRigElevationDegrees(entryObj.get("rigElevationDegrees").getAsFloat());
+                config.addFollower(entry);
+                followerIndex++;
             }
         }
 

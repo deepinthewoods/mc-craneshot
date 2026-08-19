@@ -44,6 +44,7 @@ public class MenuOverlayScreen extends Screen {
     private EditBox followerTargetPlayerNameField;
     private FollowerConfig followerConfig;
     private static final Map<Integer, Boolean> expandedFollowers = new HashMap<>();
+    private static final Map<Integer, Boolean> expandedSpeakingFollowers = new HashMap<>();
 
     public MenuOverlayScreen() {
         super(Component.literal("CraneShot Settings"));
@@ -887,6 +888,7 @@ public class MenuOverlayScreen extends Screen {
             this.addRenderableWidget(Button.builder(Component.literal("×"), button -> {
                 followerConfig.removeFollower(followerIndex);
                 expandedFollowers.remove(followerIndex);
+                expandedSpeakingFollowers.remove(followerIndex);
                 FollowerSettingsIO.saveFollowers(followerConfig);
                 reinitialize();
             }).bounds(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
@@ -918,6 +920,62 @@ public class MenuOverlayScreen extends Screen {
 
             yOffset += spacing;
 
+            if (followerIndex == 0) {
+                int directorX = buttonX + 20;
+                this.addRenderableWidget(Checkbox.builder(Component.literal("Director"), Minecraft.getInstance().font)
+                        .pos(directorX, baseY + yOffset)
+                        .selected(entry.isDirectorEnabled())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setDirectorEnabled(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
+                this.addRenderableWidget(Checkbox.builder(Component.literal("Speech camera"), Minecraft.getInstance().font)
+                        .pos(directorX + 100, baseY + yOffset)
+                        .selected(entry.isSpeechCameraEnabled())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setSpeechCameraEnabled(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
+                this.addRenderableWidget(Checkbox.builder(Component.literal("Timelapses"), Minecraft.getInstance().font)
+                        .pos(directorX + 230, baseY + yOffset)
+                        .selected(entry.isTimelapseEnabled())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setTimelapseEnabled(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
+                yOffset += spacing;
+
+                addFollowerNumberSetting("Interval s", Float.toString(entry.getTimelapseIntervalSeconds()),
+                        buttonX + 20, baseY + yOffset, 70, 45,
+                        value -> entry.setTimelapseIntervalSeconds(Float.parseFloat(value)));
+                addFollowerNumberSetting("Range chunks", Integer.toString(entry.getTimelapseDistanceChunks()),
+                        buttonX + 145, baseY + yOffset, 85, 40,
+                        value -> entry.setTimelapseDistanceChunks(Integer.parseInt(value)));
+                addFollowerNumberSetting("Node index", Integer.toString(entry.getTimelapseIndex()),
+                        buttonX + 285, baseY + yOffset, 70, 40,
+                        value -> entry.setTimelapseIndex(Integer.parseInt(value)));
+                yOffset += spacing;
+
+                addFollowerNumberSetting("Speech on ms", Integer.toString(entry.getSpeechOnsetMs()),
+                        buttonX + 20, baseY + yOffset, 85, 45,
+                        value -> entry.setSpeechOnsetMs(Integer.parseInt(value)));
+                addFollowerNumberSetting("Speech off ms", Integer.toString(entry.getSpeechReleaseMs()),
+                        buttonX + 165, baseY + yOffset, 90, 45,
+                        value -> entry.setSpeechReleaseMs(Integer.parseInt(value)));
+                yOffset += spacing;
+
+                addFollowerNumberSetting("Track smooth s", Float.toString(entry.getTrackingSmoothingSeconds()),
+                        buttonX + 20, baseY + yOffset, 95, 45,
+                        value -> entry.setTrackingSmoothingSeconds(Float.parseFloat(value)));
+                addFollowerNumberSetting("Distance", Float.toString(entry.getTrackingDistance()),
+                        buttonX + 175, baseY + yOffset, 60, 45,
+                        value -> entry.setTrackingDistance(Float.parseFloat(value)));
+                addFollowerNumberSetting("Elevation", Float.toString(entry.getRigElevationDegrees()),
+                        buttonX + 295, baseY + yOffset, 65, 45,
+                        value -> entry.setRigElevationDegrees(Float.parseFloat(value)));
+                yOffset += spacing;
+            }
+
             // Movement settings
             {
                 // Movement type selector
@@ -929,7 +987,7 @@ public class MenuOverlayScreen extends Screen {
                 }
 
                 // Movement type cycle button
-                List<CameraMovementRegistry.MovementInfo> allMovements = CameraMovementRegistry.getAllMovements();
+                List<CameraMovementRegistry.MovementInfo> allMovements = getFollowerProfileMovements();
                 this.addRenderableWidget(Button.builder(
                         Component.literal("Type: " + movementTypeName), button -> {
                     if (allMovements.isEmpty()) return;
@@ -1004,6 +1062,11 @@ public class MenuOverlayScreen extends Screen {
                 }
             }
 
+            if (followerIndex == 0) {
+                yOffset = addSpeakingProfileSettings(entry, followerIndex, buttonX, baseY, yOffset,
+                        spacing, BUTTON_HEIGHT, labelWidth, controlWidth, totalWidth);
+            }
+
             yOffset += 5; // Extra spacing between followers
         }
 
@@ -1016,6 +1079,117 @@ public class MenuOverlayScreen extends Screen {
         }
 
         updateScrollBounds(yOffset + spacing);
+    }
+
+    private List<CameraMovementRegistry.MovementInfo> getFollowerProfileMovements() {
+        return CameraMovementRegistry.getAllMovements().stream()
+                .filter(info -> !info.getMovementClass().getSimpleName().equals("TimelapseMovement"))
+                .toList();
+    }
+
+    private void addFollowerNumberSetting(String label, String value, int x, int y,
+                                          int labelWidth, int fieldWidth,
+                                          java.util.function.Consumer<String> setter) {
+        this.addRenderableWidget(Button.builder(Component.literal(label), button -> {})
+                .bounds(x, y, labelWidth, 20).build());
+        EditBox field = new EditBox(Minecraft.getInstance().font, x + labelWidth + 5, y,
+                fieldWidth, 20, Component.literal(label));
+        field.setMaxLength(10);
+        field.setValue(value);
+        field.setResponder(text -> {
+            try {
+                setter.accept(text);
+                FollowerSettingsIO.saveFollowers(followerConfig);
+            } catch (NumberFormatException ignored) {
+                // Allow partially typed numeric values; persist once valid.
+            }
+        });
+        this.addRenderableWidget(field);
+    }
+
+    private int addSpeakingProfileSettings(FollowerEntry entry, int followerIndex,
+                                           int buttonX, int baseY, int yOffset,
+                                           int spacing, int buttonHeight, int labelWidth,
+                                           int controlWidth, int totalWidth) {
+        ICameraMovement movement = entry.getSpeakingMovement();
+        String movementTypeName = movement == null ? "None"
+                : movement instanceof AbstractMovementSettings settings
+                ? settings.getDisplayName() : movement.getName();
+        List<CameraMovementRegistry.MovementInfo> allMovements = getFollowerProfileMovements();
+
+        this.addRenderableWidget(Button.builder(Component.literal("Speaking: " + movementTypeName), button -> {
+            if (allMovements.isEmpty()) return;
+            int currentIndex = -1;
+            if (entry.getSpeakingMovement() != null) {
+                for (int i = 0; i < allMovements.size(); i++) {
+                    if (allMovements.get(i).getMovementClass().equals(entry.getSpeakingMovement().getClass())) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+            }
+            int nextIndex = (currentIndex + 1) % allMovements.size();
+            try {
+                entry.setSpeakingMovement(allMovements.get(nextIndex).getMovementClass()
+                        .getDeclaredConstructor().newInstance());
+                FollowerSettingsIO.saveFollowers(followerConfig);
+                reinitialize();
+            } catch (ReflectiveOperationException exception) {
+                Craneshot.LOGGER.warn("Failed to create follower speaking movement", exception);
+            }
+        }).bounds(buttonX + 20, baseY + yOffset, 200, buttonHeight).build());
+
+        if (movement != null) {
+            boolean expanded = expandedSpeakingFollowers.getOrDefault(followerIndex, false);
+            this.addRenderableWidget(Button.builder(
+                    Component.literal(expanded ? "▼ Settings" : "▶ Settings"), button -> {
+                        expandedSpeakingFollowers.put(followerIndex,
+                                !expandedSpeakingFollowers.getOrDefault(followerIndex, false));
+                        reinitialize();
+                    }).bounds(buttonX + 225, baseY + yOffset, 80, buttonHeight).build());
+            this.addRenderableWidget(Button.builder(Component.literal("Copy"), button ->
+                    SlotSettingsIO.copyMovementToClipboard(entry.getSpeakingMovement()))
+                    .bounds(buttonX + 310, baseY + yOffset, 40, buttonHeight).build());
+            this.addRenderableWidget(Button.builder(Component.literal("Paste"), button -> {
+                ICameraMovement pasted = SlotSettingsIO.createMovementFromClipboard();
+                if (pasted != null && !pasted.getClass().getSimpleName().equals("TimelapseMovement")) {
+                    entry.setSpeakingMovement(pasted);
+                    FollowerSettingsIO.saveFollowers(followerConfig);
+                    reinitialize();
+                }
+            }).bounds(buttonX + 355, baseY + yOffset, 40, buttonHeight).build());
+        }
+        yOffset += spacing;
+
+        if (movement instanceof AbstractMovementSettings settings
+                && expandedSpeakingFollowers.getOrDefault(followerIndex, false)) {
+            List<Field> settingFields = new ArrayList<>();
+            collectSettingFields(settings, settingFields);
+            int settingWidth = labelWidth + controlWidth + 10;
+            int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+            int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+            for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                Field field = settingFields.get(fieldIndex);
+                MovementSetting annotation = field.getAnnotation(MovementSetting.class);
+                field.setAccessible(true);
+                int column = fieldIndex / settingsPerColumn;
+                int row = fieldIndex % settingsPerColumn;
+                int settingX = centerX + 40 + column * (settingWidth + 20);
+                int settingY = baseY + yOffset + row * buttonHeight;
+                try {
+                    createSettingControl(settings, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, buttonHeight);
+                } catch (IllegalAccessException ignored) { }
+            }
+            yOffset += settingsPerColumn * buttonHeight + 5;
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("Save Speaking").withStyle(ChatFormatting.GREEN), button ->
+                            FollowerSettingsIO.saveFollowers(followerConfig))
+                    .bounds(buttonX + 40, baseY + yOffset, 110, buttonHeight).build());
+            yOffset += spacing;
+        }
+        return yOffset;
     }
 
     private void createMovementList(int slotIndex, int visibleStartY, int visibleEndY,

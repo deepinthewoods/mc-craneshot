@@ -22,4 +22,14 @@ public class CameraNode {
     public float timelapseFovMultiplier = 1.0f;
     public int timelapseIndex = 0;
     public boolean timelapseEnabled = true;
+
+    // Optional Gold Golem-managed framing metadata.
+    public boolean autoManaged = false;
+    public UUID buildSessionId = null;
+    public UUID trackedEntityId = null;
+    public String buildMode = "";
+    public String buildState = "";
+    public Vec3 framingMin = null;
+    public Vec3 framingMax = null;
+    public float autoRigYaw = 0f;
 }
