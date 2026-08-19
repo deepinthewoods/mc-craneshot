@@ -1,0 +1,11 @@
+{
+	"required": false,
+	"package": "ninja.trek.mixin.client",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"VoxyClientMixin"
+	],
+	"injectors": {
+		"defaultRequire": 0
+	}
+}
