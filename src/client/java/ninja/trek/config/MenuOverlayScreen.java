@@ -19,6 +19,7 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import ninja.trek.config.FollowerConfig.FollowerEntry;
+import ninja.trek.render.X11CrosshairOverlay;
 
 
 public class MenuOverlayScreen extends Screen {
@@ -258,6 +259,24 @@ public class MenuOverlayScreen extends Screen {
                 .build());
 
         yOffset += spacing;
+
+        if (X11CrosshairOverlay.isSupported()) {
+            this.addRenderableWidget(Checkbox.builder(
+                            Component.literal("Use X11 OBS-Safe Camera Dot"),
+                            Minecraft.getInstance().font)
+                    .pos(buttonX, baseY + yOffset)
+                    .selected(GeneralMenuSettings.isUseX11CameraDot())
+                    .tooltip(Tooltip.create(Component.literal(
+                            "Replaces the HUD crosshair with a desktop dot sized by Camera Crosshair Size. "
+                                    + "Use OBS XComposite Window Capture; display capture includes it.")))
+                    .onValueChange((checkbox, checked) -> {
+                        GeneralMenuSettings.setUseX11CameraDot(checked);
+                        GeneralSettingsIO.saveSettings();
+                    })
+                    .build());
+
+            yOffset += spacing;
+        }
 
         // Camera Crosshair Shape
         this.addRenderableWidget(Checkbox.builder(Component.literal("Camera Crosshair: Square"), Minecraft.getInstance().font)

@@ -52,6 +52,7 @@ public class GeneralSettingsIO {
                 settingsObj.addProperty("showCameraCrosshair", GeneralMenuSettings.isShowCameraCrosshair());
                 settingsObj.addProperty("cameraCrosshairSize", GeneralMenuSettings.getCameraCrosshairSize());
                 settingsObj.addProperty("cameraCrosshairSquare", GeneralMenuSettings.isCameraCrosshairSquare());
+                settingsObj.addProperty("useX11CameraDot", GeneralMenuSettings.isUseX11CameraDot());
                 // Save nodes overlay toggle
                 settingsObj.addProperty("showNodesOutsideEdit", GeneralMenuSettings.isShowNodesOutsideEdit());
                 
@@ -340,6 +341,9 @@ public class GeneralSettingsIO {
             }
             if (settingsObj.has("cameraCrosshairSquare")) {
                 try { GeneralMenuSettings.setCameraCrosshairSquare(settingsObj.get("cameraCrosshairSquare").getAsBoolean()); } catch (Exception ignored) {}
+            }
+            if (settingsObj.has("useX11CameraDot")) {
+                try { GeneralMenuSettings.setUseX11CameraDot(settingsObj.get("useX11CameraDot").getAsBoolean()); } catch (Exception ignored) {}
             }
             if (settingsObj.has("showNodesOutsideEdit")) {
                 try { GeneralMenuSettings.setShowNodesOutsideEdit(settingsObj.get("showNodesOutsideEdit").getAsBoolean()); } catch (Exception ignored) {}

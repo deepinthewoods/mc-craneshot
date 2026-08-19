@@ -25,6 +25,7 @@ public class GeneralMenuSettings {
     // Size interpreted as half-length in pixels for cross arms or half-side for square
     private static int cameraCrosshairSize = 3;
     private static boolean cameraCrosshairSquare = false;
+    private static boolean useX11CameraDot = false;
     // Node overlay visibility outside edit mode
     private static boolean showNodesOutsideEdit = false;
 
@@ -100,6 +101,9 @@ public class GeneralMenuSettings {
 
     public static boolean isCameraCrosshairSquare() { return cameraCrosshairSquare; }
     public static void setCameraCrosshairSquare(boolean value) { cameraCrosshairSquare = value; }
+
+    public static boolean isUseX11CameraDot() { return useX11CameraDot; }
+    public static void setUseX11CameraDot(boolean value) { useX11CameraDot = value; }
 
     // Node overlay
     public static boolean isShowNodesOutsideEdit() { return showNodesOutsideEdit; }
