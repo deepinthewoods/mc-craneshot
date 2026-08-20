@@ -1485,6 +1485,18 @@ public class MenuOverlayScreen extends Screen {
 
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent input) {
+        // Give a focused player-name field exclusive ownership of keyboard input.
+        // Always consume the event so menu/game hotkeys cannot fire for keys the
+        // text field does not handle itself (for example inventory or Escape).
+        if (targetPlayerNameField != null && targetPlayerNameField.isFocused()) {
+            targetPlayerNameField.keyPressed(input);
+            return true;
+        }
+        if (followerTargetPlayerNameField != null && followerTargetPlayerNameField.isFocused()) {
+            followerTargetPlayerNameField.keyPressed(input);
+            return true;
+        }
+
         // ESC
         if (input.input() == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
             onClose();
