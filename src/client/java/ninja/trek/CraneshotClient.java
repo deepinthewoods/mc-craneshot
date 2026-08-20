@@ -11,6 +11,7 @@ import ninja.trek.config.FollowerMode;
 import ninja.trek.config.GeneralSettingsIO;
 import ninja.trek.config.MenuOverlayScreen;
 import ninja.trek.config.SlotSettingsIO;
+import ninja.trek.follower.MouthAnimSpeakingBridge;
 import ninja.trek.render.CrosshairHudRenderer;
 import ninja.trek.render.NodeAreaHudRenderer;
 import org.lwjgl.glfw.GLFW;
@@ -35,6 +36,8 @@ public class CraneshotClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+
+        MouthAnimSpeakingBridge.initialize();
 
         toggleMenuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.craneshot.toggle_menu",

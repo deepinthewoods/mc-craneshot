@@ -11,10 +11,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 
 public abstract class AbstractMovementSettings {
+    private CameraTarget initialMovementTarget;
     private String customName = null;
     @MovementSetting(label = "Yaw Offset", min = -180, max = 180)
     protected float yawOffset = 0.0f;
@@ -36,6 +38,39 @@ public abstract class AbstractMovementSettings {
 
     public float getYawOffset() {
         return yawOffset;
+    }
+
+    /**
+     * Starts this movement from another movement's rendered state. The override
+     * is scoped to the start call so ordinary movement starts still use the
+     * active Minecraft camera.
+     */
+    public final void startFromState(Minecraft client, Camera camera, MovementState state) {
+        if (!(this instanceof ICameraMovement movement)) {
+            throw new IllegalStateException("Movement settings do not implement ICameraMovement");
+        }
+        initialMovementTarget = state != null ? state.getCameraTarget() : null;
+        try {
+            movement.start(client, camera);
+        } finally {
+            initialMovementTarget = null;
+        }
+    }
+
+    /**
+     * Returns an independent initial target so movement implementations can
+     * safely keep separate start/current values.
+     */
+    protected final CameraTarget createInitialTarget(Camera camera) {
+        CameraTarget source = initialMovementTarget != null
+                ? initialMovementTarget
+                : CameraTarget.fromCamera(camera);
+        return new CameraTarget(
+                source.getPosition(),
+                source.getYaw(),
+                source.getPitch(),
+                source.getFovMultiplier()
+        );
     }
 
     public enum START_TARGET {PLAYER};
@@ -282,6 +317,16 @@ public abstract class AbstractMovementSettings {
 
     public void setRaycastType(RaycastType type) {
         this.raycastType = type;
+    }
+
+    protected Vec3 applySoftRaycastToTarget(Minecraft client, Vec3 targetPosition, float tickDelta) {
+        RaycastType type = getRaycastType();
+        if (!type.isSoft() || client == null || client.player == null || targetPosition == null) {
+            return targetPosition;
+        }
+
+        Vec3 playerPosition = client.player.getEyePosition(tickDelta);
+        return RaycastUtil.adjustForCollision(playerPosition, targetPosition, type);
     }
 
     public String getDisplayName() {

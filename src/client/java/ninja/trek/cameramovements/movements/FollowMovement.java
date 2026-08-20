@@ -680,7 +680,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public void start(Minecraft client, Camera camera) {
-        current = CameraTarget.fromCamera(camera);
+        current = createInitialTarget(camera);
         lastStickYaw = CameraController.controlStick.getYaw();
         Vec3 stickPos = CameraController.controlStick.getPosition();
 
@@ -773,6 +773,7 @@ public class FollowMovement extends AbstractMovementSettings implements ICameraM
             double desiredY = computeFollowY(stickPos.y, cur.y, followHeight, yThreshold, client.player.onGround());
 
             Vec3 desiredRaw = new Vec3(desiredCamXZ.x, desiredY, desiredCamXZ.z);
+            desiredRaw = applySoftRaycastToTarget(client, desiredRaw, tickDelta);
             desiredPos = easedStep(cur, desiredRaw, deltaSeconds);
         }
 

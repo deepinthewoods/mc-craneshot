@@ -65,8 +65,8 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
     @Override
     public void start(Minecraft client, Camera camera) {
-        start = CameraTarget.fromCamera(camera);
-        current = CameraTarget.fromCamera(camera);
+        start = createInitialTarget(camera);
+        current = createInitialTarget(camera);
 
         // Store base FOV
         baseFov = client.options.fov().get().floatValue();
@@ -119,6 +119,7 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
 
         // Update end target based on controlStick and target distance
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
+        targetPos = applySoftRaycastToTarget(client, targetPos, tickDelta);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset,
                 end.getFovMultiplier(),

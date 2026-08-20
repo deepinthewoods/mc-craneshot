@@ -2,6 +2,8 @@ package ninja.trek;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.loader.api.FabricLoader;
+import ninja.trek.integration.MouthAnimRelayPayload;
 import ninja.trek.nodes.network.ServerNodeNetworking;
 import ninja.trek.nodes.network.payload.ChunkNodesPayload;
 import ninja.trek.nodes.network.payload.EditRequestPayload;
@@ -34,6 +36,11 @@ public class Craneshot implements ModInitializer {
     }
 
     private void registerPayloads() {
+        if (!FabricLoader.getInstance().isModLoaded("mouth-anim")) {
+            PayloadTypeRegistry.clientboundPlay().register(
+                    MouthAnimRelayPayload.TYPE, MouthAnimRelayPayload.STREAM_CODEC);
+        }
+
         // Server-to-Client payloads
         PayloadTypeRegistry.clientboundPlay().register(ChunkNodesPayload.ID, ChunkNodesPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(NodesDeltaPayload.ID, NodesDeltaPayload.CODEC);

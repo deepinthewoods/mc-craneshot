@@ -25,8 +25,10 @@ public class RaycastUtil {
 
         switch (raycastType) {
             case NEAR:
+            case SOFT_NEAR:
                 return handleNearRaycast(client, playerPos, targetPos);
             case FAR:
+            case SOFT_FAR:
                 return handleFarRaycast(client, playerPos, targetPos);
             default:
                 return targetPos;

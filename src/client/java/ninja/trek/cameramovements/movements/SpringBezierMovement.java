@@ -94,8 +94,8 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
     @Override
     public void start(Minecraft client, Camera camera) {
         resetReturnTargetTracking();
-        start = CameraTarget.fromCamera(camera);
-        current = CameraTarget.fromCamera(camera);
+        start = createInitialTarget(camera);
+        current = createInitialTarget(camera);
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
@@ -333,6 +333,7 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
             // Out phase: advance curve progress and spring toward the curve point
             curveStart = CameraController.controlStick.getPosition();
             curveEnd = calculateTargetPosition(CameraController.controlStick);
+            curveEnd = applySoftRaycastToTarget(client, curveEnd, tickDelta);
             controlPoint = generateControlPoint(curveStart, curveEnd);
 
             if (curveProgress < 1.0) {

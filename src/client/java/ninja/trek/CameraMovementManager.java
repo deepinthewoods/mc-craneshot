@@ -579,7 +579,9 @@ public class CameraMovementManager {
             FreeCamReturnMovement freeCamReturnMovement = GeneralMenuSettings.getFreeCamReturnMovement();
             if (activeMovement == freeCamReturnMovement) {
                 MovementState state = freeCamReturnMovement.calculateState(client, camera, tickDelta, deltaSeconds);
-                baseTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
+                baseTarget = applyPostMovementRaycast(
+                        state.getCameraTarget(), client.player, activeMovement.getRaycastType(), tickDelta
+                );
                 
                 // Check if FreeCamReturnMovement has completed
                 if (state.isComplete() || freeCamReturnMovement.isComplete()) {
@@ -599,7 +601,9 @@ public class CameraMovementManager {
                     // Smooth finalize: provide one last frame at the final target
                     // Use the FreeCamReturnMovement's raycast type before clearing activeMovement
                     RaycastType finalRaycastType = freeCamReturnMovement.getRaycastType();
-                    CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, finalRaycastType, tickDelta);
+                    CameraTarget finalTarget = applyPostMovementRaycast(
+                            state.getCameraTarget(), client.player, finalRaycastType, tickDelta
+                    );
                     baseTarget = finalTarget;
 
                     // Switch back to normal camera movement - normal state
@@ -659,7 +663,9 @@ public class CameraMovementManager {
             if (isOut) {
                 // Get the current target from movement and apply collision
                 CameraTarget preAdjust = state.getCameraTarget();
-                CameraTarget currentTarget = preAdjust.withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
+                CameraTarget currentTarget = applyPostMovementRaycast(
+                        preAdjust, client.player, activeMovement.getRaycastType(), tickDelta
+                );
 
                 // logging removed
 
@@ -682,7 +688,9 @@ public class CameraMovementManager {
         }
         if (state.isComplete()) {
             // Store final camera position before ending movement
-            CameraTarget finalTarget = state.getCameraTarget().withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
+            CameraTarget finalTarget = applyPostMovementRaycast(
+                    state.getCameraTarget(), client.player, activeMovement.getRaycastType(), tickDelta
+            );
 
             // A held zoom remains active after the base movement ends. Tick it
             // for this frame so completion cannot cause an unzoomed flash.
@@ -733,7 +741,9 @@ public class CameraMovementManager {
 
         // Apply collision adjustment to the movement target
         CameraTarget rawTarget = state.getCameraTarget();
-        baseTarget = rawTarget.withAdjustedPosition(client.player, activeMovement.getRaycastType(), tickDelta);
+        baseTarget = applyPostMovementRaycast(
+                rawTarget, client.player, activeMovement.getRaycastType(), tickDelta
+        );
 
         // Apply zoom overlay if active (modifies FOV only)
         if (isZoomActive && zoomOverlay != null) {
@@ -759,6 +769,14 @@ public class CameraMovementManager {
         }
 
         return state;
+    }
+
+    private CameraTarget applyPostMovementRaycast(CameraTarget target, Player player,
+                                                   RaycastType raycastType, float tickDelta) {
+        if (target == null || player == null || raycastType == null || raycastType.isSoft()) {
+            return target;
+        }
+        return target.withAdjustedPosition(player, raycastType, tickDelta);
     }
 
     private void clearZoomOverlay(Minecraft client) {
@@ -809,7 +827,9 @@ public class CameraMovementManager {
         
         // At this point we have a valid state and raycast type
         CameraTarget rawTarget = state.getCameraTarget();
-        CameraTarget adjustedTarget = rawTarget.withAdjustedPosition(client.player, raycastType, tickDelta);
+        CameraTarget adjustedTarget = applyPostMovementRaycast(
+                rawTarget, client.player, raycastType, tickDelta
+        );
 
         // Log any large target jumps (raw or adjusted)
         final double JUMP_THRESH = 1.0; // blocks

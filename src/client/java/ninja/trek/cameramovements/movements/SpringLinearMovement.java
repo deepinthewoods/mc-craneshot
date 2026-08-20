@@ -77,8 +77,8 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
     @Override
     public void start(Minecraft client, Camera camera) {
         resetReturnTargetTracking();
-        start = CameraTarget.fromCamera(camera);
-        current = CameraTarget.fromCamera(camera);
+        start = createInitialTarget(camera);
+        current = createInitialTarget(camera);
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
@@ -286,6 +286,7 @@ public class SpringLinearMovement extends AbstractMovementSettings implements IC
         } else {
             // Out phase: target is offset position behind/around player
             targetPos = calculateTargetPosition(CameraController.controlStick);
+            targetPos = applySoftRaycastToTarget(client, targetPos, tickDelta);
             targetYaw = CameraController.controlStick.getYaw();
             targetPitch = CameraController.controlStick.getPitch() + pitchOffset;
             targetFov = fovMultiplier;

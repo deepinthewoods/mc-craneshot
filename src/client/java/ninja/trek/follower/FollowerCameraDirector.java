@@ -1,6 +1,5 @@
 package ninja.trek.follower;
 
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
@@ -38,7 +37,6 @@ import java.util.function.Predicate;
  * their output for exactly one call to {@link #calculateState}.
  */
 public final class FollowerCameraDirector extends AbstractMovementSettings implements ICameraMovement {
-    private static final String SPEAKING_PROVIDER_KEY = "mouth-anim:speaking-provider-v1";
     private static final String ANNOTATION_SENDER_KEY = "obsannotator:annotation-sender-v1";
 
     private final FollowerConfig.FollowerEntry config;
@@ -96,11 +94,14 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         observeBuildStates();
 
         long now = System.nanoTime();
-        updateSpeechState(client, camera, now);
         applyMovementSettings(activeMovement);
         MovementState baseState = activeMovement.calculateState(client, camera, tickDelta, deltaSeconds);
         if (baseState == null || baseState.getCameraTarget() == null) {
             baseState = new MovementState(CameraTarget.fromCamera(camera), false);
+        }
+
+        if (updateSpeechState(client, camera, now, baseState)) {
+            applyMovementSettings(activeMovement);
         }
 
         if (resetting) {
@@ -127,7 +128,7 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         return new MovementState(baseState.getCameraTarget(), false);
     }
 
-    private void updateSpeechState(Minecraft client, Camera camera, long now) {
+    private boolean updateSpeechState(Minecraft client, Camera camera, long now, MovementState currentState) {
         boolean detected = false;
         if (config.isSpeechCameraEnabled()) {
             Player trackedPlayer = CameraController.getTrackedPlayer(client);
@@ -153,26 +154,28 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         if (desired != speaking && now - rawSpeechChangedAtNanos >= threshold) {
             speaking = desired;
             activeMovement = speaking ? speakingMovement : normalMovement;
-            activeMovement.start(client, camera);
-            applyMovementSettings(activeMovement);
+            if (activeMovement instanceof AbstractMovementSettings settings) {
+                settings.startFromState(client, camera, currentState);
+            } else {
+                activeMovement.start(client, camera);
+            }
+            Craneshot.LOGGER.info("Follower speech camera switched to {} mode",
+                    speaking ? "speaking" : "normal");
+            return true;
         }
+        return false;
     }
 
-    @SuppressWarnings("unchecked")
     private Predicate<UUID> getSpeakingProvider() {
-        if (speakingProvider == null) {
-            Object provider = FabricLoader.getInstance().getObjectShare().get(SPEAKING_PROVIDER_KEY);
-            if (provider instanceof Predicate<?>) {
-                speakingProvider = (Predicate<UUID>) provider;
-            }
-        }
+        speakingProvider = MouthAnimSpeakingBridge.getProvider();
         return speakingProvider;
     }
 
     @SuppressWarnings("unchecked")
     private Function<String, Boolean> getAnnotationSender() {
         if (annotationSender == null) {
-            Object sender = FabricLoader.getInstance().getObjectShare().get(ANNOTATION_SENDER_KEY);
+            Object sender = net.fabricmc.loader.api.FabricLoader.getInstance()
+                    .getObjectShare().get(ANNOTATION_SENDER_KEY);
             if (sender instanceof Function<?, ?>) {
                 annotationSender = (Function<String, Boolean>) sender;
             }
