@@ -74,6 +74,9 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         // Orthographic handling removed
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
+        if (isCompletedOutStartRequested()) {
+            targetPos = applySoftRaycastToTarget(client, targetPos, getCompletedOutStartTickDelta());
+        }
         // Initialize the end target with the FOV multiplier from settings
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
@@ -88,6 +91,16 @@ public class BezierMovement extends AbstractMovementSettings implements ICameraM
         weight = 1.0f;
         alpha = 1;
         // Orthographic handling removed
+
+        if (isCompletedOutStartRequested()) {
+            current = new CameraTarget(
+                    end.getPosition(), end.getYaw(), end.getPitch(), end.getFovMultiplier()
+            );
+            progress = 1.0;
+            linearMode = true;
+            alpha = 0;
+            markCompletedOutStartApplied();
+        }
 
         // Reset jitter suppression tracking
         lastTargetYaw = current.getYaw();

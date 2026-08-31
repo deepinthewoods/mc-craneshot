@@ -31,6 +31,8 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 import ninja.trek.nodes.server.ServerNodeManager;
 
 import java.util.*;
@@ -39,17 +41,23 @@ public final class ServerNodeNetworking {
     private ServerNodeNetworking() {}
 
     private static volatile String latestFollowerConfigJson = null;
+    private static final Map<UUID, FollowerZoomStatePayload> latestFollowerZoomStates = new HashMap<>();
+    private static final double MAX_FOLLOWER_ZOOM_TARGET_DISTANCE = 132.0;
 
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register(ServerNodeNetworking::onPlayerJoin);
         ServerPlayConnectionEvents.DISCONNECT.register(ServerNodeNetworking::onPlayerDisconnect);
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> latestFollowerConfigJson = null);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            latestFollowerConfigJson = null;
+            latestFollowerZoomStates.clear();
+        });
 
         // Register CustomPayload receivers
         ServerPlayNetworking.registerGlobalReceiver(HandshakePayload.ID, ServerNodeNetworking::handleHandshakePayload);
         ServerPlayNetworking.registerGlobalReceiver(EditRequestPayload.ID, ServerNodeNetworking::handleEditRequestPayload);
         ServerPlayNetworking.registerGlobalReceiver(AreaEditRequestPayload.ID, ServerNodeNetworking::handleAreaEditRequestPayload);
         ServerPlayNetworking.registerGlobalReceiver(FollowerConfigPayload.ID, ServerNodeNetworking::handleFollowerConfigPayload);
+        ServerPlayNetworking.registerGlobalReceiver(FollowerZoomRequestPayload.ID, ServerNodeNetworking::handleFollowerZoomRequestPayload);
 
         ServerChunkEvents.CHUNK_LOAD.register(ServerNodeNetworking::onChunkLoad);
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -72,6 +80,10 @@ public final class ServerNodeNetworking {
     }
 
     private static void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
+        UUID playerId = handler.player.getUUID();
+        if (latestFollowerZoomStates.remove(playerId) != null) {
+            broadcastFollowerZoomState(server, FollowerZoomStatePayload.inactive(playerId), handler.player);
+        }
         ServerNodeManager.get().onPlayerDisconnected(handler.player);
     }
 
@@ -89,6 +101,9 @@ public final class ServerNodeNetworking {
             String storedConfig = latestFollowerConfigJson;
             if (storedConfig != null) {
                 ServerPlayNetworking.send(player, new FollowerConfigPayload(storedConfig));
+            }
+            for (FollowerZoomStatePayload zoomState : latestFollowerZoomStates.values()) {
+                ServerPlayNetworking.send(player, zoomState);
             }
             // Get the world the player is in by looking through all worlds
             for (ServerLevel world : context.server().getAllLevels()) {
@@ -311,6 +326,77 @@ public final class ServerNodeNetworking {
         }
     }
 
+    private static void handleFollowerZoomRequestPayload(
+            FollowerZoomRequestPayload payload,
+            ServerPlayNetworking.Context context) {
+        ServerPlayer sender = context.player();
+        if (!ServerNodeManager.get().isHandshakeComplete(sender)) {
+            Craneshot.LOGGER.debug("Ignoring follower zoom state from {} before handshake completion",
+                    sender.getName().getString());
+            return;
+        }
+        if (!ServerNodeManager.get().consumeRequest(sender)) {
+            Craneshot.LOGGER.debug("Rate-limited follower zoom state from {}", sender.getName().getString());
+            return;
+        }
+
+        UUID playerId = sender.getUUID();
+        if (!payload.active()) {
+            latestFollowerZoomStates.remove(playerId);
+            broadcastFollowerZoomState(context.server(), FollowerZoomStatePayload.inactive(playerId), sender);
+            return;
+        }
+
+        if (!isValidFollowerZoomTarget(sender, payload)) {
+            Craneshot.LOGGER.warn("Ignoring invalid follower zoom target from {}", sender.getName().getString());
+            latestFollowerZoomStates.remove(playerId);
+            broadcastFollowerZoomState(context.server(), FollowerZoomStatePayload.inactive(playerId), sender);
+            return;
+        }
+
+        FollowerZoomStatePayload state = new FollowerZoomStatePayload(
+                playerId,
+                true,
+                payload.dimension(),
+                payload.blockPos(),
+                payload.hitLocation(),
+                payload.yaw(),
+                payload.pitch()
+        );
+        latestFollowerZoomStates.put(playerId, state);
+        broadcastFollowerZoomState(context.server(), state, sender);
+    }
+
+    private static boolean isValidFollowerZoomTarget(ServerPlayer sender, FollowerZoomRequestPayload payload) {
+        if (payload.dimension() == null
+                || payload.dimension().length() > FollowerZoomRequestPayload.MAX_DIMENSION_LENGTH
+                || !payload.dimension().equals(sender.level().dimension().identifier().toString())
+                || payload.blockPos() == null
+                || payload.hitLocation() == null
+                || !Double.isFinite(payload.hitLocation().x)
+                || !Double.isFinite(payload.hitLocation().y)
+                || !Double.isFinite(payload.hitLocation().z)
+                || !Float.isFinite(payload.yaw())
+                || !Float.isFinite(payload.pitch())
+                || payload.pitch() < -90.0f
+                || payload.pitch() > 90.0f) {
+            return false;
+        }
+        double maxDistanceSquared = MAX_FOLLOWER_ZOOM_TARGET_DISTANCE * MAX_FOLLOWER_ZOOM_TARGET_DISTANCE;
+        return sender.getEyePosition().distanceToSqr(payload.hitLocation()) <= maxDistanceSquared;
+    }
+
+    private static void broadcastFollowerZoomState(
+            MinecraftServer server,
+            FollowerZoomStatePayload payload,
+            ServerPlayer sender) {
+        for (ServerPlayer player : PlayerLookup.all(server)) {
+            if (player != sender && ServerNodeManager.get().isHandshakeComplete(player)) {
+                ServerPlayNetworking.send(player, payload);
+            }
+        }
+    }
+
     private static boolean isValidFollowerConfig(String configJson) {
         if (configJson == null || configJson.length() > FollowerConfigPayload.MAX_CONFIG_LENGTH) {
             return false;
@@ -341,6 +427,14 @@ public final class ServerNodeNetworking {
                 }
                 if (follower.has("movement") && !follower.get("movement").isJsonNull()
                         && !isValidMovementConfig(follower.get("movement"))) {
+                    return false;
+                }
+                if (follower.has("speakingMovement") && !follower.get("speakingMovement").isJsonNull()
+                        && !isValidMovementConfig(follower.get("speakingMovement"))) {
+                    return false;
+                }
+                if (follower.has("zoomMovement") && !follower.get("zoomMovement").isJsonNull()
+                        && !isValidMovementConfig(follower.get("zoomMovement"))) {
                     return false;
                 }
             }

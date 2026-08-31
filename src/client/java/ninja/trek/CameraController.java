@@ -65,7 +65,7 @@ public class CameraController {
     private Vec3 lastPlayerPos = Vec3.ZERO;
     private Vec3 cumulativeMovement = Vec3.ZERO;
     private float targetYaw = 0f;
-    private static final double FULL_ROTATE_DISTANCE = 2.0; // Blocks to move for full rotation
+    private static final double MIN_DIRECTION_SAMPLE_DISTANCE_SQUARED = 0.001;
 
     private Vec3 currentVelocity = Vec3.ZERO;
     private boolean lockPlayerHead = false;
@@ -199,8 +199,15 @@ public class CameraController {
     }
 
     private float calculateTargetYaw(float playerYaw) {
+        return calculateTargetYaw(playerYaw, currentEndTarget, currentYawOffset);
+    }
+
+    private float calculateTargetYaw(
+            float playerYaw,
+            AbstractMovementSettings.END_TARGET endTarget,
+            float yawOffset) {
         float baseYaw;
-        switch (currentEndTarget) {
+        switch (endTarget) {
             case HEAD_BACK:
                 baseYaw = playerYaw;
                 break;
@@ -223,11 +230,17 @@ public class CameraController {
                 baseYaw = playerYaw;
                 break;
         }
-        return baseYaw + currentYawOffset;
+        return baseYaw + yawOffset;
     }
 
     private float calculateTargetPitch(float playerPitch) {
-        switch (currentEndTarget) {
+        return calculateTargetPitch(playerPitch, currentEndTarget);
+    }
+
+    private float calculateTargetPitch(
+            float playerPitch,
+            AbstractMovementSettings.END_TARGET endTarget) {
+        switch (endTarget) {
             case HEAD_FRONT:
                 return -playerPitch;
             case HEAD_BACK:
@@ -256,27 +269,20 @@ public class CameraController {
                 currentPos.z - lastPlayerPos.z
         );
 
-        // Use only a numerical-noise threshold here. A per-frame distance
-        // threshold changes behavior with FPS and can suppress normal movement
-        // direction entirely at high render rates.
-        if (movement.lengthSqr() > 1.0E-10) {
-            cumulativeMovement = cumulativeMovement.add(movement);
-
+        // Accumulate displacement so the direction threshold is independent of
+        // render rate. At a standstill, sub-threshold jitter cannot replace the
+        // last meaningful movement direction.
+        cumulativeMovement = cumulativeMovement.add(movement);
+        if (cumulativeMovement.lengthSqr() > MIN_DIRECTION_SAMPLE_DISTANCE_SQUARED) {
             // Calculate movement direction (Minecraft coordinates)
-            double movementYaw = Math.toDegrees(Math.atan2(movement.x, movement.z));
+            double movementYaw = Math.toDegrees(Math.atan2(
+                    cumulativeMovement.x,
+                    cumulativeMovement.z
+            ));
             while (movementYaw < 0) movementYaw += 360;
 
-            // Linear interpolation based on cumulative movement distance
-            double moveDistance = cumulativeMovement.length();
-            double progress = Math.min(moveDistance / FULL_ROTATE_DISTANCE, 1.0);
-
-            // Update target yaw
-            targetYaw = (float)movementYaw;
-
-            // Reset cumulative movement if we've reached full rotation
-            if (moveDistance >= FULL_ROTATE_DISTANCE) {
-                cumulativeMovement = Vec3.ZERO;
-            }
+            targetYaw = (float) movementYaw;
+            cumulativeMovement = Vec3.ZERO;
         }
 
         lastPlayerPos = currentPos;
@@ -307,6 +313,22 @@ public class CameraController {
         if (client.player != null && client.player.input instanceof IKeyboardInputMixin input) {
             input.setDisabled(true);
         }
+    }
+
+    public CameraTarget createControlStickTarget(
+            Vec3 position,
+            float playerYaw,
+            float playerPitch,
+            AbstractMovementSettings settings) {
+        if (settings == null) {
+            return new CameraTarget(position, playerYaw, playerPitch, 1.0f);
+        }
+        return new CameraTarget(
+                position,
+                calculateTargetYaw(playerYaw, settings.getEndTarget(), settings.getYawOffset()),
+                calculateTargetPitch(playerPitch, settings.getEndTarget()),
+                1.0f
+        );
     }
 
     public boolean isFreeMovementInputArmed() {
@@ -804,9 +826,6 @@ public class CameraController {
                 cameraSystem.applyRotationEasing(deltaSeconds);
                 cameraSystem.updateCamera(camera);
 
-                // Sync the ghost CameraEntity to match CameraSystem
-                cameraSystem.syncCameraEntity();
-
                 // Update our tracking variables for legacy code support
                 freeCamPosition = cameraSystem.getCameraPosition();
                 freeCamYaw = cameraSystem.getCameraYaw();
@@ -872,6 +891,14 @@ public class CameraController {
         if (currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FLAT ||
             currentKeyMoveMode == POST_MOVE_KEYS.MOVE_CAMERA_FREE) {
             handleKeyboardMovement(client, camera, deltaSeconds);
+        }
+
+        // MiniHUD and other camera-aware mods read Minecraft's active camera
+        // entity. Sync it after movement so they see this frame's final Freecam
+        // transform. Node-driven cameras do not create this entity and retain
+        // the normal player-based behavior.
+        if (cameraSystem.isCameraActive() && ninja.trek.util.CameraEntity.getCamera() != null) {
+            cameraSystem.syncCameraEntity();
         }
 
         if (cameraSystem.isCameraActive()) {

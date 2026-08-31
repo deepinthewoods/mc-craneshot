@@ -4,6 +4,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -16,6 +18,8 @@ import ninja.trek.config.FollowerMode;
 import ninja.trek.config.GeneralMenuSettings;
 import ninja.trek.config.SlotMenuSettings;
 import ninja.trek.follower.FollowerCameraDirector;
+import ninja.trek.nodes.network.ClientNodeNetworking;
+import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -99,6 +103,7 @@ public class CraneShotEventHandler {
                 } else {
                     CraneshotClient.MOVEMENT_MANAGER.stopZoomMovement(client, camera);
                 }
+                sendFollowerZoomState(client, zoomPressed);
                 zoomWasPressed = zoomPressed;
             }
 
@@ -120,6 +125,33 @@ public class CraneShotEventHandler {
         });
 
         MovementToastRenderer.register();
+    }
+
+    private static void sendFollowerZoomState(Minecraft client, boolean active) {
+        try {
+            if (!active || client.player == null || client.level == null) {
+                ClientNodeNetworking.sendFollowerZoomState(FollowerZoomRequestPayload.inactive());
+                return;
+            }
+
+            HitResult hitResult = client.player.pick(128.0, 1.0f, false);
+            if (!(hitResult instanceof BlockHitResult blockHit)
+                    || hitResult.getType() != HitResult.Type.BLOCK) {
+                ClientNodeNetworking.sendFollowerZoomState(FollowerZoomRequestPayload.inactive());
+                return;
+            }
+
+            ClientNodeNetworking.sendFollowerZoomState(new FollowerZoomRequestPayload(
+                    true,
+                    client.level.dimension().identifier().toString(),
+                    blockHit.getBlockPos(),
+                    blockHit.getLocation(),
+                    client.player.getViewYRot(1.0f),
+                    client.player.getViewXRot(1.0f)
+            ));
+        } catch (RuntimeException exception) {
+            Craneshot.LOGGER.debug("Could not send follower zoom state", exception);
+        }
     }
 
     private static void handleRespawnAndWakeReset(Minecraft client, Camera camera) {

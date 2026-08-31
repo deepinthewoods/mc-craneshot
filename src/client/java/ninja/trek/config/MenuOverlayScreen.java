@@ -45,6 +45,7 @@ public class MenuOverlayScreen extends Screen {
     private FollowerConfig followerConfig;
     private static final Map<Integer, Boolean> expandedFollowers = new HashMap<>();
     private static final Map<Integer, Boolean> expandedSpeakingFollowers = new HashMap<>();
+    private static final Map<Integer, Boolean> expandedZoomFollowers = new HashMap<>();
 
     public MenuOverlayScreen() {
         super(Component.literal("CraneShot Settings"));
@@ -889,6 +890,7 @@ public class MenuOverlayScreen extends Screen {
                 followerConfig.removeFollower(followerIndex);
                 expandedFollowers.remove(followerIndex);
                 expandedSpeakingFollowers.remove(followerIndex);
+                expandedZoomFollowers.remove(followerIndex);
                 FollowerSettingsIO.saveFollowers(followerConfig);
                 reinitialize();
             }).bounds(controlX, baseY + yOffset, 20, BUTTON_HEIGHT).build());
@@ -943,6 +945,13 @@ public class MenuOverlayScreen extends Screen {
                             entry.setTimelapseEnabled(checked);
                             FollowerSettingsIO.saveFollowers(followerConfig);
                         }).build());
+                this.addRenderableWidget(Checkbox.builder(Component.literal("Zoom focus"), Minecraft.getInstance().font)
+                        .pos(directorX + 345, baseY + yOffset)
+                        .selected(entry.isZoomCameraEnabled())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setZoomCameraEnabled(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
                 yOffset += spacing;
 
                 addFollowerNumberSetting("Interval s", Float.toString(entry.getTimelapseIntervalSeconds()),
@@ -956,12 +965,30 @@ public class MenuOverlayScreen extends Screen {
                         value -> entry.setTimelapseIndex(Integer.parseInt(value)));
                 yOffset += spacing;
 
-                addFollowerNumberSetting("Speech on ms", Integer.toString(entry.getSpeechOnsetMs()),
+                addFollowerNumberSetting("Face onset ms", Integer.toString(entry.getSpeechOnsetMs()),
                         buttonX + 20, baseY + yOffset, 85, 45,
                         value -> entry.setSpeechOnsetMs(Integer.parseInt(value)));
-                addFollowerNumberSetting("Speech off ms", Integer.toString(entry.getSpeechReleaseMs()),
+                addFollowerNumberSetting("Face return ms", Integer.toString(entry.getSpeechReleaseMs()),
                         buttonX + 165, baseY + yOffset, 90, 45,
                         value -> entry.setSpeechReleaseMs(Integer.parseInt(value)));
+                yOffset += spacing;
+
+                this.addRenderableWidget(Checkbox.builder(
+                                Component.literal("Instant face entry"), Minecraft.getInstance().font)
+                        .pos(buttonX + 20, baseY + yOffset)
+                        .selected(entry.isInstantFaceEntry())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setInstantFaceEntry(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
+                this.addRenderableWidget(Checkbox.builder(
+                                Component.literal("Instant face return"), Minecraft.getInstance().font)
+                        .pos(buttonX + 200, baseY + yOffset)
+                        .selected(entry.isInstantFaceReturn())
+                        .onValueChange((checkbox, checked) -> {
+                            entry.setInstantFaceReturn(checked);
+                            FollowerSettingsIO.saveFollowers(followerConfig);
+                        }).build());
                 yOffset += spacing;
 
                 addFollowerNumberSetting("Track smooth s", Float.toString(entry.getTrackingSmoothingSeconds()),
@@ -989,7 +1016,7 @@ public class MenuOverlayScreen extends Screen {
                 // Movement type cycle button
                 List<CameraMovementRegistry.MovementInfo> allMovements = getFollowerProfileMovements();
                 this.addRenderableWidget(Button.builder(
-                        Component.literal("Type: " + movementTypeName), button -> {
+                        Component.literal("Normal: " + movementTypeName), button -> {
                     if (allMovements.isEmpty()) return;
                     // Find current type index
                     int currentIdx = 0;
@@ -1065,6 +1092,8 @@ public class MenuOverlayScreen extends Screen {
             if (followerIndex == 0) {
                 yOffset = addSpeakingProfileSettings(entry, followerIndex, buttonX, baseY, yOffset,
                         spacing, BUTTON_HEIGHT, labelWidth, controlWidth, totalWidth);
+                yOffset = addZoomProfileSettings(entry, followerIndex, buttonX, baseY, yOffset,
+                        spacing, BUTTON_HEIGHT, labelWidth, controlWidth, totalWidth);
             }
 
             yOffset += 5; // Extra spacing between followers
@@ -1085,6 +1114,27 @@ public class MenuOverlayScreen extends Screen {
         return CameraMovementRegistry.getAllMovements().stream()
                 .filter(info -> !info.getMovementClass().getSimpleName().equals("TimelapseMovement"))
                 .toList();
+    }
+
+    private List<CameraMovementRegistry.MovementInfo> getZoomProfileMovements() {
+        Set<String> supported = Set.of(
+                "LinearMovement",
+                "BezierMovement",
+                "SpringLinearMovement",
+                "SpringBezierMovement"
+        );
+        return CameraMovementRegistry.getAllMovements().stream()
+                .filter(info -> supported.contains(info.getMovementClass().getSimpleName()))
+                .toList();
+    }
+
+    private boolean isZoomProfileMovement(ICameraMovement movement) {
+        if (movement == null) return false;
+        String name = movement.getClass().getSimpleName();
+        return name.equals("LinearMovement")
+                || name.equals("BezierMovement")
+                || name.equals("SpringLinearMovement")
+                || name.equals("SpringBezierMovement");
     }
 
     private void addFollowerNumberSetting(String label, String value, int x, int y,
@@ -1117,7 +1167,7 @@ public class MenuOverlayScreen extends Screen {
                 ? settings.getDisplayName() : movement.getName();
         List<CameraMovementRegistry.MovementInfo> allMovements = getFollowerProfileMovements();
 
-        this.addRenderableWidget(Button.builder(Component.literal("Speaking: " + movementTypeName), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("Face: " + movementTypeName), button -> {
             if (allMovements.isEmpty()) return;
             int currentIndex = -1;
             if (entry.getSpeakingMovement() != null) {
@@ -1135,7 +1185,7 @@ public class MenuOverlayScreen extends Screen {
                 FollowerSettingsIO.saveFollowers(followerConfig);
                 reinitialize();
             } catch (ReflectiveOperationException exception) {
-                Craneshot.LOGGER.warn("Failed to create follower speaking movement", exception);
+                Craneshot.LOGGER.warn("Failed to create follower face movement", exception);
             }
         }).bounds(buttonX + 20, baseY + yOffset, 200, buttonHeight).build());
 
@@ -1184,7 +1234,92 @@ public class MenuOverlayScreen extends Screen {
             }
             yOffset += settingsPerColumn * buttonHeight + 5;
             this.addRenderableWidget(Button.builder(
-                    Component.literal("Save Speaking").withStyle(ChatFormatting.GREEN), button ->
+                    Component.literal("Save Face").withStyle(ChatFormatting.GREEN), button ->
+                            FollowerSettingsIO.saveFollowers(followerConfig))
+                    .bounds(buttonX + 40, baseY + yOffset, 110, buttonHeight).build());
+            yOffset += spacing;
+        }
+        return yOffset;
+    }
+
+    private int addZoomProfileSettings(FollowerEntry entry, int followerIndex,
+                                       int buttonX, int baseY, int yOffset,
+                                       int spacing, int buttonHeight, int labelWidth,
+                                       int controlWidth, int totalWidth) {
+        ICameraMovement movement = entry.getZoomMovement();
+        String movementTypeName = movement == null ? "None"
+                : movement instanceof AbstractMovementSettings settings
+                ? settings.getDisplayName() : movement.getName();
+        List<CameraMovementRegistry.MovementInfo> allMovements = getZoomProfileMovements();
+
+        this.addRenderableWidget(Button.builder(Component.literal("Zoom focus: " + movementTypeName), button -> {
+            if (allMovements.isEmpty()) return;
+            int currentIndex = -1;
+            if (entry.getZoomMovement() != null) {
+                for (int i = 0; i < allMovements.size(); i++) {
+                    if (allMovements.get(i).getMovementClass().equals(entry.getZoomMovement().getClass())) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+            }
+            int nextIndex = (currentIndex + 1) % allMovements.size();
+            try {
+                entry.setZoomMovement(allMovements.get(nextIndex).getMovementClass()
+                        .getDeclaredConstructor().newInstance());
+                FollowerSettingsIO.saveFollowers(followerConfig);
+                reinitialize();
+            } catch (ReflectiveOperationException exception) {
+                Craneshot.LOGGER.warn("Failed to create follower zoom movement", exception);
+            }
+        }).bounds(buttonX + 20, baseY + yOffset, 200, buttonHeight).build());
+
+        if (movement != null) {
+            boolean expanded = expandedZoomFollowers.getOrDefault(followerIndex, false);
+            this.addRenderableWidget(Button.builder(
+                    Component.literal(expanded ? "▼ Settings" : "▶ Settings"), button -> {
+                        expandedZoomFollowers.put(followerIndex,
+                                !expandedZoomFollowers.getOrDefault(followerIndex, false));
+                        reinitialize();
+                    }).bounds(buttonX + 225, baseY + yOffset, 80, buttonHeight).build());
+            this.addRenderableWidget(Button.builder(Component.literal("Copy"), button ->
+                    SlotSettingsIO.copyMovementToClipboard(entry.getZoomMovement()))
+                    .bounds(buttonX + 310, baseY + yOffset, 40, buttonHeight).build());
+            this.addRenderableWidget(Button.builder(Component.literal("Paste"), button -> {
+                ICameraMovement pasted = SlotSettingsIO.createMovementFromClipboard();
+                if (isZoomProfileMovement(pasted)) {
+                    entry.setZoomMovement(pasted);
+                    FollowerSettingsIO.saveFollowers(followerConfig);
+                    reinitialize();
+                }
+            }).bounds(buttonX + 355, baseY + yOffset, 40, buttonHeight).build());
+        }
+        yOffset += spacing;
+
+        if (movement instanceof AbstractMovementSettings settings
+                && expandedZoomFollowers.getOrDefault(followerIndex, false)) {
+            List<Field> settingFields = new ArrayList<>();
+            collectSettingFields(settings, settingFields);
+            int settingWidth = labelWidth + controlWidth + 10;
+            int columnsCount = Math.max(1, Math.min(3, (totalWidth + 20) / (settingWidth + 20)));
+            int settingsPerColumn = (int) Math.ceil(settingFields.size() / (double) columnsCount);
+
+            for (int fieldIndex = 0; fieldIndex < settingFields.size(); fieldIndex++) {
+                Field field = settingFields.get(fieldIndex);
+                MovementSetting annotation = field.getAnnotation(MovementSetting.class);
+                field.setAccessible(true);
+                int column = fieldIndex / settingsPerColumn;
+                int row = fieldIndex % settingsPerColumn;
+                int settingX = centerX + 40 + column * (settingWidth + 20);
+                int settingY = baseY + yOffset + row * buttonHeight;
+                try {
+                    createSettingControl(settings, field, annotation, settingX, settingY,
+                            labelWidth, controlWidth, buttonHeight);
+                } catch (IllegalAccessException ignored) { }
+            }
+            yOffset += settingsPerColumn * buttonHeight + 5;
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("Save Zoom").withStyle(ChatFormatting.GREEN), button ->
                             FollowerSettingsIO.saveFollowers(followerConfig))
                     .bounds(buttonX + 40, baseY + yOffset, 110, buttonHeight).build());
             yOffset += spacing;
@@ -1267,7 +1402,9 @@ public class MenuOverlayScreen extends Screen {
                     settings,
                     annotation
             );
-            addRenderableWidget(enumButton);
+            if (enumButton != null) {
+                addRenderableWidget(enumButton);
+            }
 
             // Add warning if needed for postMoveMouse field
             if (field.getName().equals("postMoveMouse")) {
@@ -1342,17 +1479,14 @@ public class MenuOverlayScreen extends Screen {
     }
 
     private void collectSettingFields(AbstractMovementSettings settings, List<Field> settingFields) {
-        // Get fields from the concrete class
-        for (Field field : settings.getClass().getDeclaredFields()) {
-            if (field.isAnnotationPresent(MovementSetting.class)) {
-                settingFields.add(field);
+        Class<?> type = settings.getClass();
+        while (type != null && AbstractMovementSettings.class.isAssignableFrom(type)) {
+            for (Field field : type.getDeclaredFields()) {
+                if (field.isAnnotationPresent(MovementSetting.class)) {
+                    settingFields.add(field);
+                }
             }
-        }
-        // Get fields from AbstractMovementSettings
-        for (Field field : AbstractMovementSettings.class.getDeclaredFields()) {
-            if (field.isAnnotationPresent(MovementSetting.class)) {
-                settingFields.add(field);
-            }
+            type = type.getSuperclass();
         }
     }
 

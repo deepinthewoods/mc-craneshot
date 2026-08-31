@@ -1,7 +1,14 @@
 package ninja.trek.config;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import ninja.trek.Craneshot;
+import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FollowerMode {
     private static boolean follower = false;
@@ -13,6 +20,7 @@ public class FollowerMode {
     private static long lastConfigModified = 0;
     private static long lastConfigCheckTime = 0;
     private static final long CONFIG_CHECK_INTERVAL_MS = 2000; // check every 2 seconds
+    private static final Map<UUID, ZoomState> zoomStates = new ConcurrentHashMap<>();
 
     public static void init() {
         // Check JVM system property first: -Dcraneshot.follower=N
@@ -139,4 +147,34 @@ public class FollowerMode {
     public static void setFollowerMovementStarted(boolean started) {
         followerMovementStarted = started;
     }
+
+    public static void applyZoomState(FollowerZoomStatePayload payload) {
+        if (payload.active()) {
+            zoomStates.put(payload.playerId(), new ZoomState(
+                    payload.dimension(),
+                    payload.blockPos(),
+                    payload.hitLocation(),
+                    payload.yaw(),
+                    payload.pitch()
+            ));
+        } else {
+            zoomStates.remove(payload.playerId());
+        }
+    }
+
+    public static ZoomState getZoomState(UUID playerId) {
+        return playerId != null ? zoomStates.get(playerId) : null;
+    }
+
+    public static void clearZoomStates() {
+        zoomStates.clear();
+    }
+
+    public record ZoomState(
+            String dimension,
+            BlockPos blockPos,
+            Vec3 hitLocation,
+            float yaw,
+            float pitch
+    ) { }
 }

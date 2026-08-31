@@ -13,6 +13,8 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 
 public class Craneshot implements ModInitializer {
     public static final String MOD_ID = "craneshot";
@@ -48,11 +50,13 @@ public class Craneshot implements ModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(AreasSnapshotPayload.ID, AreasSnapshotPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(AreasDeltaPayload.ID, AreasDeltaPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(FollowerZoomStatePayload.ID, FollowerZoomStatePayload.CODEC);
 
         // Client-to-Server payloads
         PayloadTypeRegistry.serverboundPlay().register(EditRequestPayload.ID, EditRequestPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayload.ID, HandshakePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AreaEditRequestPayload.ID, AreaEditRequestPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FollowerZoomRequestPayload.ID, FollowerZoomRequestPayload.CODEC);
     }
 }

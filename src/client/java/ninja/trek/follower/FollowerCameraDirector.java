@@ -16,6 +16,7 @@ import ninja.trek.cameramovements.MovementState;
 import ninja.trek.cameramovements.RaycastType;
 import ninja.trek.cameramovements.movements.LinearMovement;
 import ninja.trek.config.FollowerConfig;
+import ninja.trek.config.FollowerMode;
 import ninja.trek.nodes.NodeManager;
 import ninja.trek.nodes.model.CameraNode;
 import ninja.trek.nodes.model.NodeType;
@@ -32,9 +33,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
- * Render-frame camera director used only by follower zero. Normal and speaking
- * shots are ordinary configurable Craneshot movements; timelapse shots replace
- * their output for exactly one call to {@link #calculateState}.
+ * Render-frame camera director used only by follower zero. Normal, face, and
+ * zoom-focus shots are ordinary configurable Craneshot movements; timelapse
+ * shots replace their output for exactly one call to {@link #calculateState}.
  */
 public final class FollowerCameraDirector extends AbstractMovementSettings implements ICameraMovement {
     private static final String ANNOTATION_SENDER_KEY = "obsannotator:annotation-sender-v1";
@@ -42,6 +43,7 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
     private final FollowerConfig.FollowerEntry config;
     private final ICameraMovement normalMovement;
     private final ICameraMovement speakingMovement;
+    private final ICameraMovement zoomMovement;
     private final ArrayDeque<TimelapsePulse> pendingPulses = new ArrayDeque<>();
     private final Map<UUID, SmoothedFocus> trackedFocus = new HashMap<>();
     private final Map<UUID, String> observedBuildStates = new HashMap<>();
@@ -56,12 +58,14 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
     private long renderSequence;
     private long markerSequence;
     private String lastCameraMarkerMode;
+    private FollowerMode.ZoomState lastZoomState;
     private boolean resetting;
 
     public FollowerCameraDirector(FollowerConfig.FollowerEntry config) {
         this.config = Objects.requireNonNull(config, "config");
         this.normalMovement = movementOrDefault(config.getMovement());
         this.speakingMovement = movementOrDefault(config.getSpeakingMovement());
+        this.zoomMovement = movementOrDefault(config.getZoomMovement());
         this.activeMovement = normalMovement;
         setRaycastType(RaycastType.NONE);
     }
@@ -80,12 +84,13 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         renderSequence = 0L;
         markerSequence = 0L;
         lastCameraMarkerMode = null;
+        lastZoomState = null;
         pendingPulses.clear();
         trackedFocus.clear();
         observedBuildStates.clear();
         resetting = false;
-        activeMovement.start(client, camera);
         applyMovementSettings(activeMovement);
+        activeMovement.start(client, camera);
     }
 
     @Override
@@ -94,14 +99,45 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         observeBuildStates();
 
         long now = System.nanoTime();
+        FollowerMode.ZoomState requestedZoomState = resolveZoomState(client);
+        FollowerMode.ZoomState calculationZoomState = activeMovement == zoomMovement
+                ? (requestedZoomState != null ? requestedZoomState : lastZoomState)
+                : null;
         applyMovementSettings(activeMovement);
-        MovementState baseState = activeMovement.calculateState(client, camera, tickDelta, deltaSeconds);
+        MovementState baseState = calculateActiveMovement(
+                client, camera, tickDelta, deltaSeconds, calculationZoomState);
         if (baseState == null || baseState.getCameraTarget() == null) {
             baseState = new MovementState(CameraTarget.fromCamera(camera), false);
         }
 
-        if (updateSpeechState(client, camera, now, baseState)) {
-            applyMovementSettings(activeMovement);
+        updateSpeechState(client, now);
+        ICameraMovement desiredMovement = speaking
+                ? speakingMovement
+                : requestedZoomState != null ? zoomMovement : normalMovement;
+        if (desiredMovement != activeMovement) {
+            boolean enteringFace = activeMovement != speakingMovement
+                    && desiredMovement == speakingMovement;
+            boolean leavingFace = activeMovement == speakingMovement
+                    && desiredMovement != speakingMovement;
+            boolean instantTransition = (enteringFace && config.isInstantFaceEntry())
+                    || (leavingFace && config.isInstantFaceReturn());
+            MovementState switchedState = switchMovement(
+                    client,
+                    camera,
+                    baseState,
+                    desiredMovement,
+                    requestedZoomState,
+                    tickDelta,
+                    instantTransition
+            );
+            if (switchedState != null && switchedState.getCameraTarget() != null) {
+                baseState = switchedState;
+            }
+        }
+        if (requestedZoomState != null) {
+            lastZoomState = requestedZoomState;
+        } else if (activeMovement != zoomMovement) {
+            lastZoomState = null;
         }
 
         if (resetting) {
@@ -121,14 +157,16 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
             pendingPulses.clear();
         }
 
-        String baseMode = speaking ? "face" : "normal";
+        String baseMode = activeMovement == speakingMovement
+                ? "face"
+                : activeMovement == zoomMovement ? "zoom" : "normal";
         if (!baseMode.equals(lastCameraMarkerMode)) {
             sendCameraMarker(baseMode, null);
         }
         return new MovementState(baseState.getCameraTarget(), false);
     }
 
-    private boolean updateSpeechState(Minecraft client, Camera camera, long now, MovementState currentState) {
+    private void updateSpeechState(Minecraft client, long now) {
         boolean detected = false;
         if (config.isSpeechCameraEnabled()) {
             Player trackedPlayer = CameraController.getTrackedPlayer(client);
@@ -153,17 +191,87 @@ public final class FollowerCameraDirector extends AbstractMovementSettings imple
         boolean desired = rawSpeaking;
         if (desired != speaking && now - rawSpeechChangedAtNanos >= threshold) {
             speaking = desired;
-            activeMovement = speaking ? speakingMovement : normalMovement;
+        }
+    }
+
+    private FollowerMode.ZoomState resolveZoomState(Minecraft client) {
+        if (!config.isZoomCameraEnabled() || client.level == null) return null;
+        Player trackedPlayer = CameraController.getTrackedPlayer(client);
+        if (trackedPlayer == null) return null;
+        FollowerMode.ZoomState state = FollowerMode.getZoomState(trackedPlayer.getUUID());
+        if (state == null || state.hitLocation() == null
+                || !state.dimension().equals(client.level.dimension().identifier().toString())) {
+            return null;
+        }
+        return state;
+    }
+
+    private MovementState calculateActiveMovement(
+            Minecraft client,
+            Camera camera,
+            float tickDelta,
+            float deltaSeconds,
+            FollowerMode.ZoomState zoomState) {
+        CameraTarget savedStick = copyControlStick();
+        try {
+            applyZoomControlStick(zoomState);
+            return activeMovement.calculateState(client, camera, tickDelta, deltaSeconds);
+        } finally {
+            CameraController.controlStick.set(savedStick);
+        }
+    }
+
+    private MovementState switchMovement(
+            Minecraft client,
+            Camera camera,
+            MovementState currentState,
+            ICameraMovement movement,
+            FollowerMode.ZoomState zoomState,
+            float tickDelta,
+            boolean instantTransition) {
+        activeMovement = movement;
+        applyMovementSettings(activeMovement);
+        MovementState switchedState = null;
+        CameraTarget savedStick = copyControlStick();
+        try {
+            applyZoomControlStick(activeMovement == zoomMovement ? zoomState : null);
             if (activeMovement instanceof AbstractMovementSettings settings) {
-                settings.startFromState(client, camera, currentState);
+                if (instantTransition) {
+                    switchedState = settings.startAtCompletedOutState(
+                            client, camera, currentState, tickDelta
+                    );
+                } else {
+                    settings.startFromState(client, camera, currentState);
+                }
             } else {
                 activeMovement.start(client, camera);
             }
-            Craneshot.LOGGER.info("Follower speech camera switched to {} mode",
-                    speaking ? "speaking" : "normal");
-            return true;
+        } finally {
+            CameraController.controlStick.set(savedStick);
         }
-        return false;
+        Craneshot.LOGGER.info("Follower camera switched to {} mode",
+                activeMovement == speakingMovement ? "face"
+                        : activeMovement == zoomMovement ? "zoom" : "normal");
+        return switchedState;
+    }
+
+    private void applyZoomControlStick(FollowerMode.ZoomState zoomState) {
+        if (zoomState == null) return;
+        AbstractMovementSettings settings = zoomMovement instanceof AbstractMovementSettings movementSettings
+                ? movementSettings : null;
+        CameraTarget anchor = CraneshotClient.CAMERA_CONTROLLER.createControlStickTarget(
+                zoomState.hitLocation(), zoomState.yaw(), zoomState.pitch(), settings);
+        CameraController.controlStick.set(anchor);
+    }
+
+    private static CameraTarget copyControlStick() {
+        CameraTarget stick = CameraController.controlStick;
+        return new CameraTarget(
+                stick.getPosition(),
+                stick.getYaw(),
+                stick.getPitch(),
+                stick.getFovMultiplier()
+        );
     }
 
     private Predicate<UUID> getSpeakingProvider() {

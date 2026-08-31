@@ -12,8 +12,12 @@ public class FollowerConfig {
         private boolean useZones;
         private ICameraMovement movement;
         private ICameraMovement speakingMovement;
+        private ICameraMovement zoomMovement;
         private boolean directorEnabled = true;
         private boolean speechCameraEnabled = true;
+        private boolean instantFaceEntry;
+        private boolean instantFaceReturn;
+        private boolean zoomCameraEnabled = true;
         private boolean timelapseEnabled = true;
         private float timelapseIntervalSeconds = 60f;
         private int timelapseDistanceChunks = 5;
@@ -28,12 +32,14 @@ public class FollowerConfig {
             this.useZones = true;
             this.movement = createNormalMovement();
             this.speakingMovement = createSpeakingMovement();
+            this.zoomMovement = createZoomMovement();
         }
 
         public FollowerEntry(ICameraMovement movement, boolean useZones) {
             this.movement = movement;
             this.useZones = useZones;
             this.speakingMovement = createSpeakingMovement();
+            this.zoomMovement = createZoomMovement();
         }
 
         public boolean isUseZones() { return useZones; }
@@ -43,10 +49,18 @@ public class FollowerConfig {
         public void setMovement(ICameraMovement movement) { this.movement = movement; }
         public ICameraMovement getSpeakingMovement() { return speakingMovement; }
         public void setSpeakingMovement(ICameraMovement movement) { this.speakingMovement = movement; }
+        public ICameraMovement getZoomMovement() { return zoomMovement; }
+        public void setZoomMovement(ICameraMovement movement) { this.zoomMovement = movement; }
         public boolean isDirectorEnabled() { return directorEnabled; }
         public void setDirectorEnabled(boolean value) { directorEnabled = value; }
         public boolean isSpeechCameraEnabled() { return speechCameraEnabled; }
         public void setSpeechCameraEnabled(boolean value) { speechCameraEnabled = value; }
+        public boolean isInstantFaceEntry() { return instantFaceEntry; }
+        public void setInstantFaceEntry(boolean value) { instantFaceEntry = value; }
+        public boolean isInstantFaceReturn() { return instantFaceReturn; }
+        public void setInstantFaceReturn(boolean value) { instantFaceReturn = value; }
+        public boolean isZoomCameraEnabled() { return zoomCameraEnabled; }
+        public void setZoomCameraEnabled(boolean value) { zoomCameraEnabled = value; }
         public boolean isTimelapseEnabled() { return timelapseEnabled; }
         public void setTimelapseEnabled(boolean value) { timelapseEnabled = value; }
         public float getTimelapseIntervalSeconds() { return timelapseIntervalSeconds; }
@@ -74,6 +88,14 @@ public class FollowerConfig {
             LinearMovement movement = new LinearMovement();
             movement.updateSetting("endTarget", "HEAD_FRONT");
             movement.updateSetting("targetDistance", 4.0);
+            movement.updateSetting("fovMultiplier", 0.8f);
+            return movement;
+        }
+
+        private static ICameraMovement createZoomMovement() {
+            LinearMovement movement = new LinearMovement();
+            movement.updateSetting("endTarget", "HEAD_BACK");
+            movement.updateSetting("targetDistance", 6.0);
             movement.updateSetting("fovMultiplier", 0.8f);
             return movement;
         }

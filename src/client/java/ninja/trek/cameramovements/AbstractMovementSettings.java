@@ -7,16 +7,17 @@ import ninja.trek.config.MovementSettingType;
 import ninja.trek.config.GeneralMenuSettings;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Stream;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 
 public abstract class AbstractMovementSettings {
     private CameraTarget initialMovementTarget;
+    private boolean completedOutStartRequested;
+    private boolean completedOutStartApplied;
+    private float completedOutStartTickDelta;
     private String customName = null;
     @MovementSetting(label = "Yaw Offset", min = -180, max = 180)
     protected float yawOffset = 0.0f;
@@ -55,6 +56,49 @@ public abstract class AbstractMovementSettings {
         } finally {
             initialMovementTarget = null;
         }
+    }
+
+    /**
+     * Starts this movement directly at its completed out-phase state when the
+     * concrete movement supports that initialization mode. A null result means
+     * the movement was started normally and should keep its ordinary transition.
+     */
+    public final MovementState startAtCompletedOutState(
+            Minecraft client,
+            Camera camera,
+            MovementState state,
+            float tickDelta) {
+        if (!(this instanceof ICameraMovement movement)) {
+            throw new IllegalStateException("Movement settings do not implement ICameraMovement");
+        }
+        initialMovementTarget = state != null ? state.getCameraTarget() : null;
+        completedOutStartRequested = true;
+        completedOutStartApplied = false;
+        completedOutStartTickDelta = tickDelta;
+        try {
+            movement.start(client, camera);
+            if (!completedOutStartApplied) {
+                return null;
+            }
+            return movement.calculateState(client, camera, tickDelta, 0.0f);
+        } finally {
+            initialMovementTarget = null;
+            completedOutStartRequested = false;
+            completedOutStartApplied = false;
+            completedOutStartTickDelta = 0.0f;
+        }
+    }
+
+    protected final boolean isCompletedOutStartRequested() {
+        return completedOutStartRequested;
+    }
+
+    protected final float getCompletedOutStartTickDelta() {
+        return completedOutStartTickDelta;
+    }
+
+    protected final void markCompletedOutStartApplied() {
+        completedOutStartApplied = true;
     }
 
     /**
@@ -339,24 +383,30 @@ public abstract class AbstractMovementSettings {
 
     public Map<String, Object> getSettings() {
         Map<String, Object> settings = new HashMap<>();
-        Stream.concat(
-                        Arrays.stream(this.getClass().getDeclaredFields()),
-                        Arrays.stream(AbstractMovementSettings.class.getDeclaredFields())
-                )
-                .filter(field -> field.isAnnotationPresent(MovementSetting.class) || field.getName().equals("customName"))
-                .forEach(field -> {
-                    field.setAccessible(true);
-                    try {
-                        Object value = field.get(this);
-                        if (value instanceof Enum<?>) {
-                            settings.put(field.getName(), ((Enum<?>) value).name());
-                        } else {
-                            settings.put(field.getName(), value);
-                        }
-                    } catch (IllegalAccessException e) {
-                        // logging removed
+        Class<?> type = getClass();
+        while (type != null && AbstractMovementSettings.class.isAssignableFrom(type)) {
+            for (Field field : type.getDeclaredFields()) {
+                if (!field.isAnnotationPresent(MovementSetting.class) && !field.getName().equals("customName")) {
+                    continue;
+                }
+                // A subclass setting with the same field name takes precedence.
+                if (settings.containsKey(field.getName())) {
+                    continue;
+                }
+                field.setAccessible(true);
+                try {
+                    Object value = field.get(this);
+                    if (value instanceof Enum<?>) {
+                        settings.put(field.getName(), ((Enum<?>) value).name());
+                    } else {
+                        settings.put(field.getName(), value);
                     }
-                });
+                } catch (IllegalAccessException e) {
+                    // logging removed
+                }
+            }
+            type = type.getSuperclass();
+        }
         return settings;
     }
 
@@ -432,16 +482,15 @@ public abstract class AbstractMovementSettings {
     }
 
     private Field findField(String key) {
-        try {
-            return this.getClass().getDeclaredField(key);
-        } catch (NoSuchFieldException e) {
+        Class<?> type = getClass();
+        while (type != null && AbstractMovementSettings.class.isAssignableFrom(type)) {
             try {
-                return AbstractMovementSettings.class.getDeclaredField(key);
-            } catch (NoSuchFieldException ex) {
-                // logging removed
-                return null;
+                return type.getDeclaredField(key);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
             }
         }
+        return null;
     }
 
     /**

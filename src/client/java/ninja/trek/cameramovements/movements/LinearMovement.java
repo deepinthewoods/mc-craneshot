@@ -56,6 +56,9 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         current = createInitialTarget(camera);
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
+        if (isCompletedOutStartRequested()) {
+            targetPos = applySoftRaycastToTarget(client, targetPos, getCompletedOutStartTickDelta());
+        }
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
 
@@ -63,6 +66,14 @@ public class LinearMovement extends AbstractMovementSettings implements ICameraM
         distanceChanged = false;
         weight = 1.0f;
         alpha = 1;
+
+        if (isCompletedOutStartRequested()) {
+            current = new CameraTarget(
+                    end.getPosition(), end.getYaw(), end.getPitch(), end.getFovMultiplier()
+            );
+            alpha = 0;
+            markCompletedOutStartApplied();
+        }
 
         // Reset jitter suppression tracking
         lastTargetYaw = current.getYaw();

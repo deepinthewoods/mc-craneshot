@@ -98,6 +98,9 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
         current = createInitialTarget(camera);
 
         Vec3 targetPos = calculateTargetPosition(CameraController.controlStick);
+        if (isCompletedOutStartRequested()) {
+            targetPos = applySoftRaycastToTarget(client, targetPos, getCompletedOutStartTickDelta());
+        }
         end = new CameraTarget(targetPos, CameraController.controlStick.getYaw(),
                 CameraController.controlStick.getPitch() + pitchOffset, fovMultiplier);
 
@@ -121,6 +124,15 @@ public class SpringBezierMovement extends AbstractMovementSettings implements IC
 
         // Reset overshoot detection
         lastDistanceToPlayer = Double.MAX_VALUE;
+
+        if (isCompletedOutStartRequested()) {
+            current = new CameraTarget(
+                    end.getPosition(), end.getYaw(), end.getPitch(), end.getFovMultiplier()
+            );
+            curveProgress = 1.0;
+            alpha = 0;
+            markCompletedOutStartApplied();
+        }
     }
 
     private Vec3 calculateTargetPosition(CameraTarget stick) {

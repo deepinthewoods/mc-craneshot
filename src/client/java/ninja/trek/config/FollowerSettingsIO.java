@@ -27,6 +27,9 @@ public class FollowerSettingsIO {
             entryObj.addProperty("useZones", entry.isUseZones());
             entryObj.addProperty("directorEnabled", entry.isDirectorEnabled());
             entryObj.addProperty("speechCameraEnabled", entry.isSpeechCameraEnabled());
+            entryObj.addProperty("instantFaceEntry", entry.isInstantFaceEntry());
+            entryObj.addProperty("instantFaceReturn", entry.isInstantFaceReturn());
+            entryObj.addProperty("zoomCameraEnabled", entry.isZoomCameraEnabled());
             entryObj.addProperty("timelapseEnabled", entry.isTimelapseEnabled());
             entryObj.addProperty("timelapseIntervalSeconds", entry.getTimelapseIntervalSeconds());
             entryObj.addProperty("timelapseDistanceChunks", entry.getTimelapseDistanceChunks());
@@ -46,6 +49,11 @@ public class FollowerSettingsIO {
                 entryObj.add("speakingMovement", SlotSettingsIO.movementToJson(entry.getSpeakingMovement()));
             } else {
                 entryObj.add("speakingMovement", JsonNull.INSTANCE);
+            }
+            if (entry.getZoomMovement() != null) {
+                entryObj.add("zoomMovement", SlotSettingsIO.movementToJson(entry.getZoomMovement()));
+            } else {
+                entryObj.add("zoomMovement", JsonNull.INSTANCE);
             }
 
             followersArray.add(entryObj);
@@ -142,9 +150,15 @@ public class FollowerSettingsIO {
                 if (entryObj.has("speakingMovement") && !entryObj.get("speakingMovement").isJsonNull()) {
                     entry.setSpeakingMovement(SlotSettingsIO.jsonToMovement(entryObj.getAsJsonObject("speakingMovement")));
                 }
+                if (entryObj.has("zoomMovement") && !entryObj.get("zoomMovement").isJsonNull()) {
+                    entry.setZoomMovement(SlotSettingsIO.jsonToMovement(entryObj.getAsJsonObject("zoomMovement")));
+                }
                 entry.setDirectorEnabled(entryObj.has("directorEnabled")
                         ? entryObj.get("directorEnabled").getAsBoolean() : followerIndex == 0);
                 if (entryObj.has("speechCameraEnabled")) entry.setSpeechCameraEnabled(entryObj.get("speechCameraEnabled").getAsBoolean());
+                if (entryObj.has("instantFaceEntry")) entry.setInstantFaceEntry(entryObj.get("instantFaceEntry").getAsBoolean());
+                if (entryObj.has("instantFaceReturn")) entry.setInstantFaceReturn(entryObj.get("instantFaceReturn").getAsBoolean());
+                if (entryObj.has("zoomCameraEnabled")) entry.setZoomCameraEnabled(entryObj.get("zoomCameraEnabled").getAsBoolean());
                 if (entryObj.has("timelapseEnabled")) entry.setTimelapseEnabled(entryObj.get("timelapseEnabled").getAsBoolean());
                 if (entryObj.has("timelapseIntervalSeconds")) entry.setTimelapseIntervalSeconds(entryObj.get("timelapseIntervalSeconds").getAsFloat());
                 if (entryObj.has("timelapseDistanceChunks")) entry.setTimelapseDistanceChunks(entryObj.get("timelapseDistanceChunks").getAsInt());

@@ -36,8 +36,8 @@ public class SettingWidget {
         boolean showWarning = false;
         try {
             if (fieldName.equals("postMoveMouse")) {
-                Field mouseField = settings.getClass().getDeclaredField("postMoveMouse");
-                Field keysField = settings.getClass().getDeclaredField("postMoveKeys");
+                Field mouseField = findSettingField(settings.getClass(), "postMoveMouse");
+                Field keysField = findSettingField(settings.getClass(), "postMoveKeys");
                 mouseField.setAccessible(true);
                 keysField.setAccessible(true);
 
@@ -68,16 +68,7 @@ public class SettingWidget {
                                                 String fieldName, AbstractMovementSettings settings,
                                                 MovementSetting annotation) {
         try {
-            Field field = null;
-            try {
-                field = settings.getClass().getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                try {
-                    field = AbstractMovementSettings.class.getDeclaredField(fieldName);
-                } catch (NoSuchFieldException ex) {
-                    throw new IllegalStateException("Field not found: " + fieldName);
-                }
-            }
+            Field field = findSettingField(settings.getClass(), fieldName);
 
             if (!field.getType().isEnum()) {
                 throw new IllegalStateException("Field is not an enum type: " + fieldName);
@@ -124,9 +115,27 @@ public class SettingWidget {
 
             return button;
         } catch (Exception e) {
-            // logging removed
+            Craneshot.LOGGER.warn(
+                    "Failed to create enum setting widget '" + fieldName + "' for "
+                            + settings.getClass().getName(),
+                    e
+            );
             return null;
         }
+    }
+
+    private static Field findSettingField(Class<?> type, String fieldName) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null && AbstractMovementSettings.class.isAssignableFrom(current)) {
+            try {
+                return current.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(
+                "Field '" + fieldName + "' not found in movement hierarchy for " + type.getName()
+        );
     }
 
 

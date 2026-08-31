@@ -17,6 +17,8 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
+import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 import ninja.trek.config.FollowerConfig;
 import ninja.trek.config.FollowerMode;
 import ninja.trek.config.FollowerSettingsIO;
@@ -36,8 +38,12 @@ public final class ClientNodeNetworking {
         ClientPlayNetworking.registerGlobalReceiver(AreasSnapshotPayload.ID, ClientNodeNetworking::handleAreasSnapshotPayload);
         ClientPlayNetworking.registerGlobalReceiver(AreasDeltaPayload.ID, ClientNodeNetworking::handleAreasDeltaPayload);
         ClientPlayNetworking.registerGlobalReceiver(FollowerConfigPayload.ID, ClientNodeNetworking::handleFollowerConfigPayload);
+        ClientPlayNetworking.registerGlobalReceiver(FollowerZoomStatePayload.ID, ClientNodeNetworking::handleFollowerZoomStatePayload);
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> NodeManager.get().onDisconnected());
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            NodeManager.get().onDisconnected();
+            FollowerMode.clearZoomStates();
+        });
         ClientChunkEvents.CHUNK_UNLOAD.register(ClientNodeNetworking::onChunkUnload);
     }
 
@@ -127,6 +133,17 @@ public final class ClientNodeNetworking {
                 FollowerMode.applyNetworkConfig(config);
             }
         });
+    }
+
+    private static void handleFollowerZoomStatePayload(
+            FollowerZoomStatePayload payload,
+            ClientPlayNetworking.Context context) {
+        if (!FollowerMode.isFollower()) return;
+        context.client().execute(() -> FollowerMode.applyZoomState(payload));
+    }
+
+    public static void sendFollowerZoomState(FollowerZoomRequestPayload payload) {
+        ClientPlayNetworking.send(payload);
     }
 
     private static void onChunkUnload(ClientLevel world, net.minecraft.world.level.chunk.LevelChunk chunk) {

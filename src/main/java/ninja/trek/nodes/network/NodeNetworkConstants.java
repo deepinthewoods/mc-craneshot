@@ -4,7 +4,7 @@ import net.minecraft.resources.Identifier;
 import ninja.trek.Craneshot;
 
 public final class NodeNetworkConstants {
-    public static final int PROTOCOL_VERSION = 2;
+    public static final int PROTOCOL_VERSION = 3;
 
     public static final Identifier HANDSHAKE = Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "handshake");
     public static final Identifier CHUNK_NODES = Identifier.fromNamespaceAndPath(Craneshot.MOD_ID, "chunk_nodes");

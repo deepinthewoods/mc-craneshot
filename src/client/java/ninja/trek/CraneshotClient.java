@@ -28,7 +28,7 @@ public class CraneshotClient implements ClientModInitializer {
 	public static KeyMapping zoomKey;
 	public static KeyMapping toggleZonesKey;
 	private static boolean isMenuOpen = false;
-	public static MenuOverlayScreen MENU = new MenuOverlayScreen();
+	public static MenuOverlayScreen MENU;
 	public static final CameraMovementManager MOVEMENT_MANAGER = new CameraMovementManager();
 
     private static final KeyMapping.Category KB_CAT_UI = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("craneshot", "ui"));
@@ -94,6 +94,8 @@ public class CraneshotClient implements ClientModInitializer {
             ));
         }
         CameraMovementRegistry.initialize();
+        // The menu constructor loads follower movements, so the registry must be ready first.
+        MENU = new MenuOverlayScreen();
         // Detect follower mode from launch args (--craneshot-follower=N or -Dcraneshot.follower=N)
         FollowerMode.init();
 
