@@ -13,6 +13,7 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerRegistrationPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 
@@ -57,6 +58,7 @@ public class Craneshot implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(HandshakePayload.ID, HandshakePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(AreaEditRequestPayload.ID, AreaEditRequestPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FollowerConfigPayload.ID, FollowerConfigPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(FollowerRegistrationPayload.ID, FollowerRegistrationPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FollowerZoomRequestPayload.ID, FollowerZoomRequestPayload.CODEC);
     }
 }

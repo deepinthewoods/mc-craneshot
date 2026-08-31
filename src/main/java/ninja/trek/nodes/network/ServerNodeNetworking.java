@@ -20,6 +20,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import ninja.trek.Craneshot;
+import ninja.trek.follower.FollowerChunkLoadingRegistry;
 import ninja.trek.nodes.model.AreaInstanceDTO;
 import ninja.trek.nodes.model.CameraNodeDTO;
 import ninja.trek.nodes.network.ServerNodeNetworking.NodeDelta.Type;
@@ -31,6 +32,7 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerRegistrationPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 import ninja.trek.nodes.server.ServerNodeManager;
@@ -50,6 +52,7 @@ public final class ServerNodeNetworking {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             latestFollowerConfigJson = null;
             latestFollowerZoomStates.clear();
+            FollowerChunkLoadingRegistry.clear();
         });
 
         // Register CustomPayload receivers
@@ -57,6 +60,9 @@ public final class ServerNodeNetworking {
         ServerPlayNetworking.registerGlobalReceiver(EditRequestPayload.ID, ServerNodeNetworking::handleEditRequestPayload);
         ServerPlayNetworking.registerGlobalReceiver(AreaEditRequestPayload.ID, ServerNodeNetworking::handleAreaEditRequestPayload);
         ServerPlayNetworking.registerGlobalReceiver(FollowerConfigPayload.ID, ServerNodeNetworking::handleFollowerConfigPayload);
+        ServerPlayNetworking.registerGlobalReceiver(
+                FollowerRegistrationPayload.ID,
+                ServerNodeNetworking::handleFollowerRegistrationPayload);
         ServerPlayNetworking.registerGlobalReceiver(FollowerZoomRequestPayload.ID, ServerNodeNetworking::handleFollowerZoomRequestPayload);
 
         ServerChunkEvents.CHUNK_LOAD.register(ServerNodeNetworking::onChunkLoad);
@@ -81,10 +87,29 @@ public final class ServerNodeNetworking {
 
     private static void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
         UUID playerId = handler.player.getUUID();
+        FollowerChunkLoadingRegistry.unregister(playerId);
         if (latestFollowerZoomStates.remove(playerId) != null) {
             broadcastFollowerZoomState(server, FollowerZoomStatePayload.inactive(playerId), handler.player);
         }
         ServerNodeManager.get().onPlayerDisconnected(handler.player);
+    }
+
+    private static void handleFollowerRegistrationPayload(
+            FollowerRegistrationPayload payload,
+            ServerPlayNetworking.Context context) {
+        if (payload.followerIndex() < 0) {
+            Craneshot.LOGGER.warn(
+                    "Ignoring invalid follower index {} from {}",
+                    payload.followerIndex(), context.player().getName().getString());
+            return;
+        }
+
+        ServerPlayer player = context.player();
+        FollowerChunkLoadingRegistry.register(player, payload.followerIndex());
+        player.level().getChunkSource().move(player);
+        Craneshot.LOGGER.info(
+                "Registered {} as Craneshot follower {} with chunk loading disabled in spectator mode",
+                player.getName().getString(), payload.followerIndex());
     }
 
     private static void handleHandshakePayload(HandshakePayload payload, ServerPlayNetworking.Context context) {

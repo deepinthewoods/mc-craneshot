@@ -17,6 +17,7 @@ import ninja.trek.nodes.network.payload.AreaEditRequestPayload;
 import ninja.trek.nodes.network.payload.AreasDeltaPayload;
 import ninja.trek.nodes.network.payload.AreasSnapshotPayload;
 import ninja.trek.nodes.network.payload.FollowerConfigPayload;
+import ninja.trek.nodes.network.payload.FollowerRegistrationPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomRequestPayload;
 import ninja.trek.nodes.network.payload.FollowerZoomStatePayload;
 import ninja.trek.config.FollowerConfig;
@@ -65,6 +66,15 @@ public final class ClientNodeNetworking {
             NodeNetworkConstants.PROTOCOL_VERSION
         );
         ClientPlayNetworking.send(reply);
+
+        if (FollowerMode.isFollower()) {
+            if (ClientPlayNetworking.canSend(FollowerRegistrationPayload.ID)) {
+                ClientPlayNetworking.send(new FollowerRegistrationPayload(FollowerMode.getFollowerIndex()));
+            } else {
+                Craneshot.LOGGER.warn(
+                        "Server does not support follower chunk-loading suppression; follower may keep chunks loaded");
+            }
+        }
     }
 
     private static void handleChunkNodesPayload(ChunkNodesPayload payload, ClientPlayNetworking.Context context) {
